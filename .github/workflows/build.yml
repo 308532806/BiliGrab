@@ -37,6 +37,16 @@ jobs:
           path: ${{ github.workspace }}\.android-sdk
           key: android-sdk-r34-win-${{ runner.os }}-v1
 
+      # vendor/ 是必需的构建依赖（YouTube 引擎：CPython 运行时 + yt-dlp，
+      # 约 21 MB）。它被 gitignore 了，所以首次流水线由 build-apk.ps1
+      # 就地拉取；这里缓存住，后续运行就不必再下。
+      # key 里带上版本号：fetch-vendor.ps1 的默认版本一变，缓存自然失效。
+      - name: Cache YouTube engine
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}\vendor
+          key: vendor-youtubedl-0.18.1-kotlin-2.0.21-arm64-v8a-v1
+
       # 不用 android-actions/setup-android：它默认安装 'tools' 包，
       # 而 Google 已下架该包，会导致 "Failed to find package 'tools'" 失败。
       - name: Install Android SDK components

@@ -1,0 +1,49 @@
+修掉 CI 构建失败，并删掉跑不通的 Gradle 路径
+
+## CI 为什么挂
+
+tag 推上去之后两次构建都是 failure（main 和 v1.3.0），
+失败点在 [3/7] javac，报错只有一行「javac 失败」。
+
+本机精确复现了：把 vendor/ 移走再构建，同样死在 javac。
+根因是我上一版引入的一条**从来没有走通的降级路径**。
+
+当时的想法是「检测不到 vendor/ 就产出纯 B 站版本（117 KB）」，
+但代码结构根本不允许：YouTubeEngine.java 直接引用 com.yausername.*，
+而 MainActivity / DownloadService 又引用 YouTubeEngine。
+少了 vendor，javac 必然失败，而且还报不出一句有指向性的话。
+
+CI 从来没下载过 vendor（工作流里没有这一步），所以它**注定失败**。
+也就是说上一个 tag 的 CI 绿灯从来没有出现过 —— 是我没验证 CI 就推了。
+
+## 怎么修的
+
+放弃降级这个卖点，把 vendor/ 当正常依赖：
+
+- build-apk.ps1 检测不到 vendor/ 时**自动调用** fetch-vendor.ps1，
+  拉不动就抛一条说清楚「为什么它是必需的、该怎么手工重试」的错误，
+  而不是让 javac 丢一句没头没尾的失败
+- 工作流加 vendor 缓存，21 MB 只在下第一次
+- README / DESIGN 里那三处「删掉 vendor 即可退回纯 B 站版本」的说法全部改正
+
+真机复现验证：vendor 缺失 → 自动拉取 21.66 MB → 构建成功，
+产物 19,424,807 字节，与已发布的 APK 一致。全程不设代理，
+模拟 GitHub runner 的直连环境。
+
+## 顺带删掉 Gradle
+
+查 CI 的时候发现 app/build.gradle.kts 也是个陷阱：
+
+- 版本停在 1.1.1（实际已经 1.3.0），自 1.1.1 之后没人动过
+- 缺四样必需的东西：vendor jar 不在 classpath、原生库没进 jniLibs、
+  res/raw/ytdlp 没进资源、com.yausername.* 的 R 类无处生成
+  （脚本构建靠 aapt2 的 --extra-packages）
+- 仓库里根本没有 gradlew，README 那条
+  ./gradlew :app:assembleDebug 从来没跑通过
+
+一个构建不了的文件比没有更糟，所以把 build.gradle.kts、
+settings.gradle.kts、gradle.properties、app/build.gradle.kts、
+app/proguard-rules.pro 一并删除，README 的「方式二」换成
+一节说明为什么不支持 Gradle、以及要恢复需要先补什么。
+
+这也让项目回到了它自己声称的定位：不依赖 Gradle 构建。

@@ -154,17 +154,21 @@ edge-to-edge、Snackbar、底部表单，全部基于平台原生 API 实现。
 
 | 项 | 说明 |
 | --- | --- |
-| 语言 | Java 8（无 Kotlin，无需 Kotlin 编译器） |
-| 依赖 | **零**。不用 AndroidX / OkHttp / Gson / RxJava |
+| 语言 | Java 8（无 Kotlin 源码，不需要 Kotlin 编译器） |
+| B 站链路的依赖 | **零**。不用 AndroidX / OkHttp / Gson / RxJava |
 | JSON | 系统自带 `org.json` |
 | 网络 | 系统自带 `HttpURLConnection` |
-| 合成 | 系统自带 `MediaMuxer` + `MediaExtractor`（不打包 ffmpeg） |
+| 合成 | 系统自带 `MediaMuxer` + `MediaExtractor`（**不打包 ffmpeg**） |
 | 预览 | 系统自带 `MediaPlayer` + `SurfaceView`（不打包 ExoPlayer） |
-| 包体 | 约 117 KB |
+| 包体 | 约 18.5 MB —— 其中 17.5 MB 是 YouTube 引擎 |
 | 构建 | `aapt2` + `javac` + `d8` + `zipalign` + `apksigner`，**不依赖 Gradle** |
 
-因为不引入任何第三方库，整个 APK 只有一个约 98 KB 的 `classes.dex`，
-冷启动快，也没有供应链风险。
+B 站那部分代码一个第三方库都不用，`classes.dex` 只有约 98 KB。
+18.5 MB 里 17.5 MB 是 YouTube 引擎的运行时（CPython + yt-dlp），
+那部分是被迫引进的 —— 理由见下面「为什么不是自己解析」。
+
+**注意整张表描述的是运行时形态。** 构建时仍然需要 vendor/ 里的 jar
+参与编译，详见「许可」一节。
 
 ## 它是怎么工作的
 
@@ -191,36 +195,44 @@ edge-to-edge、Snackbar、底部表单，全部基于平台原生 API 实现。
 
 ## 编译
 
-### 方式一：官方脚本（不需要 Gradle）
+### 本地构建
 
 ```powershell
 # 1) 准备工具链（幂等，可重复执行；会从 dl.google.com 直接下载官方 zip）
 powershell -ExecutionPolicy Bypass -File scripts\setup-sdk.ps1
 
 # 2) 编译（另需 JDK 17）
-powershell -ExecutionPolicy Bypass -File scripts\build-apk.ps1 -VersionName 1.1.1
-# 产物：dist\BiliGrab-1.1.1.apk
+powershell -ExecutionPolicy Bypass -File scripts\build-apk.ps1 -VersionName 1.3.0
+# 产物：dist\BiliGrab-1.3.0.apk
 ```
 
-可用环境变量 `JAVA_HOME`、`ANDROID_HOME` 指定工具链位置。
+首次构建会自动调用 `scripts/fetch-vendor.ps1` 拉取 YouTube 引擎
+（约 21 MB，之后复用）。可用环境变量 `JAVA_HOME`、`ANDROID_HOME` 指定工具链位置。
 `setup-sdk.ps1` 不走 `sdkmanager`，而是直接解压官方 zip，少一层出错的可能。
 
-### 方式二：Android Studio / Gradle
-
-```bash
-./gradlew :app:assembleDebug
-```
-
-### 方式三：让 GitHub 帮你编译
+### 让 GitHub 帮你编译
 
 推一个 tag 即可，Actions 会自动构建并发布 Release：
 
 ```bash
-git tag v1.0.0 && git push origin v1.0.0
+git tag v1.3.0 && git push origin v1.3.0
 ```
 
 > 想让 CI 产物和本地发布的 APK 签名一致（用户才能原地升级），
 > 需要先配置 `KEYSTORE_BASE64` Secret —— 见下一节。
+
+### 关于 Gradle
+
+**本项目不支持 Gradle 构建**，`build.gradle.kts` 一类的文件已经删除。
+
+原先确实放过一套，但它只维护到 1.1.1 就再没动过，而且**缺四样必需的东西**：
+vendor 的 jar 不在 classpath 上、原生库没进 `jniLibs`、`res/raw/ytdlp` 没进资源、
+`com.yausername.youtubedl_android` 的 R 类无处生成（脚本构建靠的是 aapt2 的
+`--extra-packages`）。它编译不过，而且仓库里根本没有 `gradlew` 包装器 ——
+README 里那条 `./gradlew :app:assembleDebug` 从来没跑通过。
+
+留着一个构建不了的文件比没有更糟，所以删掉了。要恢复 Android Studio 支持，
+得先把上面四项配齐并在真机上验证过。
 
 ## 签名密钥
 
@@ -318,8 +330,10 @@ BiliGrab/
 └── .github/workflows/build.yml        # CI 自动打包
 ```
 
-`vendor/` 不入库：它由 `scripts/fetch-vendor.ps1` 按固定版本号拉取，
-构建时若检测不到就会自动退化成**只含 B 站逻辑**的版本（约 117 KB）。
+`vendor/` 不入库（约 21 MB 二进制），但它是**必需的构建依赖** ——
+源代码里的 `YouTubeEngine.java` 直接引用了 `com.yausername.youtubedl_android`
+的类，没有它 `javac` 一定失败。构建脚本检测不到就会**自动调用**
+`scripts/fetch-vendor.ps1` 拉取；CI 上这一步被缓存住了，只下第一次。
 
 ## 常见问题
 
@@ -377,8 +391,16 @@ BiliGrab 原本以 MIT 授权。加入 YouTube 支持后**必须**改为 GPL-3.0
 它以 GPL-3.0 发布，而 GPL-3.0 要求链接它的作品整体以 GPL-3.0 分发。
 
 B 站那部分代码本身依然是自成一体的，但**整个应用**现在是 GPL-3.0。
-如果你只想要 B 站下载功能并希望保持 MIT，删掉 `vendor/` 目录即可 ——
-构建脚本会检测到它不存在，然后退化成只编 B 站逻辑的版本。
+如果你只想要 B 站下载功能并希望保持 MIT，那需要自己动手：把
+`YouTubeEngine.java` 与 `LocalRelay.java` 删掉，同时移除 `MainActivity` 与
+`DownloadService` 里对它们的调用。B 站那部分代码本身与 YouTube 无关，
+删干净之后整体回到 MIT 是成立的 —— 但**构建脚本不会替你完成这件事**。
+
+> 早先的版本里写着「删掉 `vendor/` 即可自动退回纯 B 站版本」，那是错的：
+> 少了 vendor 只会在 javac 阶段以一行没有指向性的「javac 失败」告终
+> （CI 上确实就是这么挂的）。要做到自动降级，得有第二份接口对齐的桩实现，
+> 而桩会随真实实现漂移。与其维护一个对不上的东西，不如把 vendor 当成
+> 普通依赖 —— 缺了就拉，拉不动就报一条说得清的错。
 
 ### 第三方组件
 

@@ -35,8 +35,15 @@
 2. **授权从 MIT 变成 GPL-3.0**。youtubedl-android 是 GPL-3.0，链接它就意味着整体
    必须 GPL-3.0。这是法律要求，不是风格选择。
 
-删掉 `vendor/` 目录即可退回纯 B 站版本：构建脚本会检测到它不存在，
-自动产出只含 B 站逻辑的 APK，这条约束在那时完全成立。
+`vendor/` 是必需的构建依赖，不是可选项：源代码里的 `YouTubeEngine.java`
+直接引用了 `com.yausername.youtubedl_android` 的类，而 `MainActivity` 与
+`DownloadService` 又引用 `YouTubeEngine`。构建脚本检测不到就会自动拉取
+（`scripts/fetch-vendor.ps1`，约 21 MB，CI 上被缓存）。
+
+> 这里曾经写过「删掉 `vendor/` 即可退回纯 B 站版本」，那条降级路径**从来没有
+> 真正走通过** —— 少了 vendor 只会在 javac 阶段以一行「javac 失败」告终。
+> 第一次推到 GitHub 上时 CI 就是这么挂的。要真做成降级，得再维护一份接口
+> 对齐的桩实现，而桩会随真实实现漂移；这个代价不值得，所以放弃了那个卖点。
 
 ---
 

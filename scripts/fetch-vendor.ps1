@@ -5,16 +5,16 @@
 #    它们合计约 17 MB（CPython 运行时 + Kotlin 标准库 + yt-dlp 本体），
 #    提交进去会让仓库体积膨胀一个数量级，而且这些内容都能从公开源重新拉到。
 #
-#  为什么单独一个脚本而不是在构建时顺手下载：
-#    构建脚本不应该依赖网络。CI 和本地都应该能离线重复构建出同一个包。
-#    所以拆成「先 fetch，后 build」两步，fetch 的结果进 vendor/ 并被 gitignore。
+#  为什么单独一个脚本而不是把下载散落在构建脚本里：
+#    这样 vendor/ 可以被 CI 缓存住，也能手工重跑而不必触发一次完整构建。
+#
+#  它是一份**必需的**构建依赖：源代码里的 YouTubeEngine.java 直接引用了
+#  com.yausername.youtubedl_android 的类，少了 vendor/ 的话 javac 一定失败。
+#  所以 build-apk.ps1 检测不到 vendor/ 时会自动调用本脚本。
 #
 #  用法：
 #     powershell -ExecutionPolicy Bypass -File scripts\fetch-vendor.ps1
 #     powershell -ExecutionPolicy Bypass -File scripts\fetch-vendor.ps1 -Force   # 强制重下
-#
-#  vendor/ 不存在时，build-apk.ps1 依然能构建 —— 那会产出一个不含 YouTube
-#  能力的纯 B 站版本（约 117 KB），这是刻意保留的降级路径。
 # =====================================================================
 
 param(

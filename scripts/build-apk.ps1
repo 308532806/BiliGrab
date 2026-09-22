@@ -121,19 +121,46 @@ if ($mfText -notmatch '<manifest[^>]*\spackage\s*=') {
     Write-Host "    已向 manifest 注入 package=$AppPackage"
 }
 
-# ---------------------------- vendor（可选） ----------------------------
-# vendor/ 由 scripts/fetch-vendor.ps1 生成，约 19 MB，内容是 YouTube 引擎：
+# ---------------------------- vendor ----------------------------
+# vendor/ 由 scripts/fetch-vendor.ps1 生成，约 21 MB，内容是 YouTube 引擎：
 #   jni/<abi>/*.so   CPython 运行时 + QuickJS
 #   libs/*.jar       youtubedl-android 的 Java API + Kotlin 标准库
-#   res/raw/ytdlp    yt-dlp 本体（zip，运行时可由 updateYoutubeDL 更新）
+#   res/raw/ytdlp    yt-dlp 本体（zip，运行时可由自定义更新器更新）
 #
-# 它不存在时构建照常进行，只是产出一个不含 YouTube 能力的纯 B 站版本
-# （约 117 KB）。这条降级路径是刻意保留的：仓库本身保持轻量，
-# 想要完整功能的人跑一次 fetch-vendor 即可。
+# 它是一份**必需的构建依赖**，缺了必须补上才能继续。
+#
+# 这里曾经设计过一条「检测不到 vendor 就产出纯 B 站版本（117 KB）」的降级
+# 路径，那条路是错的：YouTubeEngine.java 硬引用 com.yausername.*，
+# 而 MainActivity / DownloadService 又引用 YouTubeEngine，少了 vendor
+# 会在 [3/7] javac 阶段以一行毫无指向性的「javac 失败」告终。
+# 要真做成降级，就得再维护一份接口对齐的桩实现，而桩会随真实实现漂移。
+# 所以现在的策略是：当普通依赖处理，缺了就地拉，拉不动就报一条说得清的错。
 $VendorDir   = Join-Path $RepoRoot "vendor"
 $VendorJars  = @()
 $VendorJni   = Join-Path $VendorDir "jni"
 $HasVendor   = Test-Path (Join-Path $VendorDir "libs\youtubedl-android.jar")
+
+if (-not $HasVendor) {
+    $fetchScript = Join-Path $PSScriptRoot "fetch-vendor.ps1"
+    if (-not (Test-Path $fetchScript)) {
+        throw "缺少 scripts\fetch-vendor.ps1，无法获取 YouTube 引擎（vendor/）"
+    }
+    Write-Host "`n    未检测到 vendor/，正在拉取 YouTube 引擎（约 21 MB，仅首次）" -ForegroundColor Yellow
+    Write-Host "    来源: repo1.maven.org + github.com" -ForegroundColor DarkGray
+    & $fetchScript
+    $HasVendor = Test-Path (Join-Path $VendorDir "libs\youtubedl-android.jar")
+    if (-not $HasVendor) {
+        throw @"
+YouTube 引擎拉取失败，构建无法继续。
+
+  vendor/ 是必需的构建依赖，不是可选项：源代码里的 YouTubeEngine.java
+  直接引用了 com.yausername.youtubedl_android 的类，没有它 javac 一定失败。
+
+  请检查网络后手工重试：
+      powershell -ExecutionPolicy Bypass -File scripts\fetch-vendor.ps1
+"@
+    }
+}
 
 # 库的字节码里硬引用了它自己的 R 类（com/yausername/youtubedl_android/R$raw，
 # 字段 ytdlp，类型 int）。aapt2 默认只为我们的包名生成 R，所以必须用
@@ -149,7 +176,7 @@ if ($HasVendor) {
     Write-Host "`n    vendor/ 已就绪 —— 本次构建包含 YouTube 引擎" -ForegroundColor Magenta
     Write-Host ("      jar {0} 个, 原生库目录 {1}" -f $VendorJars.Count, $VendorJni) -ForegroundColor DarkGray
 
-    # vendor 的资源并进待编译的 res/ 目录。
+    # vendor 的资源并进 res/ 目录。
     # 只并 raw/ —— AAR 的 res/values/values.xml 声明了自己的 app_name，
     # 会和本应用的 app_name 撞名导致 aapt2 以
     # "resource 'string/app_name' has a conflicting value" 失败，
@@ -161,11 +188,8 @@ if ($HasVendor) {
         Copy-Item (Join-Path $vendorRaw "*") $dstRaw -Recurse -Force
         Write-Host "    已并入 vendor/res/raw（yt-dlp 本体）" -ForegroundColor DarkGray
     } else {
-        Write-Host "    vendor/res/raw 缺失，YouTube 引擎会在初始化时找不到 yt-dlp 本体" -ForegroundColor Red
+        throw "vendor/res/raw 缺失：YouTube 引擎初始化时会找不到 yt-dlp 本体，请重跑 fetch-vendor.ps1"
     }
-} else {
-    Write-Host "`n    未检测到 vendor/ —— 构建纯 B 站版本（不含 YouTube）" -ForegroundColor DarkGray
-    Write-Host "    需要 YouTube 支持请先运行: scripts\fetch-vendor.ps1" -ForegroundColor DarkGray
 }
 
 # ---------------------------- 1. aapt2 compile ----------------------------

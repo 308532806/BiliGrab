@@ -23,11 +23,6 @@
 *.keystore
 keystore.properties
 
-# Gradle
-.gradle/
-gradle-app.setting
-local.properties
-
 # IDE
 .idea/
 *.iml
