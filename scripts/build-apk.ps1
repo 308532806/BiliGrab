@@ -6,12 +6,15 @@
 #
 #  用法：
 #     powershell -ExecutionPolicy Bypass -File scripts\build-apk.ps1
-#     powershell -ExecutionPolicy Bypass -File scripts\build-apk.ps1 -VersionName 1.1.0
+#     powershell -ExecutionPolicy Bypass -File scripts\build-apk.ps1 -VersionName 1.1.1
 # =====================================================================
 
 param(
     [string]$VersionName = "1.0.0",
-    [int]$VersionCode = 1,
+    # 0 = 由 VersionName 推导。CI 只从 tag 取版本名、不传这个参数，
+    # 若默认成某个固定值，凡是没显式传参的构建都会产出一个低于上一版的
+    # versionCode，系统会直接拒绝覆盖安装。
+    [int]$VersionCode = 0,
     [string]$AppPackage = "com.biligrab.downloader",
     [string]$OutDir = "",
     # 签名密钥库。默认放在仓库的 keystore/ 目录（已 gitignore）。
@@ -28,6 +31,20 @@ param(
 # 这里统一靠 $LASTEXITCODE 判断成败。
 $ErrorActionPreference = 'Continue'
 $ProgressPreference = 'SilentlyContinue'
+
+# ---------------------------- 版本码 ----------------------------
+
+# 由版本名推导版本码：1.1.1 → 10101。单调递增，永远大于上一版。
+if ($VersionCode -le 0) {
+    $mv = [regex]::Match($VersionName, '^(\d+)\.(\d+)\.(\d+)')
+    if ($mv.Success) {
+        $VersionCode = [int]$mv.Groups[1].Value * 10000 +
+                       [int]$mv.Groups[2].Value * 100 +
+                       [int]$mv.Groups[3].Value
+    } else {
+        throw "无法从版本名 '$VersionName' 推导出版本码，请显式传入 -VersionCode。"
+    }
+}
 
 # ---------------------------- 路径 ----------------------------
 

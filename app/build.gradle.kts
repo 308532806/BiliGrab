@@ -10,8 +10,8 @@ android {
         applicationId = "com.biligrab.downloader"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 10101
+        versionName = "1.1.1"
     }
 
     buildTypes {

@@ -127,8 +127,8 @@ edge-to-edge、Snackbar、底部表单，全部基于平台原生 API 实现。
 powershell -ExecutionPolicy Bypass -File scripts\setup-sdk.ps1
 
 # 2) 编译（另需 JDK 17）
-powershell -ExecutionPolicy Bypass -File scripts\build-apk.ps1 -VersionName 1.1.0
-# 产物：dist\BiliGrab-1.1.0.apk
+powershell -ExecutionPolicy Bypass -File scripts\build-apk.ps1 -VersionName 1.1.1
+# 产物：dist\BiliGrab-1.1.1.apk
 ```
 
 可用环境变量 `JAVA_HOME`、`ANDROID_HOME` 指定工具链位置。
