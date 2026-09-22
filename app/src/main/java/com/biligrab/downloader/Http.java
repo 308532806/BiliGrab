@@ -5,6 +5,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
+import java.net.InetSocketAddress;
+import java.net.Proxy;
 import java.net.URL;
 
 /**
@@ -26,9 +28,114 @@ public final class Http {
     private Http() {
     }
 
+    /**
+     * 把 {@code host:port} 解析成代理对象，无法解析或为空时返回 {@code null}（表示直连）。
+     *
+     * <p>允许用户写 {@code http://192.168.8.2:7890} 或 {@code 192.168.8.2:7890}，
+     * 两种写法都很常见，多剥一层协议前缀成本极低。</p>
+     */
+    public static Proxy parseProxy(String spec) {
+        if (spec == null) {
+            return null;
+        }
+        String s = spec.trim();
+        if (s.isEmpty()) {
+            return null;
+        }
+        if (s.startsWith("http://")) {
+            s = s.substring(7);
+        } else if (s.startsWith("https://")) {
+            s = s.substring(8);
+        }
+        // 去掉可能存在的路径部分
+        int slash = s.indexOf('/');
+        if (slash >= 0) {
+            s = s.substring(0, slash);
+        }
+        int colon = s.lastIndexOf(':');
+        if (colon <= 0 || colon == s.length() - 1) {
+            return null;
+        }
+        try {
+            String host = s.substring(0, colon);
+            int port = Integer.parseInt(s.substring(colon + 1).trim());
+            if (port <= 0 || port > 65535) {
+                return null;
+            }
+            return new Proxy(Proxy.Type.HTTP, new InetSocketAddress(host, port));
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
     public static HttpURLConnection open(String url, String cookie, boolean withReferer)
             throws IOException {
-        HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
+        return open(url, cookie, withReferer, null);
+    }
+
+    /** 剥掉协议前缀与路径，只留 {@code host:port}。解析不出时返回空串。 */
+    private static String hostPort(String spec) {
+        if (spec == null) {
+            return "";
+        }
+        String s = spec.trim();
+        if (s.startsWith("http://")) {
+            s = s.substring(7);
+        } else if (s.startsWith("https://")) {
+            s = s.substring(8);
+        }
+        int slash = s.indexOf('/');
+        if (slash >= 0) {
+            s = s.substring(0, slash);
+        }
+        return s;
+    }
+
+    /** 代理主机名。{@link LocalRelay} 要拿它去建原始 socket。 */
+    public static String proxyHost(String spec) {
+        String s = hostPort(spec);
+        int colon = s.lastIndexOf(':');
+        return colon > 0 ? s.substring(0, colon).trim() : "";
+    }
+
+    /** 代理端口。解析失败返回 -1。 */
+    public static int proxyPort(String spec) {
+        String s = hostPort(spec);
+        int colon = s.lastIndexOf(':');
+        if (colon <= 0 || colon == s.length() - 1) {
+            return -1;
+        }
+        try {
+            int p = Integer.parseInt(s.substring(colon + 1).trim());
+            return (p > 0 && p <= 65535) ? p : -1;
+        } catch (NumberFormatException e) {
+            return -1;
+        }
+    }
+
+    /** 从一个完整 URL 里取出主机名，取不到返回空串。 */
+    public static String hostOf(String url) {
+        if (url == null) {
+            return "";
+        }
+        try {
+            String h = new URL(url).getHost();
+            return h == null ? "" : h;
+        } catch (Exception e) {
+            return "";
+        }
+    }
+
+    /**
+     * @param proxy 为 {@code null} 时直连。B 站一路永远传 null ——
+     *              它走代理只会更慢，还可能触发风控。代理只服务于 YouTube。
+     */
+    public static HttpURLConnection open(String url, String cookie, boolean withReferer, Proxy proxy)
+            throws IOException {
+        URL u = new URL(url);
+        HttpURLConnection c = (HttpURLConnection) (proxy == null
+                ? u.openConnection()
+                : u.openConnection(proxy));
         c.setConnectTimeout(15000);
         c.setReadTimeout(30000);
         c.setInstanceFollowRedirects(true);

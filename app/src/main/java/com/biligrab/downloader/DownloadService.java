@@ -39,6 +39,18 @@ public class DownloadService extends Service {
     public static final String EXTRA_QN = "qn";
     public static final String EXTRA_AUDIO_ONLY = "audioOnly";
 
+    // YouTube 任务专用
+    public static final String EXTRA_YOUTUBE = "youtube";
+    public static final String EXTRA_PAGE_URL = "pageUrl";
+    public static final String EXTRA_VIDEO_URL = "videoUrl";
+    public static final String EXTRA_VIDEO_SIZE = "videoSize";
+    public static final String EXTRA_VIDEO_W = "videoW";
+    public static final String EXTRA_VIDEO_H = "videoH";
+    public static final String EXTRA_AUDIO_URL = "audioUrl";
+    public static final String EXTRA_AUDIO_SIZE = "audioSize";
+    public static final String EXTRA_WEBM = "webm";
+    public static final String EXTRA_PROXY = "proxy";
+
     private static final String CHANNEL_ID = "biligrab_download";
     private static final int NOTIF_ID = 0x2101;
 
@@ -98,6 +110,16 @@ public class DownloadService extends Service {
         i.putExtra(EXTRA_PART, task.partTitle);
         i.putExtra(EXTRA_QN, task.qn);
         i.putExtra(EXTRA_AUDIO_ONLY, task.audioOnly);
+        i.putExtra(EXTRA_YOUTUBE, task.youtube);
+        i.putExtra(EXTRA_PAGE_URL, task.pageUrl);
+        i.putExtra(EXTRA_VIDEO_URL, task.videoUrl);
+        i.putExtra(EXTRA_VIDEO_SIZE, task.videoSize);
+        i.putExtra(EXTRA_VIDEO_W, task.videoWidth);
+        i.putExtra(EXTRA_VIDEO_H, task.videoHeight);
+        i.putExtra(EXTRA_AUDIO_URL, task.audioUrl);
+        i.putExtra(EXTRA_AUDIO_SIZE, task.audioSize);
+        i.putExtra(EXTRA_WEBM, task.webm);
+        i.putExtra(EXTRA_PROXY, task.proxy);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             ctx.startForegroundService(i);
         } else {
@@ -129,6 +151,16 @@ public class DownloadService extends Service {
         task.partTitle = str(intent, EXTRA_PART);
         task.qn = intent.getIntExtra(EXTRA_QN, Prefs.DEFAULT_QN);
         task.audioOnly = intent.getBooleanExtra(EXTRA_AUDIO_ONLY, false);
+        task.youtube = intent.getBooleanExtra(EXTRA_YOUTUBE, false);
+        task.pageUrl = str(intent, EXTRA_PAGE_URL);
+        task.videoUrl = str(intent, EXTRA_VIDEO_URL);
+        task.videoSize = intent.getLongExtra(EXTRA_VIDEO_SIZE, 0L);
+        task.videoWidth = intent.getIntExtra(EXTRA_VIDEO_W, 0);
+        task.videoHeight = intent.getIntExtra(EXTRA_VIDEO_H, 0);
+        task.audioUrl = str(intent, EXTRA_AUDIO_URL);
+        task.audioSize = intent.getLongExtra(EXTRA_AUDIO_SIZE, 0L);
+        task.webm = intent.getBooleanExtra(EXTRA_WEBM, false);
+        task.proxy = str(intent, EXTRA_PROXY);
 
         // 必须在 5 秒内调用 startForeground
         Notification preparing = buildNotification(
@@ -184,14 +216,25 @@ public class DownloadService extends Service {
     // ------------------------------------------------------------------
 
     private String runTask(Model.Task task) throws Exception {
-        Prefs prefs = new Prefs(this);
-        String cookie = prefs.cookie();
-
         File work = new File(getExternalFilesDir(null), "work");
         if (!work.exists() && !work.mkdirs()) {
             throw new IOException(getString(R.string.err_tmp_dir));
         }
         clearDir(work);
+        try {
+            return task.youtube ? runYouTubeTask(task, work) : runBiliTask(task, work);
+        } finally {
+            clearDir(work);
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // B 站：解析 → 下 DASH 双轨 → 合流
+    // ------------------------------------------------------------------
+
+    private String runBiliTask(Model.Task task, File work) throws Exception {
+        Prefs prefs = new Prefs(this);
+        String cookie = prefs.cookie();
 
         String stageResolve = getString(R.string.stage_resolve);
         emitProgress(stageResolve, 2);
@@ -211,7 +254,7 @@ public class DownloadService extends Service {
             String label = getString(R.string.stage_video,
                     v.width + "x" + v.height, Model.codecName(v.codecId));
             emitProgress(label, 5);
-            downloadStream(v, vFile, cookie, 5, 50, label, task.title);
+            downloadStream(v.candidates(), vFile, cookie, true, null, 5, 50, label, task.title);
         }
 
         Model.Stream a = info.bestAudio();
@@ -220,16 +263,90 @@ public class DownloadService extends Service {
             int lo = task.audioOnly ? 5 : 50;
             String stageAudio = getString(R.string.stage_audio);
             emitProgress(stageAudio, lo);
-            downloadStream(a, aFile, cookie, lo, 85, stageAudio, task.title);
+            downloadStream(a.candidates(), aFile, cookie, true, null, lo, 85,
+                    stageAudio, task.title);
         } else if (task.audioOnly) {
             throw new IOException(getString(R.string.err_no_audio_stream));
         }
 
-        File outFile = new File(work, "output.mp4");
+        return muxAndSave(task, work, vFile, aFile);
+    }
+
+    // ------------------------------------------------------------------
+    // YouTube：直链已经由界面解析好了，这里只负责下载与合流
+    // ------------------------------------------------------------------
+
+    /**
+     * <p>不在服务里重新解析是有意为之：YouTube 的解析要跑一整个 Python
+     * 解释器，实测量级 10-20 秒。用户刚在界面上看到画质列表就点了下载，
+     * 再让他对着通知栏等一次解析没有道理。直链在点击后立即使用，
+     * 远早于 googlevideo 的过期时间。</p>
+     */
+    private String runYouTubeTask(Model.Task task, File work) throws Exception {
+        java.net.Proxy proxy = Http.parseProxy(task.proxy);
+        if (proxy == null && !task.proxy.trim().isEmpty()) {
+            Log.w(TAG, "代理 " + task.proxy + " 无法解析，本次直连");
+        }
+
+        File vFile = null;
+        File aFile = null;
+
+        if (!task.audioOnly) {
+            if (task.videoUrl.isEmpty()) {
+                throw new IOException(getString(R.string.err_no_video_stream));
+            }
+            vFile = new File(work, "video.yt");
+            String label = getString(R.string.stage_video,
+                    task.videoWidth + "x" + task.videoHeight,
+                    YouTubeEngine.describeHeight(task.videoHeight));
+            emitProgress(label, 5);
+            // 不传 Cookie、不带 B 站 Referer：googlevideo 的直链自带签名，
+            // 多送一个 B 站 Referer 反而会被 CDN 当成异常请求。
+            downloadStream(java.util.Collections.singletonList(task.videoUrl), vFile,
+                    null, false, proxy, 5, 50, label, task.title);
+        }
+
+        if (task.audioOnly || !task.audioUrl.isEmpty()) {
+            if (task.audioUrl.isEmpty()) {
+                throw new IOException(getString(R.string.err_no_audio_stream));
+            }
+            aFile = new File(work, "audio.yt");
+            int lo = task.audioOnly ? 5 : 50;
+            String stageAudio = getString(R.string.stage_audio);
+            emitProgress(stageAudio, lo);
+            downloadStream(java.util.Collections.singletonList(task.audioUrl), aFile,
+                    null, false, proxy, lo, 85, stageAudio, task.title);
+        }
+
+        return muxAndSave(task, work, vFile, aFile);
+    }
+
+    // ------------------------------------------------------------------
+    // 合流与落库（B 站与 YouTube 共用）
+    // ------------------------------------------------------------------
+
+    private String muxAndSave(Model.Task task, File work, File vFile, File aFile) throws Exception {
+        // 扩展名必须和实际容器一致，而且要和 MediaStoreSaver 的 MIME 对得上。
+        // 只判断 webm 是不够的：音频那条走的是纯音频封装（audio/mp4），
+        // 名字却拼成 .mp4，MediaStore 发现对不上就会自己补成「标题.mp4.m4a」。
+        String ext = task.audioOnly ? "m4a" : (task.webm ? "webm" : "mp4");
+        File outFile = new File(work, "output." + ext);
         String stageMux = getString(R.string.stage_mux);
         emitProgress(stageMux, 88);
         updateNotification(stageMux, task.title, 88);
-        MuxUtil.mux(vFile, aFile, outFile);
+        try {
+            MuxUtil.mux(vFile, aFile, outFile, task.webm);
+        } catch (Exception e) {
+            // 走到这里说明容器的搭配有问题。给一句能直接照做的指引，
+            // 而不是丢一个 MediaMuxer 的异常名让用户去猜 —— 他刚下完
+            // 342 MB 才失败，这时候最需要知道的是「改选哪一档」。
+            if (!task.audioOnly) {
+                throw new IOException(getString(R.string.err_mux_failed,
+                        ext.toUpperCase(java.util.Locale.US),
+                        YouTubeEngine.describeHeight(task.videoHeight)), e);
+            }
+            throw e;
+        }
 
         if (!task.audioOnly && !MuxUtil.hasVideoTrack(outFile)) {
             throw new IOException(getString(R.string.err_no_video_track));
@@ -238,15 +355,18 @@ public class DownloadService extends Service {
         String stageSave = getString(R.string.stage_save_library);
         emitProgress(stageSave, 95);
         updateNotification(stageSave, task.title, 95);
-        String location = MediaStoreSaver.save(this, outFile, task.displayName(), task.audioOnly);
-
-        clearDir(work);
-        return location;
+        return MediaStoreSaver.save(this, outFile, task.displayName(), task.audioOnly, ext);
     }
 
-    private void downloadStream(Model.Stream s, File dst, String cookie,
-                                int lo, int hi, String stage, String title) throws IOException {
-        List<String> urls = s.candidates();
+    /**
+     * 依次尝试候选地址下载。
+     *
+     * @param withReferer 是否附带 B 站 Referer 与 Cookie。YouTube 直链必须为 false
+     * @param proxy       {@code null} 表示直连
+     */
+    private void downloadStream(List<String> urls, File dst, String cookie, boolean withReferer,
+                                java.net.Proxy proxy, int lo, int hi,
+                                String stage, String title) throws IOException {
         if (urls.isEmpty()) {
             throw new IOException(getString(R.string.err_no_url));
         }
@@ -256,7 +376,7 @@ public class DownloadService extends Service {
                 if (i > 0) {
                     Log.i(TAG, "fallback to backup url #" + i);
                 }
-                downloadUrl(urls.get(i), dst, cookie, lo, hi, stage, title);
+                downloadUrl(urls.get(i), dst, cookie, withReferer, proxy, lo, hi, stage, title);
                 return;
             } catch (IOException e) {
                 last = e;
@@ -270,9 +390,10 @@ public class DownloadService extends Service {
         throw last != null ? last : new IOException(getString(R.string.err_all_urls_failed));
     }
 
-    private void downloadUrl(String url, File dst, String cookie,
-                             int lo, int hi, String stage, String title) throws IOException {
-        HttpURLConnection c = Http.open(url, cookie, true);
+    private void downloadUrl(String url, File dst, String cookie, boolean withReferer,
+                             java.net.Proxy proxy, int lo, int hi,
+                             String stage, String title) throws IOException {
+        HttpURLConnection c = Http.open(url, cookie, withReferer, proxy);
         c.setRequestProperty("Range", "bytes=0-");
         try {
             int code = c.getResponseCode();

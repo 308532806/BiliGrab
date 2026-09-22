@@ -30,16 +30,34 @@ public final class MediaStoreSaver {
      */
     public static String save(Context ctx, File src, String displayName, boolean audioOnly)
             throws IOException {
-        // 扩展名必须和 MIME 一致。之前不管什么类型都拼 ".mp4"，而音频那条
-        // 走的 MIME 是 audio/mp4 —— MediaStore 发现对不上，自己把 ".m4a"
-        // 补到了后面，用户拿到的文件名就成了「标题.mp4.m4a」。
-        String safeName = displayName + (audioOnly ? ".m4a" : ".mp4");
-        String mime = audioOnly ? "audio/mp4" : "video/mp4";
+        return save(ctx, src, displayName, audioOnly, audioOnly ? "m4a" : "mp4");
+    }
+
+    /**
+     * @param ext 扩展名（不含点）。扩展名必须和 MIME 一致 —— 之前不管什么
+     *            类型都拼 {@code ".mp4"}，而音频那条走的 MIME 是
+     *            {@code audio/mp4}，MediaStore 发现对不上，自己把
+     *            {@code ".m4a"} 补到了后面，用户拿到的文件名就成了
+     *            「标题.mp4.m4a」。
+     */
+    public static String save(Context ctx, File src, String displayName, boolean audioOnly,
+                              String ext) throws IOException {
+        String safeName = displayName + "." + ext;
+        String mime = mimeOf(ext, audioOnly);
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             return saveViaMediaStore(ctx, src, safeName, mime, audioOnly);
         }
         return saveViaPublicDir(ctx, src, safeName, audioOnly);
+    }
+
+    private static String mimeOf(String ext, boolean audioOnly) {
+        if ("webm".equalsIgnoreCase(ext)) {
+            // WebM 的音视频是同一个 MIME。audioOnly 时走 Audio 集合，
+            // 但类型串仍然得是 audio/webm，否则 MediaStore 又会改扩展名。
+            return audioOnly ? "audio/webm" : "video/webm";
+        }
+        return audioOnly ? "audio/mp4" : "video/mp4";
     }
 
     private static String saveViaMediaStore(Context ctx, File src, String name, String mime,

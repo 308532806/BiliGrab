@@ -176,6 +176,67 @@
                     android:trackTint="@color/switch_track" />
             </LinearLayout>
 
+            <!-- ==================== YouTube ==================== -->
+
+            <TextView
+                style="@style/Widget.SectionTitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/section_gap"
+                android:text="@string/settings_youtube_title" />
+
+            <TextView
+                android:id="@+id/labelProxy"
+                style="@style/Widget.FieldLabel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/space_lg"
+                android:layout_marginBottom="@dimen/space_sm"
+                android:labelFor="@id/etProxy"
+                android:text="@string/settings_proxy_label" />
+
+            <EditText
+                android:id="@+id/etProxy"
+                style="@style/Widget.TextField"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="@string/settings_proxy_hint"
+                android:importantForAutofill="no"
+                android:inputType="textNoSuggestions|textUri"
+                tools:ignore="TextViewEdits" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/space_sm"
+                android:text="@string/settings_proxy_help"
+                android:textAppearance="@style/Text.BodySmall" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/space_md"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/tvYtDlpVersion"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:paddingEnd="@dimen/space_md"
+                    android:textAppearance="@style/Text.BodySmall"
+                    android:textColor="@color/m3_on_surface_variant"
+                    tools:text="解析引擎 2025.11.12" />
+
+                <Button
+                    android:id="@+id/btnUpdateYtDlp"
+                    style="@style/Widget.Button.Outlined"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/settings_update_engine" />
+            </LinearLayout>
+
             <!-- ==================== 外观 ==================== -->
 
             <TextView
@@ -215,6 +276,16 @@
                 android:layout_marginTop="@dimen/space_xs"
                 android:text="@string/settings_about_body"
                 android:textAppearance="@style/Text.BodySmall" />
+
+            <!-- GPL-3.0 要求保留出处。放在这里而不是只在代码注释里，
+                 是因为用户能在应用内看到它。 -->
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/space_sm"
+                android:text="@string/settings_about_license"
+                android:textAppearance="@style/Text.BodySmall"
+                android:textColor="@color/m3_on_surface_variant" />
 
         </LinearLayout>
     </ScrollView>

@@ -111,6 +111,21 @@ public class MainActivity extends Activity implements DownloadService.Listener {
     // ---- 状态 ----
     private Model.Video current;
     private Model.PlayInfo currentProbe;
+
+    /**
+     * YouTube 预览用的本地转发。MediaPlayer 不认应用层代理，
+     * 只能让它连 127.0.0.1，由我们经代理把字节搬回来。
+     * 换视频或退出时必须停掉，否则端口一直占着。
+     */
+    private LocalRelay previewRelay;
+
+    /** 停掉预览转发。可以安全地重复调用。 */
+    private void stopPreviewRelay() {
+        if (previewRelay != null) {
+            previewRelay.stop();
+            previewRelay = null;
+        }
+    }
     private int selectedQn = Prefs.DEFAULT_QN;
     private int selectedPart;
     private boolean downloading;
@@ -140,11 +155,19 @@ public class MainActivity extends Activity implements DownloadService.Listener {
         final ProgressBar bar;
         /** 空闲时该显示的副标题，下载结束后要还原回来。 */
         final String metaIdle;
+        /**
+         * 这一行对应的流。B 站这边是 null（服务会自己按 qn 重新解析），
+         * YouTube 这边必须带上 —— 直链是界面解析阶段拿到的，
+         * 服务端没有别的办法再拿到它。
+         */
+        final Model.Stream stream;
 
-        DownloadRow(int qn, boolean audioOnly, View main, TextView label, TextView meta,
-                    ImageView icon, TextView percent, ProgressBar bar, String metaIdle) {
+        DownloadRow(int qn, boolean audioOnly, Model.Stream stream, View main, TextView label,
+                    TextView meta, ImageView icon, TextView percent, ProgressBar bar,
+                    String metaIdle) {
             this.qn = qn;
             this.audioOnly = audioOnly;
+            this.stream = stream;
             this.main = main;
             this.label = label;
             this.meta = meta;
@@ -206,6 +229,28 @@ public class MainActivity extends Activity implements DownloadService.Listener {
 
         ensureBuvid();
         requestPermissionsIfNeeded();
+        warmUpYouTubeEngine();
+    }
+
+    /**
+     * 后台预热 YouTube 解析引擎。
+     *
+     * <p>首次使用要把 {@code libpython.zip.so} 解压到应用私有目录、把内置的
+     * yt-dlp 落地，实测要十几秒。放到启动时做掉，用户第一次点「解析」就不用
+     * 对着进度条发愣。之后每次启动只是几次文件存在性检查，开销可以忽略。</p>
+     *
+     * <p>失败不提示：没装引擎不该影响 B 站功能，用户真去解析 YouTube 链接时
+     * 会在结果区看到具体原因。</p>
+     */
+    private void warmUpYouTubeEngine() {
+        bg.execute(() -> {
+            String err = YouTubeEngine.ensureReady(this);
+            if (err.isEmpty()) {
+                Log.i(TAG, "YouTube 引擎就绪，yt-dlp " + YouTubeEngine.version(this));
+            } else {
+                Log.w(TAG, "YouTube 引擎预热失败：" + err);
+            }
+        });
     }
 
     /**
@@ -259,6 +304,7 @@ public class MainActivity extends Activity implements DownloadService.Listener {
         if (preview != null) {
             preview.release();
         }
+        stopPreviewRelay();
         bg.shutdownNow();
         super.onDestroy();
     }
@@ -404,10 +450,45 @@ public class MainActivity extends Activity implements DownloadService.Listener {
      */
     private void fetchPreviewSource() {
         final Model.Video v = current;
+        final Model.PlayInfo info = currentProbe;
+        Log.i(TAG, "取预览地址：video=" + (v != null)
+                + " pages=" + (v == null ? -1 : v.pages.size())
+                + " youtube=" + (info != null && info.fromYouTube)
+                + " preview=" + (info == null || info.preview == null
+                        ? "无" : info.preview.url.length() + "字符"));
+
         if (v == null || v.pages.isEmpty()) {
             preview.sourceFailed();
             return;
         }
+
+        // YouTube 的预览地址在解析阶段就一起拿到了（yt-dlp 顺带返回的
+        // 渐进式 MP4，音视频已经合体，可以直接交给 MediaPlayer）。
+        // 不必也不该再跑一次 Python。
+        if (info != null && info.fromYouTube) {
+            stopPreviewRelay();
+            if (info.preview != null && !info.preview.url.isEmpty()) {
+                // MediaPlayer 是 native 的 NuPlayer，不认应用层代理。
+                // 有代理时必须在本地起一跳转发，否则它会直连 googlevideo
+                // 然后一直卡在 prepareAsync（真机实测）。
+                LocalRelay relay = LocalRelay.start(
+                        info.preview.url, prefs.youtubeProxy());
+                if (relay != null) {
+                    previewRelay = relay;
+                    preview.sourceReady(relay.url(), info.preview.durationMs);
+                } else {
+                    preview.sourceReady(info.preview.url, info.preview.durationMs);
+                }
+            } else {
+                // 极少数视频没有渐进式格式。分离轨给 MediaPlayer 播出来是无声的，
+                // 所以这里选择明确失败，而不是播一个没声音的画面。
+                Log.w(TAG, "该 YouTube 视频没有渐进式格式，无法预览");
+                preview.sourceFailed();
+            }
+            return;
+        }
+        stopPreviewRelay();
+
         final Model.Part part = v.pages.get(clampPartIndex());
         bg.execute(() -> {
             try {
@@ -591,14 +672,20 @@ public class MainActivity extends Activity implements DownloadService.Listener {
 
         renderLoading();
 
+        final boolean youtube = YouTubeEngine.isYouTubeUrl(raw);
         bg.execute(() -> {
             try {
-                String cookie = prefs.cookie();
-                Model.Video v = BiliApi.view(raw, cookie);
-                // 用 127 探测一次，拿到该稿件全部可用画质
-                Model.PlayInfo probe = BiliApi.playurl(
-                        v.bvid, v.pages.get(0).cid, 127, cookie);
-                ui.post(() -> onParsed(v, probe));
+                if (youtube) {
+                    YouTubeEngine.Result r = YouTubeEngine.resolve(this, raw, prefs.youtubeProxy());
+                    ui.post(() -> onParsed(r.video, r.play));
+                } else {
+                    String cookie = prefs.cookie();
+                    Model.Video v = BiliApi.view(raw, cookie);
+                    // 用 127 探测一次，拿到该稿件全部可用画质
+                    Model.PlayInfo probe = BiliApi.playurl(
+                            v.bvid, v.pages.get(0).cid, 127, cookie);
+                    ui.post(() -> onParsed(v, probe));
+                }
             } catch (Exception e) {
                 ui.post(() -> onParseFailed(e));
             }
@@ -615,11 +702,19 @@ public class MainActivity extends Activity implements DownloadService.Listener {
         renderResult();
 
         tvTitle.setText(v.title);
-        tvMeta.setText(getString(R.string.meta_format,
-                v.owner, v.pages.size(), fmtDuration(v.duration)));
+        if (probe != null && probe.fromYouTube) {
+            // YouTube 没有分 P 的概念，照搬 B 站的「N 个分P」会显示成一句废话
+            tvMeta.setText(getString(R.string.meta_format_youtube,
+                    v.owner.isEmpty() ? getString(R.string.youtube_unknown_channel) : v.owner,
+                    fmtDuration(v.duration)));
+        } else {
+            tvMeta.setText(getString(R.string.meta_format,
+                    v.owner, v.pages.size(), fmtDuration(v.duration)));
+        }
 
         // 新稿件：预览退回封面态，否则会留着上一个视频的画面
         preview.reset();
+        stopPreviewRelay();
         loadCover(v.cover);
         adapter.notifyDataSetChanged();
 
@@ -711,6 +806,8 @@ public class MainActivity extends Activity implements DownloadService.Listener {
         rows.clear();
         selectedQn = Prefs.DEFAULT_QN;
 
+        boolean youtube = probe != null && probe.fromYouTube;
+
         // 画质去重、从高到低
         LinkedHashSet<Integer> seen = new LinkedHashSet<>();
         if (probe != null && probe.videos != null) {
@@ -734,21 +831,36 @@ public class MainActivity extends Activity implements DownloadService.Listener {
 
         LayoutInflater inflater = LayoutInflater.from(this);
         for (Integer qn : qns) {
+            // YouTube 的 qn 就是画面高度，videoByQuality 按 quality 匹配，能直接命中
             Model.Stream s = probe.videoByQuality(qn, prefs.preferAvc());
-            String meta = s == null || s.width <= 0
-                    ? ""
-                    : getString(R.string.row_meta_video, s.width, s.height, codecName(s.codecId));
-            rows.add(addDownloadRow(inflater, qn, false, qnLabel(probe, qn), meta,
+            String meta;
+            if (s == null || s.width <= 0) {
+                meta = "";
+            } else if (youtube) {
+                // YouTube 的档位体积差异极大（144P 是 2 MB，2160P 是 342 MB），
+                // 把体积摆出来比只写分辨率有用得多
+                meta = getString(R.string.row_meta_youtube,
+                        s.width, s.height, fmtSize(s.size), codecName(s.codecId));
+            } else {
+                meta = getString(R.string.row_meta_video, s.width, s.height, codecName(s.codecId));
+            }
+            rows.add(addDownloadRow(inflater, qn, false, s, qnLabel(probe, qn), meta,
                     R.drawable.ic_download));
         }
-        rows.add(addDownloadRow(inflater, selectedQn, true,
-                getString(R.string.row_audio), getString(R.string.row_audio_desc),
-                R.drawable.ic_music));
+
+        Model.Stream audio = probe.audios.isEmpty() ? null : probe.audios.get(0);
+        String audioDesc = getString(R.string.row_audio_desc);
+        if (youtube && audio != null && audio.size > 0) {
+            audioDesc = getString(R.string.row_audio_desc_size, fmtSize(audio.size));
+        }
+        rows.add(addDownloadRow(inflater, selectedQn, true, audio,
+                getString(R.string.row_audio), audioDesc, R.drawable.ic_music));
 
         setRowsEnabled(true);
 
-        // 只有「受登录限制」时才提示，避免无端打扰
-        if (!prefs.hasLogin() && best < QN_1080P && best > 0) {
+        // 「登录解锁画质」只对 B 站成立。YouTube 的档位限制来自服务端，
+        // 与登录状态无关，在那边显示这句会纯粹误导用户。
+        if (!youtube && !prefs.hasLogin() && best < QN_1080P && best > 0) {
             tvQualityHint.setText(getString(R.string.hint_login_for_quality, qnLabel(probe, best)));
             qualityHintBox.setVisibility(View.VISIBLE);
         } else {
@@ -756,8 +868,24 @@ public class MainActivity extends Activity implements DownloadService.Listener {
         }
     }
 
+    /** 人类可读的体积。0 表示未知，此时返回空串而不是 "0 B"。 */
+    static String fmtSize(long bytes) {
+        if (bytes <= 0) {
+            return "";
+        }
+        if (bytes < 1024L * 1024L) {
+            return (bytes / 1024L) + " KB";
+        }
+        double mb = bytes / 1024.0 / 1024.0;
+        if (mb < 1024.0) {
+            return String.format(java.util.Locale.US, "%.0f MB", mb);
+        }
+        return String.format(java.util.Locale.US, "%.2f GB", mb / 1024.0);
+    }
+
     private DownloadRow addDownloadRow(LayoutInflater inflater, int qn, boolean audioOnly,
-                                       String label, String meta, int iconRes) {
+                                       Model.Stream stream, String label, String meta,
+                                       int iconRes) {
         View root = inflater.inflate(R.layout.item_download, listDownloads, false);
         View main = root.findViewById(R.id.rowMain);
         TextView tvLabel = root.findViewById(R.id.tvRowLabel);
@@ -771,7 +899,7 @@ public class MainActivity extends Activity implements DownloadService.Listener {
         // 音频行用音符图标，和视频行区分开 —— 不用读文字也能一眼分辨
         icon.setImageResource(iconRes);
 
-        DownloadRow row = new DownloadRow(qn, audioOnly, main, tvLabel, tvMeta,
+        DownloadRow row = new DownloadRow(qn, audioOnly, stream, main, tvLabel, tvMeta,
                 icon, percent, bar, meta);
         main.setContentDescription(getString(R.string.cd_download_quality, label));
         main.setOnClickListener(v -> startDownload(row));
@@ -791,6 +919,7 @@ public class MainActivity extends Activity implements DownloadService.Listener {
             case 7:  return getString(R.string.codec_avc);
             case 12: return getString(R.string.codec_hevc);
             case 13: return getString(R.string.codec_av1);
+            case Model.CODEC_VP9: return getString(R.string.codec_vp9);
             default: return getString(R.string.codec_unknown);
         }
     }
@@ -858,20 +987,58 @@ public class MainActivity extends Activity implements DownloadService.Listener {
             return;
         }
 
-        Model.Part part = current.pages.get(clampPartIndex());
+        boolean youtube = currentProbe != null && currentProbe.fromYouTube;
 
         Model.Task task = new Model.Task();
-        task.bvid = current.bvid;
-        task.cid = part.cid;
         task.title = current.title;
-        task.partTitle = part.title;
         task.qn = row.qn;
         task.audioOnly = row.audioOnly;
+        task.youtube = youtube;
 
-        // 记住视频档位的选择；「仅音频」不代表画质偏好
-        if (!row.audioOnly) {
-            selectedQn = row.qn;
-            prefs.setPreferQn(row.qn);
+        if (youtube) {
+            Model.Part p = current.pages.get(0);
+            task.pageUrl = inputUrl.getText().toString().trim();
+            task.partTitle = p.title;
+            task.videoWidth = row.stream != null ? row.stream.width : 0;
+            task.videoHeight = row.stream != null ? row.stream.height : row.qn;
+            task.proxy = prefs.youtubeProxy();
+
+            if (row.stream == null) {
+                Snackbar.show(findViewById(R.id.root), getString(R.string.err_no_video_stream));
+                return;
+            }
+            task.videoUrl = row.stream.url;
+            task.videoSize = row.stream.size;
+
+            // 容器跟着视频编码走，这不是偏好问题：MediaMuxer 不接受
+            // VP9 进 MP4（实测抛 IllegalStateException），而 AAC 进不了 WebM。
+            // YouTube 的 1440P / 2160P 只有 VP9 与 AV1，所以这两档必须走 WebM。
+            task.webm = Model.needsWebm(row.stream.codecId);
+
+            Model.Stream a = currentProbe.audioFor(task.webm);
+            if (a == null && !row.audioOnly) {
+                // 下到一个没有声音的视频比直接说清楚更糟 —— 用户多半
+                // 不会意识到问题出在音轨格式上。这条分支实际很难走到：
+                // yt-dlp 对任何视频都会给 Opus 音轨。
+                Snackbar.show(findViewById(R.id.root), getString(
+                        task.webm ? R.string.err_no_webm_audio : R.string.err_no_audio_stream));
+                return;
+            }
+            if (a != null) {
+                task.audioUrl = a.url;
+                task.audioSize = a.size;
+            }
+        } else {
+            Model.Part part = current.pages.get(clampPartIndex());
+            task.bvid = current.bvid;
+            task.cid = part.cid;
+            task.partTitle = part.title;
+
+            // 记住视频档位的选择；「仅音频」不代表画质偏好
+            if (!row.audioOnly) {
+                selectedQn = row.qn;
+                prefs.setPreferQn(row.qn);
+            }
         }
 
         downloading = true;
@@ -977,6 +1144,77 @@ public class MainActivity extends Activity implements DownloadService.Listener {
         final Switch swAvc = content.findViewById(R.id.swPreferAvc);
         swAvc.setChecked(prefs.preferAvc());
 
+        // ---- YouTube ----
+        final EditText etProxy = content.findViewById(R.id.etProxy);
+        etProxy.setText(prefs.youtubeProxy());
+
+        final TextView tvDlp = content.findViewById(R.id.tvYtDlpVersion);
+        final Button btnUpdate = content.findViewById(R.id.btnUpdateYtDlp);
+        tvDlp.setText(R.string.settings_engine_checking);
+
+        // 读版本要起一次解释器（约 30 ms，但首次解压要几秒），
+        // 放在后台线程，别卡住表单弹出的动画
+        bg.execute(() -> {
+            String v;
+            if (!YouTubeEngine.isAvailable(this)) {
+                v = "";
+            } else {
+                v = YouTubeEngine.version(this);
+            }
+            ui.post(() -> {
+                if (isFinishing() || isDestroyed()) {
+                    return;
+                }
+                if (v.isEmpty()) {
+                    tvDlp.setText(R.string.settings_engine_missing);
+                } else {
+                    tvDlp.setText(getString(R.string.settings_engine_version, v));
+                }
+                // 引擎都没装起来就没得更新
+                btnUpdate.setEnabled(!v.isEmpty());
+            });
+        });
+
+        btnUpdate.setOnClickListener(v -> {
+            btnUpdate.setEnabled(false);
+            tvDlp.setText(R.string.snack_engine_updating);
+            Snackbar.show(findViewById(R.id.root), getString(R.string.snack_engine_updating));
+
+            // 更新用的是输入框里的值而不是已保存的值：用户刚填完代理就点更新，
+            // 是很自然的顺序，这时候拿旧值去连必然失败
+            final String proxy = etProxy.getText().toString().trim();
+            bg.execute(() -> {
+                try {
+                    String nv = YouTubeEngine.updateYtDlp(this, proxy);
+                    ui.post(() -> {
+                        if (isFinishing() || isDestroyed()) {
+                            return;
+                        }
+                        tvDlp.setText(getString(R.string.settings_engine_version, nv));
+                        btnUpdate.setEnabled(true);
+                        Snackbar.show(findViewById(R.id.root),
+                                getString(R.string.snack_engine_updated, nv), null, null,
+                                R.drawable.ic_check);
+                    });
+                } catch (Exception e) {
+                    Log.w(TAG, "更新 yt-dlp 失败", e);
+                    ui.post(() -> {
+                        if (isFinishing() || isDestroyed()) {
+                            return;
+                        }
+                        btnUpdate.setEnabled(true);
+                        // 版本号可能已经被上一次成功的更新改掉了，重新读一次
+                        String cur = YouTubeEngine.version(this);
+                        tvDlp.setText(cur.isEmpty()
+                                ? getString(R.string.settings_engine_missing)
+                                : getString(R.string.settings_engine_version, cur));
+                        Snackbar.show(findViewById(R.id.root), describeRaw(e), null, null,
+                                R.drawable.ic_error);
+                    });
+                }
+            });
+        });
+
         // ---- 外观 ----
         final FlowLayout chipTheme = content.findViewById(R.id.chipTheme);
         final int[] modeValues = {Prefs.THEME_SYSTEM, Prefs.THEME_LIGHT, Prefs.THEME_DARK};
@@ -1010,20 +1248,33 @@ public class MainActivity extends Activity implements DownloadService.Listener {
 
         // ---- 关闭 ----
         content.findViewById(R.id.btnSheetClose).setOnClickListener(v -> {
-            commitSettings(et, swAvc);
+            commitSettings(et, swAvc, etProxy);
             sheet.dismiss();
         });
 
-        sheet.setOnDismissListener(d -> commitSettings(et, swAvc));
+        sheet.setOnDismissListener(d -> commitSettings(et, swAvc, etProxy));
         sheet.show();
     }
 
     private void commitSettings(EditText et, Switch swAvc) {
+        commitSettings(et, swAvc, null);
+    }
+
+    private void commitSettings(EditText et, Switch swAvc, EditText etProxy) {
         String sess = et.getText().toString().trim();
         boolean changed = !sess.equals(prefs.sessdata())
                 || swAvc.isChecked() != prefs.preferAvc();
         prefs.setSessdata(sess);
         prefs.setPreferAvc(swAvc.isChecked());
+
+        if (etProxy != null) {
+            String proxy = etProxy.getText().toString().trim();
+            if (!proxy.equals(prefs.youtubeProxy())) {
+                prefs.setYoutubeProxy(proxy);
+                changed = true;
+            }
+        }
+
         if (changed) {
             Snackbar.show(findViewById(R.id.root), getString(R.string.snack_settings_saved));
         }
@@ -1061,11 +1312,19 @@ public class MainActivity extends Activity implements DownloadService.Listener {
         // 接口返回的封面是明文 http，manifest 里 usesCleartextTraffic=false 会拦掉它。
         // BiliApi 已经统一升级成 https，这里再兜一次底。
         final String fixed = BiliApi.httpsify(url);
+        // YouTube 的封面在 i.ytimg.com 上，和视频一样被墙，必须走代理。
+        // 判据用最终 URL 而不是当前数据源：封面地址本身就是最好的指示。
+        final boolean isYouTubeCover = Http.hostOf(fixed).endsWith("ytimg.com");
+        final java.net.Proxy proxy = isYouTubeCover
+                ? Http.parseProxy(prefs.youtubeProxy())
+                : null;
+        // B 站 CDN 校验 Referer，ytimg 不校验 —— 多送一个反而多余
+        final boolean withReferer = !isYouTubeCover;
         bg.execute(() -> {
             Bitmap bmp = null;
             HttpURLConnection c = null;
             try {
-                c = Http.open(fixed, "", true);
+                c = Http.open(fixed, "", withReferer, proxy);
                 InputStream in = c.getInputStream();
                 try {
                     bmp = BitmapFactory.decodeStream(in);

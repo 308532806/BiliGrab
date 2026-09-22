@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  网络安全配置
+  =============
+  这里只为一个目的存在：让 MediaPlayer 能访问本机的预览转发。
+
+  背景：YouTube 的预览必须在本地起一跳 HTTP 转发（MediaPlayer 是 native 的
+  NuPlayer，不认应用层代理，直连 googlevideo 必然超时）。那个转发监听的是
+  http://127.0.0.1:PORT，属于明文流量。
+
+  而 manifest 里 usesCleartextTraffic="false" 会把这唯一的例外也一并掐掉 ——
+  真机上的表现是 NuPlayer 报 source returned error -1，转发侧连一个连接
+  都收不到，看起来像是转发没工作，实际上是流量根本没被允许发出。
+
+  所以这里把回环地址单独放行。除它以外的所有域名仍然禁止明文，
+  全局策略没有被削弱。
+-->
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">127.0.0.1</domain>
+        <domain includeSubdomains="false">localhost</domain>
+    </domain-config>
+</network-security-config>

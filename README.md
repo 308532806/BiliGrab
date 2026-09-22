@@ -1,13 +1,15 @@
 # BiliGrab
 
-> 一个**零第三方依赖**的哔哩哔哩视频下载器 Android 客户端。
-> 只调用网页版自身使用的公开接口，用你自己的登录态取流，用系统 `MediaMuxer` 合成 MP4。
+> 哔哩哔哩 + YouTube 视频下载器 Android 客户端。
+> B 站部分**零第三方依赖**，只调用网页版自身使用的公开接口，用你自己的登录态取流，
+> 用系统 `MediaMuxer` 合成。YouTube 部分由内嵌的 yt-dlp 提供。
 > 内置预览播放器，选好画质再下载。
 
 [![Build APK](https://github.com/308532806/BiliGrab/actions/workflows/build.yml/badge.svg)](https://github.com/308532806/BiliGrab/actions/workflows/build.yml)
 ![Android](https://img.shields.io/badge/Android-8.0%2B%20(API%2026)-3DDC84)
-![APK Size](https://img.shields.io/badge/APK-~117%20KB-blue)
-![Dependencies](https://img.shields.io/badge/dependencies-none-success)
+![APK Size](https://img.shields.io/badge/APK-~18.5%20MB-blue)
+![B站部分依赖](https://img.shields.io/badge/bilibili%20deps-none-success)
+![License](https://img.shields.io/badge/license-GPL--3.0-blue)
 
 ---
 
@@ -50,6 +52,8 @@ BiliGrab 是从零重写的独立实现，**没有复用 BILIBILIAS 的任何代
 
 ## 功能
 
+**哔哩哔哩**
+
 - 粘贴链接 / BV 号 / av 号，或直接从 B 站 App「分享」唤起
 - 自动解析标题、UP 主、封面、分 P 列表
 - **内置预览播放器**：解析完直接在应用里播放，可拖动到任意位置，确认是要下载的那个再下
@@ -58,10 +62,71 @@ BiliGrab 是从零重写的独立实现，**没有复用 BILIBILIAS 的任何代
 - 支持 **4K / 1080P60 / HDR / 杜比音频**（取决于账号权限）
 - 仅音频导出为 `m4a`（跳过视频流）
 - 多 CDN 备用地址自动切换（主地址失败时重试 `backupUrl`）
+
+**YouTube**
+
+- 粘贴 `youtube.com` / `youtu.be` 链接即可，与 B 站共用同一套界面
+- 画质从 **144P 到 2160P（4K）**，每一行直接标出**文件体积**和编码
+- 高画质自动选用正确的容器：1440P / 2160P 只有 VP9 / AV1，会封装成 **WebM**；
+  1080P 及以下走 H.264 + AAC 的 **MP4**
+- **应用内更新解析引擎**：YouTube 的接口变化频繁，内置的 yt-dlp 迟早会失效，
+  设置里一键拉取官方最新版（实测 2025.11.12 → 2026.08.19）
+- 预览播放同样可用（经本地转发走代理）
+
+**通用**
+
 - 前台服务 + 通知栏实时进度
-- 完成后写入系统媒体库，相册直接可见
+- 完成后写入系统媒体库，相册 / 音乐播放器直接可见
 - Material 3 界面，浅色 / 深色 / 跟随系统三选一
 - 自适应启动图标（含 Android 13+ 主题化图标）
+
+---
+
+## YouTube 支持是怎么做的
+
+### 为什么不是自己解析
+
+先说结论：**纯 Java 解析 YouTube 是做不到的**，这不是工作量问题。
+
+实测拿到的 27 个格式**全部是 `signatureCipher`，没有一个明文 `url`**。
+签名要用 YouTube 自己的播放器 JS 去解，而 Android 上没有 JS 引擎能直接用。
+InnerTube 的 `/youtubei/v1/player` 走网页端身份会被判定为 `UNPLAYABLE`，
+换 Android / TVHTML5 客户端身份则直接 `HTTP 400`。
+
+所以这里选了 **yt-dlp**（192k stars，最新版单个二进制的下载量就有 327 万次），
+通过 [`youtubedl-android`](https://github.com/youtube-dl-android/youtubedl-android)
+把 CPython 运行时和 yt-dlp 一起打包进 APK。
+
+### 体积账
+
+| 部分 | 大小 |
+| --- | --- |
+| CPython 运行时（仅 arm64-v8a） | 14.52 MB |
+| yt-dlp 本体 | 3.02 MB |
+| 其余（含原来的 B 站逻辑） | ~1 MB |
+| **合计** | **18.5 MB** |
+
+两个刻意的取舍：
+
+- **只打包 arm64-v8a。** 四个 ABI 全打是 56.47 MB，而 2026 年的设备几乎都是 arm64。
+- **不带 ffmpeg 和 aria2c。** 单是 ffmpeg 的 AAR 就 132.91 MB。
+  合流这活本来就有系统 `MediaMuxer` 在做，没有必要为了「统一」再塞一份 ffmpeg。
+
+对比同类应用（Seal 54–66 MB、YTDLnis 同量级），18.5 MB 属于明显更小的。
+
+### 一个必须知道的限制
+
+**YouTube 在中国大陆无法直连，必须先在设置里填代理。**
+该设置只作用于 YouTube —— B 站仍然直连，走代理只会更慢，还可能触发风控。
+
+代理是传给 yt-dlp 命令行（`--proxy`）的，因为 Python 的 urllib **不认**
+Android 的全局 HTTP 代理。
+
+预览播放还有一层特殊处理：`MediaPlayer` 由 native 的 NuPlayer 驱动，
+**同样不认应用层代理**，直连 googlevideo 会一直卡在 `prepareAsync`。
+所以预览会在本地起一个转发（`LocalRelay`），让 MediaPlayer 连 `127.0.0.1`，
+由应用经代理把字节搬回来。为此 manifest 里给回环地址开了一个明文例外
+（`network_security_config.xml`），其余域名仍然全部禁止明文。
 
 ## 界面
 
@@ -189,6 +254,8 @@ tag 触发 Release 时会给出 `::warning::` 提示。
 
 ## 使用
 
+### 哔哩哔哩
+
 1. 安装 APK。
 2. （推荐）点右上角**设置**，填入 `SESSDATA` —— 不填画质上限只有 480P。
 
@@ -199,6 +266,18 @@ tag 触发 Release 时会给出 `::warning::` 提示。
 4. 选分 P 和画质，点**开始下载**。
 5. 完成后视频在 `Movies/BiliGrab/`，相册里能直接看到。
 
+### YouTube
+
+1. 先在**设置 → 代理**里填 `host:port`。**这一步不能跳过**，
+   YouTube 在中国大陆无法直连。该设置只影响 YouTube。
+2. 粘贴 `youtube.com/watch?v=...`、`youtu.be/...` 或 `youtube.com/shorts/...`，点**解析**。
+3. 画质列表从 144P 到 2160P，每行都标着体积。点一行开始下载。
+4. 完成后视频在 `Movies/BiliGrab/`，音频在 `Music/BiliGrab/`。
+
+> **引擎会过期，这是知道的前提。** yt-dlp 内置的是打包时的快照，
+> YouTube 的接口变化以周计。真遇到解析失败，去**设置 → 更新引擎**拉最新版。
+> 更新前请确认代理可用 —— 更新走的是 `github.com`。
+
 ## 项目结构
 
 ```
@@ -208,9 +287,11 @@ BiliGrab/
 │   ├── java/com/biligrab/downloader/
 │   │   ├── MainActivity.java          # 界面状态机与交互
 │   │   ├── DownloadService.java       # 前台服务、下载流程、通知
-│   │   ├── BiliApi.java               # 接口封装与参数校验
+│   │   ├── BiliApi.java               # B 站接口封装与参数校验
 │   │   ├── WbiSigner.java             # WBI 风控签名
-│   │   ├── MuxUtil.java               # MediaMuxer 音视频合成
+│   │   ├── YouTubeEngine.java         # yt-dlp 调用、更新、结果解析
+│   │   ├── LocalRelay.java            # 预览用的本地代理转发
+│   │   ├── MuxUtil.java               # MediaMuxer 音视频合成（MP4 / WebM）
 │   │   ├── MediaStoreSaver.java       # 写入系统媒体库
 │   │   ├── Http.java                  # HttpURLConnection 封装
 │   │   ├── Json.java                  # org.json 包装
@@ -218,17 +299,27 @@ BiliGrab/
 │   │   ├── Prefs.java                 # 偏好设置
 │   │   ├── FlowLayout.java            # 可换行的芯片容器
 │   │   └── Snackbar.java              # M3 Snackbar 宿主
-│   └── res/                           # 色板、字阶、布局、矢量图标（含 values-night）
+│   └── res/
+│       ├── xml/network_security_config.xml   # 仅放行回环地址的明文例外
+│       └── ...                        # 色板、字阶、布局、矢量图标（含 values-night）
+├── vendor/                            # YouTube 引擎（由脚本下载，gitignore）
+│   ├── libs/                          # youtubedl-android 及其运行时依赖
+│   ├── jni/arm64-v8a/                 # CPython 运行时
+│   └── res/raw/ytdlp                  # yt-dlp 本体
 ├── scripts/
 │   ├── setup-sdk.ps1                  # 下载 Android SDK 组件
+│   ├── fetch-vendor.ps1               # 拉取并裁剪 YouTube 引擎（21.66 MB）
 │   └── build-apk.ps1                  # 无 Gradle 构建脚本
 ├── tools/
 │   ├── gen_palette.py                 # 由品牌色相推导 M3 色板 + WCAG 校验
-│   └── desktop-verify/TestApi.java    # 桌面端接口联调测试
+│   └── desktop-verify/                # 桌面端接口联调测试
 ├── keystore/                          # 签名密钥（gitignore，请自行备份）
 ├── DESIGN.md                          # 设计系统与规则
 └── .github/workflows/build.yml        # CI 自动打包
 ```
+
+`vendor/` 不入库：它由 `scripts/fetch-vendor.ps1` 按固定版本号拉取，
+构建时若检测不到就会自动退化成**只含 B 站逻辑**的版本（约 117 KB）。
 
 ## 常见问题
 
@@ -247,11 +338,27 @@ BiliGrab/
 **Q：为什么下载的是 m4s 而不是 mp4？**
 内部确实分两次下载 `.m4s`（DASH 规范），合成后输出的就是标准 MP4，用户拿到的永远是单个 mp4 文件。
 
+**Q：YouTube 链接解析失败，提示连接超时？**
+没填代理。YouTube 在中国大陆无法直连，去设置里填 `host:port`。
+
+**Q：YouTube 下 4K 得到的是 `.webm` 而不是 `.mp4`？**
+这是必然的，不是 bug。YouTube 的 1440P 和 2160P 只有 VP9 与 AV1，没有 H.264。
+而系统封装器不接受 VP9 进 MP4（实测 `addTrack` 直接抛
+`IllegalStateException: Failed to add the track to the muxer`），
+所以高画质封装成 WebM（VP9 + Opus）。1080P 及以下有 H.264，走 MP4。
+
+想要 MP4 就选 1080P —— 那也是绝大多数场景下最合适的一档。
+
+**Q：YouTube 提示「解析引擎已过期」，但更新失败？**
+先确认代理填对了。更新走的是 `github.com`，同样需要代理。
+另外 GitHub 对单个出口 IP 有频率限制，遇到 403 过几分钟再试。
+
 ## 免责声明
 
 本项目**仅供个人学习、研究与技术交流**，用于备份你有权访问的内容。
 
-- 请遵守[哔哩哔哩用户协议](https://www.bilibili.com/protocol/)及相关法律法规。
+- 请遵守[哔哩哔哩用户协议](https://www.bilibili.com/protocol/)、
+  [YouTube 服务条款](https://www.youtube.com/t/terms)及相关法律法规。
 - 请勿将下载内容用于商业用途或二次传播。
 - 请勿高频请求，避免对平台造成负担。
 - 作者不对使用本工具产生的任何后果负责。
@@ -260,4 +367,25 @@ BiliGrab/
 
 ## 许可
 
-MIT License，见 [LICENSE](LICENSE)。
+**GPL-3.0**，见 [LICENSE](LICENSE)。
+
+### 为什么不是 MIT
+
+BiliGrab 原本以 MIT 授权。加入 YouTube 支持后**必须**改为 GPL-3.0，原因不在选择，
+而在依赖的传染性：YouTube 解析依赖
+[`youtubedl-android`](https://github.com/youtube-dl-android/youtubedl-android)，
+它以 GPL-3.0 发布，而 GPL-3.0 要求链接它的作品整体以 GPL-3.0 分发。
+
+B 站那部分代码本身依然是自成一体的，但**整个应用**现在是 GPL-3.0。
+如果你只想要 B 站下载功能并希望保持 MIT，删掉 `vendor/` 目录即可 ——
+构建脚本会检测到它不存在，然后退化成只编 B 站逻辑的版本。
+
+### 第三方组件
+
+| 组件 | 授权 | 用途 |
+| --- | --- | --- |
+| [yt-dlp](https://github.com/yt-dlp/yt-dlp) | Unlicense | YouTube 解析 |
+| [youtubedl-android](https://github.com/youtube-dl-android/youtubedl-android) | GPL-3.0 | 在 Android 上运行 CPython 与 yt-dlp |
+| [CPython](https://www.python.org/) | PSF-2.0 | 运行时 |
+| [Jackson](https://github.com/FasterXML/jackson) | Apache-2.0 | youtubedl-android 的硬依赖 |
+| [Apache Commons IO / Compress](https://commons.apache.org/) | Apache-2.0 | 同上 |

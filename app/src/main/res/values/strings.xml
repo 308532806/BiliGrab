@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <!--
   文案
   =====
@@ -24,7 +24,7 @@
     <string name="cd_clear">清空输入</string>
     <string name="action_parse">解析</string>
     <string name="action_parsing">解析中…</string>
-    <string name="helper_url">支持完整链接、BV 号、av 号，或直接从 B 站 App 分享过来</string>
+    <string name="helper_url">支持哔哩哔哩链接 / BV 号，也支持 YouTube 链接</string>
 
     <!-- ==================== 空状态 ==================== -->
     <!-- 不是占位文案，而是引导用户完成第一步 -->
@@ -82,6 +82,9 @@
     <string name="section_download">下载</string>
 
     <string name="meta_format">%1$s · %2$d 个分 P · %3$s</string>
+    <!-- YouTube 没有分 P，照搬上面那句会显示成「频道 · 1 个分 P · 3:33」这种废话 -->
+    <string name="meta_format_youtube">%1$s · %2$s</string>
+    <string name="youtube_unknown_channel">未知频道</string>
     <string name="part_duration">时长 %1$s</string>
     <string name="quality_not_available">该稿件暂无可用画质</string>
 
@@ -109,6 +112,10 @@
 
     <string name="row_audio">仅音频</string>
     <string name="row_audio_desc">跳过视频流，导出为 m4a</string>
+    <!-- YouTube 各画质档体积差距极大（144P 约 2 MB，2160P 可到 342 MB），
+         把体积摆出来比只写分辨率有用 -->
+    <string name="row_meta_youtube">%1$dx%2$d · %3$s · %4$s</string>
+    <string name="row_audio_desc_size">仅保留音轨 · %1$s</string>
     <string name="row_meta_video">%1$d×%2$d · %3$s</string>
     <string name="cd_download_quality">下载 %1$s</string>
 
@@ -116,6 +123,7 @@
     <string name="codec_avc">H.264</string>
     <string name="codec_hevc">H.265</string>
     <string name="codec_av1">AV1</string>
+    <string name="codec_vp9">VP9</string>
     <string name="codec_unknown">未知编码</string>
 
     <!-- ==================== 画质档位 ==================== -->
@@ -161,6 +169,8 @@
     <string name="err_no_video_stream">该稿件没有可用的视频流。可能是付费或区域限制内容</string>
     <string name="err_no_audio_stream">该稿件没有可用的音频流。换一个画质再试，或改选视频下载</string>
     <string name="err_no_video_track">合成结果缺少视频轨。某些 HEVC / AV1 流在旧设备上无法封装，改用 H.264 画质后重试</string>
+    <string name="err_mux_failed">合成失败：这台设备的系统封装器不接受该编码组合（%1$s 容器 / %2$s 画质）。换成 1080P 及以下（H.264）重试</string>
+    <string name="err_no_webm_audio">这个视频没有 Opus 音轨，无法与 VP9 画面合成 WebM。换 1080P 及以下重试</string>
     <string name="err_no_url">接口没有返回下载地址。稍后重试，或换一个画质</string>
     <string name="err_all_urls_failed">所有 CDN 地址都不可用。稍等片刻再试；若持续失败，可能是该稿件的流已失效</string>
     <string name="err_cdn_http">CDN 返回 HTTP %1$d。这是哔哩哔哩侧的临时问题，稍后重试</string>
@@ -197,7 +207,23 @@
 
     <string name="settings_about_title">关于</string>
     <string name="settings_version">版本 %1$s</string>
-    <string name="settings_about_body">零第三方依赖的哔哩哔哩视频下载器。核心逻辑不依赖 Android API，可在桌面端直接运行联调测试。</string>
+    <string name="settings_about_body">B 站部分零第三方依赖，核心逻辑不依赖 Android API，可在桌面端直接运行联调测试。YouTube 支持由 yt-dlp 提供。</string>
+    <string name="settings_about_license">本应用以 GPL-3.0 授权。YouTube 解析由 yt-dlp（Unlicense）经 youtubedl-android（GPL-3.0）提供。</string>
+
+    <!-- ==================== YouTube ==================== -->
+
+    <string name="settings_youtube_title">YouTube</string>
+    <string name="settings_proxy_label">代理</string>
+    <string name="settings_proxy_hint">192.168.1.10:7890</string>
+    <string name="settings_proxy_help">YouTube 在中国大陆无法直连，必须先填代理。该设置只作用于 YouTube，B 站仍走直连。</string>
+    <string name="settings_update_engine">更新引擎</string>
+    <string name="settings_engine_version">解析引擎 %1$s</string>
+    <string name="settings_engine_missing">解析引擎不可用</string>
+    <string name="settings_engine_checking">正在读取…</string>
+    <string name="snack_engine_updating">正在更新解析引擎…</string>
+    <string name="snack_engine_updated">解析引擎已更新到 %1$s</string>
+    <string name="snack_engine_latest">解析引擎已是最新（%1$s）</string>
+    <string name="snack_proxy_saved">代理已保存</string>
 
     <!-- ==================== Snackbar ==================== -->
 

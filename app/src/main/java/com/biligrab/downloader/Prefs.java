@@ -12,6 +12,7 @@ public final class Prefs {
     private static final String KEY_QN = "prefer_qn";
     private static final String KEY_PREFER_AVC = "prefer_avc";
     private static final String KEY_THEME = "theme_mode";
+    private static final String KEY_PROXY = "youtube_proxy";
 
     public static final int DEFAULT_QN = 80;
 
@@ -68,6 +69,24 @@ public final class Prefs {
 
     public void setThemeMode(int mode) {
         sp.edit().putInt(KEY_THEME, mode).apply();
+    }
+
+    /**
+     * YouTube 走的 HTTP 代理，形如 {@code 192.168.8.2:7890}。空串表示直连。
+     *
+     * <p>这不是可有可无的选项：YouTube 在中国大陆无法直连，没有代理时
+     * yt-dlp 会以 {@code [Errno 110] Connection timed out} 结束。
+     * 所以它和 SESSDATA 一样属于「不填就有一整块功能不能用」的配置。</p>
+     *
+     * <p>刻意只作用于 YouTube 一路：B 站走代理反而会变慢甚至被风控，
+     * 两边的网络需求完全不同。</p>
+     */
+    public String youtubeProxy() {
+        return sp.getString(KEY_PROXY, "").trim();
+    }
+
+    public void setYoutubeProxy(String v) {
+        sp.edit().putString(KEY_PROXY, v == null ? "" : v.trim()).apply();
     }
 
     /**

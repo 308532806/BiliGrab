@@ -9,13 +9,34 @@
 
 ---
 
-## 0. 硬约束：零第三方依赖
+## 0. 硬约束：零 AndroidX
 
-整个 APK 只有 **107 KB**，不引入 Material Components，也不引入 AndroidX。
-
-这意味着 Material 3 **是手写实现的**：色角色、字阶、形状阶、动效、涟漪、48dp 触控目标、edge-to-edge、Snackbar、底部表单，全部基于平台原生 API。
+界面层不引入 Material Components，也不引入 AndroidX。Material 3 **是手写实现的**：色角色、字阶、形状阶、动效、涟漪、48dp 触控目标、edge-to-edge、Snackbar、底部表单，全部基于平台原生 API。
 
 这不是保守，而是这个项目的立身之本：核心逻辑（`Http` / `WbiSigner` / `Json` / `BiliApi` / `Model`）不依赖任何 Android API，因此可以在桌面上直接跑 `tools/desktop-verify/TestApi.java` 做端到端联调。引入 AndroidX 会切断这条链路。
+
+### 2026 年的修正：这条约束的适用范围
+
+加入 YouTube 支持后，「零第三方依赖」**不再对整个应用成立**，必须说清楚边界：
+
+| 部分 | 依赖情况 |
+| --- | --- |
+| B 站链路（解析 / 签名 / 下载 / 合流） | 仍然零第三方依赖 |
+| 界面层 | 仍然零 AndroidX、零 Material Components |
+| YouTube 链路 | 依赖 yt-dlp + youtubedl-android + Jackson + Commons IO/Compress |
+
+之所以必须让步：**纯 Java 解析 YouTube 在技术上是做不到的**。实测拿到的 27 个格式全是 `signatureCipher`，没有明文 `url`，签名必须用 YouTube 自己的播放器 JS 去解。这不是工作量问题，是能力边界。
+
+代价有两条，都是知情的取舍：
+
+1. **APK 从 117 KB 变成 18.5 MB**（CPython 运行时 14.52 MB + yt-dlp 3.02 MB）。
+   已经通过「只打 arm64-v8a」和「不带 ffmpeg/aria2c」压到同类应用的三分之一左右
+   （Seal 是 54–66 MB）。
+2. **授权从 MIT 变成 GPL-3.0**。youtubedl-android 是 GPL-3.0，链接它就意味着整体
+   必须 GPL-3.0。这是法律要求，不是风格选择。
+
+删掉 `vendor/` 目录即可退回纯 B 站版本：构建脚本会检测到它不存在，
+自动产出只含 B 站逻辑的 APK，这条约束在那时完全成立。
 
 ---
 

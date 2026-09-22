@@ -121,6 +121,53 @@ if ($mfText -notmatch '<manifest[^>]*\spackage\s*=') {
     Write-Host "    已向 manifest 注入 package=$AppPackage"
 }
 
+# ---------------------------- vendor（可选） ----------------------------
+# vendor/ 由 scripts/fetch-vendor.ps1 生成，约 19 MB，内容是 YouTube 引擎：
+#   jni/<abi>/*.so   CPython 运行时 + QuickJS
+#   libs/*.jar       youtubedl-android 的 Java API + Kotlin 标准库
+#   res/raw/ytdlp    yt-dlp 本体（zip，运行时可由 updateYoutubeDL 更新）
+#
+# 它不存在时构建照常进行，只是产出一个不含 YouTube 能力的纯 B 站版本
+# （约 117 KB）。这条降级路径是刻意保留的：仓库本身保持轻量，
+# 想要完整功能的人跑一次 fetch-vendor 即可。
+$VendorDir   = Join-Path $RepoRoot "vendor"
+$VendorJars  = @()
+$VendorJni   = Join-Path $VendorDir "jni"
+$HasVendor   = Test-Path (Join-Path $VendorDir "libs\youtubedl-android.jar")
+
+# 库的字节码里硬引用了它自己的 R 类（com/yausername/youtubedl_android/R$raw，
+# 字段 ytdlp，类型 int）。aapt2 默认只为我们的包名生成 R，所以必须用
+# --extra-packages 让 aapt2 额外为这个包生成一份 R.java，否则运行时
+# init() 一取 R.raw.ytdlp 就 NoClassDefFoundError。
+$ExtraPackages = @()
+
+if ($HasVendor) {
+    $VendorJars = @(Get-ChildItem (Join-Path $VendorDir "libs") -Filter *.jar |
+                    Sort-Object Name | ForEach-Object { $_.FullName })
+    $ExtraPackages = @("com.yausername.youtubedl_android")
+
+    Write-Host "`n    vendor/ 已就绪 —— 本次构建包含 YouTube 引擎" -ForegroundColor Magenta
+    Write-Host ("      jar {0} 个, 原生库目录 {1}" -f $VendorJars.Count, $VendorJni) -ForegroundColor DarkGray
+
+    # vendor 的资源并进待编译的 res/ 目录。
+    # 只并 raw/ —— AAR 的 res/values/values.xml 声明了自己的 app_name，
+    # 会和本应用的 app_name 撞名导致 aapt2 以
+    # "resource 'string/app_name' has a conflicting value" 失败，
+    # 而库运行时只用到 R.raw.ytdlp，那份 strings 没有任何作用。
+    $vendorRaw = Join-Path $VendorDir "res\raw"
+    if (Test-Path $vendorRaw) {
+        $dstRaw = Join-Path $ResDir "raw"
+        if (-not (Test-Path $dstRaw)) { New-Item -ItemType Directory -Path $dstRaw -Force | Out-Null }
+        Copy-Item (Join-Path $vendorRaw "*") $dstRaw -Recurse -Force
+        Write-Host "    已并入 vendor/res/raw（yt-dlp 本体）" -ForegroundColor DarkGray
+    } else {
+        Write-Host "    vendor/res/raw 缺失，YouTube 引擎会在初始化时找不到 yt-dlp 本体" -ForegroundColor Red
+    }
+} else {
+    Write-Host "`n    未检测到 vendor/ —— 构建纯 B 站版本（不含 YouTube）" -ForegroundColor DarkGray
+    Write-Host "    需要 YouTube 支持请先运行: scripts\fetch-vendor.ps1" -ForegroundColor DarkGray
+}
+
 # ---------------------------- 1. aapt2 compile ----------------------------
 
 Write-Host "`n[1/7] 编译资源 (aapt2 compile)" -ForegroundColor Yellow
@@ -135,14 +182,18 @@ $BaseApk = Join-Path $OutBuild "base.apk"
 $GenDir  = Join-Path $OutBuild "gen"
 New-Item -ItemType Directory -Force -Path $GenDir | Out-Null
 
-& $Aapt2 link `
-    -o $BaseApk `
-    -I $AndroidJar `
-    --manifest $Manifest `
-    --java $GenDir `
-    --version-code $VersionCode `
-    --version-name $VersionName `
-    $ResZip
+$aapt2Args = @(
+    "link", "-o", $BaseApk,
+    "-I", $AndroidJar,
+    "--manifest", $Manifest,
+    "--java", $GenDir,
+    "--version-code", $VersionCode,
+    "--version-name", $VersionName
+)
+foreach ($pkg in $ExtraPackages) { $aapt2Args += @("--extra-packages", $pkg) }
+$aapt2Args += $ResZip
+
+& $Aapt2 @aapt2Args
 if ($LASTEXITCODE -ne 0) { throw "aapt2 link 失败" }
 
 # ---------------------------- 3. javac ----------------------------
@@ -155,9 +206,15 @@ $Sources = @(Get-ChildItem $JavaDir -Recurse -Filter *.java | ForEach-Object { $
 $Sources += @(Get-ChildItem $GenDir -Recurse -Filter *.java | ForEach-Object { $_.FullName })
 Write-Host "    源文件 $($Sources.Count) 个"
 
+# vendor 的 jar 要进 classpath：我们的代码要 import YoutubeDL，
+# 而它的方法签名里又出现 kotlin.* 类型，所以 kotlin-stdlib 也必须在。
+$JavacCp = @($AndroidJar)
+$JavacCp += $VendorJars
+$JavacCpStr = $JavacCp -join ';'
+
 & $Javac -encoding UTF-8 --release 8 -nowarn -Xlint:none `
     "-J-Duser.language=en" "-J-Duser.country=US" `
-    -cp $AndroidJar -d $ClassesDir @Sources
+    -cp $JavacCpStr -d $ClassesDir @Sources
 if ($LASTEXITCODE -ne 0) { throw "javac 失败" }
 
 # ---------------------------- 4. d8 ----------------------------
@@ -170,7 +227,9 @@ if ($LASTEXITCODE -ne 0) { throw "jar 打包失败" }
 $DexDir = Join-Path $OutBuild "dex"
 New-Item -ItemType Directory -Force -Path $DexDir | Out-Null
 
-& $D8 --min-api 26 --lib $AndroidJar --output $DexDir $ClassesJar
+# d8 直接吃 vendor 的 jar —— 它们已经是编译好的字节码，不参与 javac。
+$D8Inputs = @($ClassesJar) + $VendorJars
+& $D8 --min-api 26 --lib $AndroidJar --output $DexDir @D8Inputs
 if ($LASTEXITCODE -ne 0) { throw "d8 失败" }
 
 $DexFile = Join-Path $DexDir "classes.dex"
@@ -189,6 +248,30 @@ try {
     foreach ($e in $existing) { $zip.Entries.Remove($e) | Out-Null }
     [System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile(
         $zip, $DexFile, 'classes.dex', [System.IO.Compression.CompressionLevel]::Optimal) | Out-Null
+
+    # 原生库必须落在 lib/<abi>/ 下。libpython.zip.so 这个名字是刻意的：
+    # Android 只会把匹配 lib/<abi>/*.so 的文件解压到应用的原生库目录，
+    # 库正是靠这一点把 CPython 运行时「夹带」进去的。
+    # 这依赖 manifest 里的 extractNativeLibs=true。
+    if ($HasVendor -and (Test-Path $VendorJni)) {
+        $soCount = 0
+        $soBytes = 0L
+        Get-ChildItem $VendorJni -Directory | ForEach-Object {
+            $abi = $_.Name
+            Get-ChildItem $_.FullName -File | ForEach-Object {
+                $entryName = "lib/$abi/$($_.Name)"
+                $stale = $zip.Entries | Where-Object { $_.FullName -eq $entryName }
+                foreach ($s in $stale) { $zip.Entries.Remove($s) | Out-Null }
+                [System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile(
+                    $zip, $_.FullName, $entryName,
+                    [System.IO.Compression.CompressionLevel]::Optimal) | Out-Null
+                Write-Host ("    lib/{0}/{1}  {2:N0} KB" -f $abi, $_.Name, ($_.Length / 1KB)) -ForegroundColor DarkGray
+                $soCount++
+                $soBytes += $_.Length
+            }
+        }
+        Write-Host ("    原生库 {0} 个，共 {1:N2} MB" -f $soCount, ($soBytes / 1MB))
+    }
 } finally {
     $zip.Dispose()
 }

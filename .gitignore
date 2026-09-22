@@ -11,6 +11,11 @@
 # 本地下载的 Android SDK（scripts/setup-sdk.ps1 默认落点）
 /.android-sdk/
 
+# YouTube 引擎（scripts/fetch-vendor.ps1 按固定版本号拉取，21.66 MB）
+# 不入库的原因有两个：二进制体积，以及其中的 youtubedl-android 是 GPL-3.0，
+# 重新分发一份副本没有必要。构建脚本检测不到它会自动退化成纯 B 站版本。
+/vendor/
+
 # 签名（密钥库默认落在 keystore/，切勿提交）
 /keystore/*
 !/keystore/README.md

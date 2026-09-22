@@ -48,6 +48,8 @@ public final class Model {
         public int width;
         public int height;
         public String mimeType = "";
+        /** 字节数。B 站接口会给，YouTube 走 yt-dlp 的 filesize(_approx)，都可能为 0。 */
+        public long size;
 
         /** 带兜底地址的候选列表，主地址失败时按序重试。 */
         public List<String> candidates() {
@@ -69,6 +71,35 @@ public final class Model {
         public boolean audioOnlySupported;
         /** 画质档位 qn → 中文描述，来源为 support_formats。 */
         public final java.util.LinkedHashMap<Integer, String> qualities = new java.util.LinkedHashMap<>();
+
+        /**
+         * 已经合体的音视频流。B 站走 {@code fnval=1} 的 durl 拿到，
+         * YouTube 走 yt-dlp 的渐进式 MP4（itag 18）拿到。
+         * 没有它就只能放弃预览 —— 分离轨给 MediaPlayer 播出来是没声音的。
+         */
+        public PreviewSource preview;
+
+        /** 这个结果是不是来自 YouTube。界面据此切换画质档位的含义。 */
+        public boolean fromYouTube;
+
+        /**
+         * YouTube 专用：是否拿到了能装进 WebM 的音轨（Opus）。
+         *
+         * <p>WebM 不收 AAC，MP4 不收 Opus。没有 WebM 音轨时，
+         * 1440P / 2160P 这两档就没有音轨可配，界面要提前说清楚，
+         * 而不是等用户下完 342 MB 才在合成阶段失败。</p>
+         */
+        public boolean webmAudioAvailable;
+
+        /** 按目标容器挑音轨。找不到对应容器的音轨时返回 {@code null}。 */
+        public Stream audioFor(boolean webm) {
+            for (Stream s : audios) {
+                if (isWebmAudio(s) == webm) {
+                    return s;
+                }
+            }
+            return null;
+        }
 
         public Stream videoByQuality(int qn, boolean preferAvc) {
             Stream best = null;
@@ -146,6 +177,37 @@ public final class Model {
         public int qn = 80;
         public boolean audioOnly;
 
+        // ------------------------------------------------------------------
+        // YouTube 专用字段
+        //
+        // 为什么不只带一个页面地址让服务端重新解析：YouTube 的解析要跑一整个
+        // Python 解释器，实测量级是 10-20 秒。用户在界面上刚看到画质列表就点下载，
+        // 再让他等一次解析没有道理。所以界面解析出来的直链直接带过来。
+        //
+        // 直链本身是有时效的（googlevideo 的 expire 参数），但这个窗口以小时计，
+        // 而任务在点击后立刻开始，不存在过期风险。
+        // ------------------------------------------------------------------
+
+        /** true 表示这是 YouTube 任务，走另一条下载与合流路径。 */
+        public boolean youtube;
+        /** 页面地址，仅用于展示与日志。 */
+        public String pageUrl = "";
+        public String videoUrl = "";
+        public long videoSize;
+        public int videoWidth;
+        public int videoHeight;
+        public String audioUrl = "";
+        public long audioSize;
+        /**
+         * 输出 WebM 而不是 MP4。
+         *
+         * <p>由视频编码决定，不是用户选项：VP9 / AV1 装不进 MP4，
+         * AAC 装不进 WebM，两者没有交集。</p>
+         */
+        public boolean webm;
+        /** 下载 YouTube 直链所用的代理，空串表示直连。 */
+        public String proxy = "";
+
         public String displayName() {
             String base = sanitize(title);
             if (partTitle != null && !partTitle.isEmpty() && !partTitle.equals(title)) {
@@ -183,9 +245,47 @@ public final class Model {
                 return "HEVC/H.265";
             case 13:
                 return "AV1";
+            case CODEC_VP9:
+                // 单独给一个 id 而不是并到 12：VP9 不是 HEVC，界面上标成
+                // 「H.265」会让用户以为下载的是另一种编码，而这两者的
+                // 封装去向完全不同（VP9 只能进 WebM，HEVC 只能进 MP4）
+                return "VP9";
             default:
                 return "codec#" + codecId;
         }
+    }
+
+    // ------------------------------------------------------------------
+    // 容器选择
+    //
+    // MediaMuxer 对「什么能进哪个容器」有硬性限制，实测 OPPO PDPM00
+    // (Android 12) 上把 VP9 加进 MP4 会直接抛 IllegalStateException
+    // （Failed to add the track to the muxer）。所以容器不能写死，
+    // 必须跟着视频编码走：
+    //
+    //   H.264        → MP4（配 AAC）
+    //   VP9 / AV1    → WebM（配 Opus）
+    //
+    // 这不是偏好问题。YouTube 的 1440P 和 2160P **只有** VP9 与 AV1，
+    // 写死 MP4 就等于这两档永远下不了。
+    // ------------------------------------------------------------------
+
+    /** VP9。借用一个 B 站不会出现的值，避免和 DASH 的 codecid 撞车。 */
+    public static final int CODEC_VP9 = 14;
+
+    /** 这个视频编码是否必须装进 WebM。 */
+    public static boolean needsWebm(int codecId) {
+        return codecId == CODEC_VP9 || codecId == 13;
+    }
+
+    /**
+     * 这个音轨能不能装进 WebM。
+     *
+     * <p>WebM 不收 AAC，MP4 不收 Opus，两边没有交集，所以选音轨必须
+     * 和选容器同时决定。</p>
+     */
+    public static boolean isWebmAudio(Stream s) {
+        return s != null && "webm".equalsIgnoreCase(s.mimeType);
     }
 
     /** DASH 音频档位 id → 可读名称。 */
