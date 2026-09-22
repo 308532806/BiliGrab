@@ -15,7 +15,6 @@
     <string name="title_main">BiliGrab</string>
     <string name="cd_settings">打开设置</string>
     <string name="cd_close">关闭</string>
-    <string name="cd_back">返回</string>
 
     <!-- ==================== 链接输入 ==================== -->
 
@@ -42,7 +41,6 @@
 
     <!-- ==================== 错误：问题 + 恢复 ==================== -->
 
-    <string name="error_title">解析失败</string>
     <string name="action_retry">重试</string>
 
     <string name="err_empty_input">还没有填写链接</string>
@@ -62,6 +60,15 @@
 
     <string name="err_forbidden">请求被哔哩哔哩拒绝</string>
     <string name="err_forbidden_fix">可能是登录态失效或请求过于频繁，稍后重试或更新 SESSDATA</string>
+
+    <string name="err_need_vip">这个内容需要大会员权限</string>
+    <string name="err_need_vip_fix">请用有权限的账号登录后，在设置里填入该账号的 SESSDATA</string>
+
+    <string name="err_under_review">稿件正在审核中</string>
+    <string name="err_under_review_fix">审核通过后才能解析，请稍后再试</string>
+
+    <string name="err_bad_input">无法识别这个链接</string>
+    <string name="err_bad_input_fix">支持完整链接、b23.tv 短链、BV 号和 av 号</string>
 
     <string name="err_no_stream">这个稿件没有可下载的流</string>
     <string name="err_no_stream_fix">可能是付费或区域限制内容</string>
@@ -87,23 +94,65 @@
     <string name="hint_login_for_quality">当前最高只有 %1$s。填入 SESSDATA 可以解锁 1080P 及以上画质</string>
     <string name="action_open_settings">去设置</string>
 
-    <!-- ==================== 下载进度 ==================== -->
+    <!-- ==================== 画质档位 ==================== -->
+    <!--
+      兜底名称。正常情况下优先用接口返回的 accept_description ——
+      哔哩哔哩偶尔会调整档位的叫法，以接口为准就不用跟着改代码。
+      只有接口没列到某一档时才落到这里。
+    -->
 
-    <string name="section_progress">下载进度</string>
-    <string name="stage_prepare">正在获取播放地址…</string>
-    <string name="stage_video">正在下载视频流…</string>
-    <string name="stage_audio">正在下载音频流…</string>
-    <string name="stage_mux">正在合成 MP4…</string>
-    <string name="stage_save">正在写入相册…</string>
+    <string name="qn_8k">8K 超高清</string>
+    <string name="qn_dolby_vision">杜比视界</string>
+    <string name="qn_hdr">HDR 真彩</string>
+    <string name="qn_4k">4K 超清</string>
+    <string name="qn_1080p60">1080P60</string>
+    <string name="qn_1080p_plus">1080P+ 高码率</string>
+    <string name="qn_1080p">1080P 高清</string>
+    <string name="qn_720p60">720P60</string>
+    <string name="qn_720p">720P 高清</string>
+    <string name="qn_480p">480P 清晰</string>
+    <string name="qn_360p">360P 流畅</string>
+    <string name="qn_240p">240P 极速</string>
+    <string name="qn_unknown">画质 %1$d</string>
+
+    <!-- ==================== 下载进度 ==================== -->
+    <!-- 这一组由 DownloadService 使用，同时驱动通知栏和主界面的进度区 -->
+
+    <string name="stage_preparing">准备中…</string>
+    <string name="stage_preparing_detail">正在解析 %1$s</string>
+    <string name="stage_resolve">解析播放地址</string>
+    <string name="stage_video">下载视频流 %1$s · %2$s</string>
+    <string name="stage_audio">下载音频流</string>
+    <string name="stage_mux">合成 MP4</string>
+    <string name="stage_save_library">写入媒体库</string>
     <string name="stage_done">下载完成</string>
+    <string name="stage_failed">下载失败</string>
     <string name="progress_percent">%1$d%%</string>
     <string name="cd_progress">下载进度</string>
     <string name="saved_to">已保存到 %1$s</string>
 
+    <!-- ==================== 下载阶段的错误：问题 + 恢复 ==================== -->
+
+    <string name="err_tmp_dir">无法创建临时目录。请检查存储空间后重试</string>
+    <string name="err_no_video_stream">该稿件没有可用的视频流。可能是付费或区域限制内容</string>
+    <string name="err_no_audio_stream">该稿件没有可用的音频流。换一个画质再试，或改选视频下载</string>
+    <string name="err_no_video_track">合成结果缺少视频轨。某些 HEVC / AV1 流在旧设备上无法封装，改用 H.264 画质后重试</string>
+    <string name="err_no_url">接口没有返回下载地址。稍后重试，或换一个画质</string>
+    <string name="err_all_urls_failed">所有 CDN 地址都不可用。稍等片刻再试；若持续失败，可能是该稿件的流已失效</string>
+    <string name="err_cdn_http">CDN 返回 HTTP %1$d。这是哔哩哔哩侧的临时问题，稍后重试</string>
+    <string name="err_download_timeout">网络超时。检查网络后重试</string>
+    <string name="err_download_dns">无法解析域名。检查网络连接或代理设置</string>
+
+    <!-- ==================== 通知 ==================== -->
+
+    <string name="notif_channel_name">下载任务</string>
+    <string name="notif_channel_desc">哔哩哔哩视频的下载进度</string>
+    <string name="notif_done_title">下载完成</string>
+    <string name="notif_failed_title">下载失败</string>
+
     <!-- ==================== 设置（底部表单） ==================== -->
 
     <string name="settings_title">设置</string>
-    <string name="settings_close">完成</string>
 
     <string name="settings_account_title">账号</string>
     <string name="settings_sessdata_label">SESSDATA</string>
@@ -118,7 +167,6 @@
     <string name="settings_prefer_avc_desc">兼容性最好。关闭后优先 HEVC，体积更小但部分旧机型不支持</string>
 
     <string name="settings_theme_title">外观</string>
-    <string name="settings_theme_label">主题</string>
     <string name="settings_theme_system">跟随系统</string>
     <string name="settings_theme_light">浅色</string>
     <string name="settings_theme_dark">深色</string>
@@ -129,15 +177,12 @@
 
     <!-- ==================== Snackbar ==================== -->
 
-    <string name="snack_need_url">请先粘贴一个链接或 BV 号</string>
+    <!-- 只有确实会弹出的提示才留在这里；「下载失败」之类不写，
+         因为失败的正文就是 DownloadService 传回来的具体原因 -->
     <string name="snack_need_parse">请先解析一个视频</string>
     <string name="snack_settings_saved">设置已保存</string>
     <string name="snack_cookie_cleared">已清除登录态</string>
     <string name="snack_copied">已从剪贴板粘贴</string>
     <string name="snack_clipboard_empty">剪贴板里没有文本</string>
-    <string name="snack_download_started">已加入下载队列</string>
-    <string name="snack_download_failed">下载失败</string>
-    <string name="snack_undo">撤销</string>
-    <string name="cd_snackbar_icon">提示</string>
 
 </resources>

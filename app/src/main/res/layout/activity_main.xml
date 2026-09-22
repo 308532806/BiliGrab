@@ -99,6 +99,8 @@
                         android:selectAllOnFocus="false"
                         tools:ignore="TextViewEdits" />
 
+                    <!-- 一钮两用：输入框为空时是「粘贴」，有内容时变「清空」。
+                         图标与 contentDescription 由 MainActivity 随文本切换 -->
                     <ImageButton
                         android:id="@+id/btnPaste"
                         style="@style/Widget.IconButton"
@@ -172,10 +174,8 @@
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:layout_marginTop="@dimen/space_xs"
-                            android:fontFamily="monospace"
-                            android:textAppearance="@style/Text.BodySmall"
+                            android:textAppearance="@style/Text.Code"
                             android:textColor="@color/m3_on_error_container"
-                            android:textSize="11sp"
                             android:visibility="gone"
                             tools:text="code=-403 请求被拒绝"
                             tools:visibility="visible" />
@@ -187,6 +187,9 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginStart="@dimen/space_sm"
+                        android:drawableStart="@drawable/ic_refresh"
+                        android:drawablePadding="@dimen/space_sm"
+                        android:drawableTint="@color/state_button_outlined_text"
                         android:text="@string/action_retry" />
                 </LinearLayout>
 
@@ -232,12 +235,11 @@
 
                     <!-- 两条能力提示，各带图标，不靠颜色区分 -->
                     <LinearLayout
+                        style="@style/Widget.Card"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="@dimen/content_gap"
-                        android:background="@drawable/bg_card"
-                        android:orientation="vertical"
-                        android:padding="@dimen/card_padding">
+                        android:orientation="vertical">
 
                         <LinearLayout
                             android:layout_width="match_parent"
@@ -381,16 +383,13 @@
                     <!-- 仅在「未登录导致画质受限」时出现：说明原因，并直接给出动作 -->
                     <LinearLayout
                         android:id="@+id/qualityHintBox"
+                        style="@style/Widget.Card"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="@dimen/space_lg"
-                        android:background="@drawable/bg_card"
                         android:gravity="center_vertical"
                         android:orientation="horizontal"
-                        android:paddingStart="@dimen/card_padding"
-                        android:paddingTop="@dimen/space_md"
                         android:paddingEnd="@dimen/space_sm"
-                        android:paddingBottom="@dimen/space_md"
                         android:visibility="gone"
                         tools:visibility="visible">
 
@@ -409,9 +408,10 @@
                             android:layout_weight="1"
                             android:textAppearance="@style/Text.BodySmall" />
 
+                        <!-- 这是「建议」而不是「恢复」动作，用色调按钮表达中等强调度 -->
                         <Button
                             android:id="@+id/btnQualityHintAction"
-                            style="@style/Widget.Button.Outlined"
+                            style="@style/Widget.Button.Tonal"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:layout_marginStart="@dimen/space_sm"
@@ -430,10 +430,10 @@
 
                     <ListView
                         android:id="@+id/listParts"
+                        style="@style/Widget.Card"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="@dimen/title_gap"
-                        android:background="@drawable/bg_card"
                         android:divider="@null"
                         android:dividerHeight="0dp"
                         android:maxHeight="@dimen/parts_list_max_height"
@@ -502,12 +502,11 @@
 
                     <LinearLayout
                         android:id="@+id/progressBox"
+                        style="@style/Widget.Card"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="@dimen/section_gap"
-                        android:background="@drawable/bg_card"
                         android:orientation="vertical"
-                        android:padding="@dimen/card_padding"
                         android:visibility="gone"
                         tools:visibility="visible">
 
@@ -549,6 +548,9 @@
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:layout_marginTop="@dimen/space_md"
+                            android:drawableStart="@drawable/ic_folder"
+                            android:drawablePadding="@dimen/space_sm"
+                            android:drawableTint="@color/m3_on_surface_variant"
                             android:textAppearance="@style/Text.BodySmall"
                             android:visibility="gone" />
                     </LinearLayout>

@@ -185,12 +185,6 @@
                 android:layout_marginTop="@dimen/section_gap"
                 android:text="@string/settings_theme_title" />
 
-            <TextView
-                style="@style/Widget.FieldLabel"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="@dimen/space_lg" />
-
             <com.biligrab.downloader.FlowLayout
                 android:id="@+id/chipTheme"
                 android:layout_width="match_parent"

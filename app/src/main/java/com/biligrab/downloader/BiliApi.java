@@ -53,6 +53,37 @@ public final class BiliApi {
         return s;
     }
 
+    /**
+     * 带错误码的接口异常。
+     *
+     * <p>这个类刻意不依赖任何 Android API —— 正因为如此 {@code tools/desktop-verify/TestApi}
+     * 才能在桌面上直接跑。所以它不能调用 {@code getString()}。</p>
+     *
+     * <p>解法是把接口返回的 {@code code} 原样抛出来，由界面层映射成用户看得懂的问题与恢复方式。
+     * 界面**不应该**靠匹配异常消息里的中文子串来决定显示哪条错误 —— 那样改一个字就会静默失效。</p>
+     */
+    public static class ApiException extends IOException {
+
+        /** 接口返回的业务码；本地校验失败时用下面三个哨兵码。 */
+        public final int code;
+
+        /** 出错时正在做什么，例如「获取视频信息」。 */
+        public final String what;
+
+        public ApiException(int code, String what, String message) {
+            super(message);
+            this.code = code;
+            this.what = what;
+        }
+    }
+
+    /** 哨兵码：链接/BV 号无法识别。 */
+    public static final int CODE_BAD_INPUT = 1;
+    /** 哨兵码：稿件没有可用的 cid。 */
+    public static final int CODE_NO_CID = 2;
+    /** 哨兵码：没有可用的 DASH 流。 */
+    public static final int CODE_NO_DASH = 3;
+
     /** 获取稿件基本信息与分 P 列表。 */
     public static Model.Video view(String rawId, String cookie) throws IOException {
         String id = extractId(rawId);
@@ -64,7 +95,8 @@ public final class BiliApi {
         } else if (id.matches("\\d+")) {
             query = "aid=" + id;
         } else {
-            throw new IOException("无法识别的视频标识：" + rawId);
+            throw new ApiException(CODE_BAD_INPUT, "解析链接",
+                    "无法识别的视频标识：" + rawId);
         }
 
         JSONObject root = Json.parse(Http.get(VIEW_URL + "?" + query, cookie));
@@ -105,7 +137,8 @@ public final class BiliApi {
             v.pages.add(part);
         }
         if (v.pages.isEmpty() || v.pages.get(0).cid == 0) {
-            throw new IOException("未取到 cid，该稿件可能受版权限制或为付费内容");
+            throw new ApiException(CODE_NO_CID, "获取视频信息",
+                    "未取到 cid，该稿件可能受版权限制或为付费内容");
         }
         return v;
     }
@@ -141,13 +174,14 @@ public final class BiliApi {
 
         JSONObject dash = d.optJSONObject("dash");
         if (dash == null) {
-            throw new IOException("接口未返回 DASH 流。该视频可能是付费/大会员专享内容，"
-                    + "或需要填写有效的 SESSDATA。");
+            throw new ApiException(CODE_NO_DASH, "获取播放地址",
+                    "接口未返回 DASH 流。该视频可能是付费/大会员专享内容，"
+                            + "或需要填写有效的 SESSDATA。");
         }
 
         JSONArray videos = dash.optJSONArray("video");
         if (videos == null || videos.length() == 0) {
-            throw new IOException("DASH 流中没有可用的视频轨");
+            throw new ApiException(CODE_NO_DASH, "获取播放地址", "DASH 流中没有可用的视频轨");
         }
         for (int i = 0; i < videos.length(); i++) {
             info.videos.add(readStream(Json.obj(videos, i), true));
@@ -295,6 +329,7 @@ public final class BiliApi {
             default:
                 break;
         }
-        throw new IOException(what + "失败：code=" + code + " " + msg + hint);
+        throw new ApiException(code, what,
+                what + "失败：code=" + code + " " + msg + hint);
     }
 }

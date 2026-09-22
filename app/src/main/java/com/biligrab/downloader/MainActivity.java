@@ -301,9 +301,32 @@ public class MainActivity extends Activity implements DownloadService.Listener {
     private void wireActions() {
         btnParse.setOnClickListener(v -> doParse());
         btnRetry.setOnClickListener(v -> doParse());
-        btnPaste.setOnClickListener(v -> pasteFromClipboard());
         btnSettings.setOnClickListener(v -> showSettings());
         btnQualityHintAction.setOnClickListener(v -> showSettings());
+
+        // 尾部按钮一钮两用：空的时候是「粘贴」，有内容时是「清空」
+        btnPaste.setOnClickListener(v -> {
+            if (inputUrl.getText().toString().trim().isEmpty()) {
+                pasteFromClipboard();
+            } else {
+                inputUrl.setText("");
+                inputUrl.requestFocus();
+            }
+        });
+        inputUrl.addTextChangedListener(new android.text.TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int a, int b, int c) {
+            }
+
+            @Override
+            public void onTextChanged(CharSequence s, int a, int b, int c) {
+            }
+
+            @Override
+            public void afterTextChanged(android.text.Editable s) {
+                syncInputTrailingButton();
+            }
+        });
 
         // 键盘上的「搜索」键等同于点解析
         inputUrl.setOnEditorActionListener((v, actionId, event) -> {
@@ -419,6 +442,19 @@ public class MainActivity extends Activity implements DownloadService.Listener {
         btnParse.post(this::doParse);
     }
 
+    /**
+     * 同步输入框尾部按钮的图标与无障碍描述。
+     *
+     * <p>有内容时切成「清空」—— 换一个视频下载时最常见的动作就是清掉旧链接。
+     * 长按输入框仍然能粘贴，所以并不是把粘贴入口拿走了。</p>
+     */
+    private void syncInputTrailingButton() {
+        boolean empty = inputUrl.getText().toString().trim().isEmpty();
+        btnPaste.setImageResource(empty ? R.drawable.ic_paste : R.drawable.ic_close);
+        btnPaste.setContentDescription(getString(
+                empty ? R.string.cd_paste : R.string.cd_clear));
+    }
+
     private void pasteFromClipboard() {
         CharSequence text = null;
         try {
@@ -501,18 +537,47 @@ public class MainActivity extends Activity implements DownloadService.Listener {
         } else if (e instanceof SocketTimeoutException) {
             title = getString(R.string.err_timeout);
             fix = getString(R.string.err_timeout_fix);
-        } else if (raw.contains("-101") || raw.contains("未登录") || raw.contains("账号未登录")) {
-            title = getString(R.string.err_need_login);
-            fix = getString(R.string.err_need_login_fix);
-        } else if (raw.contains("-404") || raw.contains("不存在") || raw.contains("啥都木有")) {
-            title = getString(R.string.err_not_found);
-            fix = getString(R.string.err_not_found_fix);
-        } else if (raw.contains("-403") || raw.contains("拒绝")) {
-            title = getString(R.string.err_forbidden);
-            fix = getString(R.string.err_forbidden_fix);
-        } else if (raw.contains("没有可下载") || raw.contains("无可用")) {
-            title = getString(R.string.err_no_stream);
-            fix = getString(R.string.err_no_stream_fix);
+        } else if (e instanceof BiliApi.ApiException) {
+            // 按错误码分派。这里刻意不匹配异常消息里的中文子串 ——
+            // 那样只要改一个字的文案，错误映射就会静默失效
+            int code = ((BiliApi.ApiException) e).code;
+            switch (code) {
+                case -101:
+                    title = getString(R.string.err_need_login);
+                    fix = getString(R.string.err_need_login_fix);
+                    break;
+                case -352:
+                case -799:
+                    title = getString(R.string.err_forbidden);
+                    fix = getString(R.string.err_forbidden_fix);
+                    break;
+                case -403:
+                    title = getString(R.string.err_need_vip);
+                    fix = getString(R.string.err_need_vip_fix);
+                    break;
+                case -404:
+                case 62002:
+                    title = getString(R.string.err_not_found);
+                    fix = getString(R.string.err_not_found_fix);
+                    break;
+                case 62004:
+                    title = getString(R.string.err_under_review);
+                    fix = getString(R.string.err_under_review_fix);
+                    break;
+                case BiliApi.CODE_BAD_INPUT:
+                    title = getString(R.string.err_bad_input);
+                    fix = getString(R.string.err_bad_input_fix);
+                    break;
+                case BiliApi.CODE_NO_CID:
+                case BiliApi.CODE_NO_DASH:
+                    title = getString(R.string.err_no_stream);
+                    fix = getString(R.string.err_no_stream_fix);
+                    break;
+                default:
+                    title = getString(R.string.err_generic);
+                    fix = getString(R.string.err_generic_fix);
+                    break;
+            }
         } else if (e instanceof java.io.IOException) {
             title = getString(R.string.err_network);
             fix = getString(R.string.err_network_fix);
@@ -560,7 +625,11 @@ public class MainActivity extends Activity implements DownloadService.Listener {
         selectedQn = target;
 
         for (Integer qn : qnList) {
-            chipQuality.addView(makeChip(qn));
+            final int quality = qn;
+            TextView chip = makeChip(chipQuality, qnLabel(probe, qn));
+            chip.setSelected(qn == selectedQn);
+            chip.setOnClickListener(v -> selectQualityChip((TextView) v, quality));
+            chipQuality.addView(chip);
         }
 
         tvQualityLabel.setVisibility(
@@ -570,58 +639,61 @@ public class MainActivity extends Activity implements DownloadService.Listener {
 
         // 只有「受登录限制」时才提示，避免无端打扰
         if (!prefs.hasLogin() && best < QN_1080P && best > 0) {
-            tvQualityHint.setText(getString(R.string.hint_login_for_quality, qnLabel(best)));
+            tvQualityHint.setText(getString(R.string.hint_login_for_quality, qnLabel(probe, best)));
             qualityHintBox.setVisibility(View.VISIBLE);
         } else {
             qualityHintBox.setVisibility(View.GONE);
         }
     }
 
-    /** 造一个 M3 filter chip。普通 TextView + 选中态即可，不需要引入 Material 组件库。 */
-    private TextView makeChip(final int qn) {
-        TextView chip = new TextView(this);
-        chip.setText(qnLabel(qn));
-        chip.setTextAppearance(this, R.style.Text_LabelLarge);
-        chip.setTextColor(getColorStateList(R.color.state_chip_text));
-        chip.setBackgroundResource(R.drawable.bg_chip);
-        chip.setGravity(Gravity.CENTER);
-        // 满足 48dp 触控目标：视觉高度 36dp，再补足可点区域
-        chip.setMinHeight(getResources().getDimensionPixelSize(R.dimen.chip_height));
-        chip.setPadding(
-                getResources().getDimensionPixelSize(R.dimen.space_lg),
-                0,
-                getResources().getDimensionPixelSize(R.dimen.space_lg),
-                0);
-        chip.setSelected(qn == selectedQn);
-        chip.setClickable(true);
-        chip.setFocusable(true);
-        chip.setOnClickListener(v -> {
-            selectedQn = qn;
-            for (int i = 0; i < chipQuality.getChildCount(); i++) {
-                View c = chipQuality.getChildAt(i);
-                c.setSelected(false);
-            }
-            v.setSelected(true);
-        });
+    private void selectQualityChip(TextView chip, int qn) {
+        selectedQn = qn;
+        for (int i = 0; i < chipQuality.getChildCount(); i++) {
+            chipQuality.getChildAt(i).setSelected(false);
+        }
+        chip.setSelected(true);
+    }
+
+    /**
+     * 造一个 M3 filter chip。
+     *
+     * <p>外观全部来自 {@code @style/Widget.Chip} 与 {@code view_chip.xml}，
+     * 这里只负责绑定文案和行为 —— 之前画质芯片和主题芯片各自堆了一遍属性。</p>
+     */
+    private TextView makeChip(FlowLayout parent, String label) {
+        TextView chip = (TextView) LayoutInflater.from(this)
+                .inflate(R.layout.view_chip, parent, false);
+        chip.setText(label);
         return chip;
     }
 
-    /** 画质码 → 用户能看懂的名字。 */
-    private static String qnLabel(int qn) {
+    /**
+     * 画质码 → 用户能看懂的名字。
+     *
+     * <p>优先用接口返回的 {@code accept_description}：哔哩哔哩偶尔会调整档位的叫法，
+     * 以接口为准就不用跟着改代码。接口没列到这一档时才退回本地兜底表。</p>
+     */
+    private String qnLabel(Model.PlayInfo info, int qn) {
+        if (info != null && info.qualities != null) {
+            String fromApi = info.qualities.get(qn);
+            if (fromApi != null && !fromApi.trim().isEmpty()) {
+                return fromApi.trim();
+            }
+        }
         switch (qn) {
-            case 127: return "8K 超高清";
-            case 126: return "杜比视界";
-            case 125: return "HDR 真彩";
-            case 120: return "4K 超清";
-            case 116: return "1080P60";
-            case 112: return "1080P+ 高码率";
-            case 80:  return "1080P 高清";
-            case 74:  return "720P60";
-            case 64:  return "720P 高清";
-            case 32:  return "480P 清晰";
-            case 16:  return "360P 流畅";
-            case 6:   return "240P 极速";
-            default:  return "qn" + qn;
+            case 127: return getString(R.string.qn_8k);
+            case 126: return getString(R.string.qn_dolby_vision);
+            case 125: return getString(R.string.qn_hdr);
+            case 120: return getString(R.string.qn_4k);
+            case 116: return getString(R.string.qn_1080p60);
+            case 112: return getString(R.string.qn_1080p_plus);
+            case 80:  return getString(R.string.qn_1080p);
+            case 74:  return getString(R.string.qn_720p60);
+            case 64:  return getString(R.string.qn_720p);
+            case 32:  return getString(R.string.qn_480p);
+            case 16:  return getString(R.string.qn_360p);
+            case 6:   return getString(R.string.qn_240p);
+            default:  return getString(R.string.qn_unknown, qn);
         }
     }
 
@@ -668,7 +740,7 @@ public class MainActivity extends Activity implements DownloadService.Listener {
         fab.setVisibility(View.GONE);
         progressBox.setVisibility(View.VISIBLE);
         tvSavedTo.setVisibility(View.GONE);
-        tvStage.setText(R.string.stage_prepare);
+        tvStage.setText(R.string.stage_preparing);
         tvPercent.setText(getString(R.string.progress_percent, 0));
         progress.setProgress(0);
 
@@ -694,7 +766,7 @@ public class MainActivity extends Activity implements DownloadService.Listener {
         ui.post(() -> {
             downloading = false;
             progress.setProgress(ok ? 100 : progress.getProgress());
-            tvStage.setText(ok ? R.string.stage_done : R.string.snack_download_failed);
+            tvStage.setText(ok ? R.string.stage_done : R.string.stage_failed);
             tvPercent.setText(ok ? getString(R.string.progress_percent, 100) : "");
 
             if (ok && location != null && !location.isEmpty()) {
@@ -773,8 +845,9 @@ public class MainActivity extends Activity implements DownloadService.Listener {
         final int currentMode = prefs.themeMode();
         for (int i = 0; i < modeValues.length; i++) {
             final int mode = modeValues[i];
-            TextView c = makeThemeChip(getString(modeLabels[i]), mode == currentMode);
             final int index = i;
+            TextView c = makeChip(chipTheme, getString(modeLabels[i]));
+            c.setSelected(mode == currentMode);
             c.setOnClickListener(v -> {
                 for (int k = 0; k < chipTheme.getChildCount(); k++) {
                     chipTheme.getChildAt(k).setSelected(k == index);
@@ -812,25 +885,6 @@ public class MainActivity extends Activity implements DownloadService.Listener {
         if (changed) {
             Snackbar.show(findViewById(R.id.root), getString(R.string.snack_settings_saved));
         }
-    }
-
-    private TextView makeThemeChip(String label, boolean selected) {
-        TextView chip = new TextView(this);
-        chip.setText(label);
-        chip.setTextAppearance(this, R.style.Text_LabelLarge);
-        chip.setTextColor(getColorStateList(R.color.state_chip_text));
-        chip.setBackgroundResource(R.drawable.bg_chip);
-        chip.setGravity(Gravity.CENTER);
-        chip.setMinHeight(getResources().getDimensionPixelSize(R.dimen.chip_height));
-        chip.setPadding(
-                getResources().getDimensionPixelSize(R.dimen.space_lg),
-                0,
-                getResources().getDimensionPixelSize(R.dimen.space_lg),
-                0);
-        chip.setSelected(selected);
-        chip.setClickable(true);
-        chip.setFocusable(true);
-        return chip;
     }
 
     private String versionName() {

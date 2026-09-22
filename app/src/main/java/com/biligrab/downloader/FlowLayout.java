@@ -24,8 +24,9 @@ public class FlowLayout extends ViewGroup {
 
     public FlowLayout(Context context, AttributeSet attrs) {
         super(context, attrs);
-        float density = getResources().getDisplayMetrics().density;
-        gap = Math.round(density * 8f);
+        // 间距取 touch_gap，与「相邻可点目标至少间隔 8dp」是同一条规则，
+        // 不再在代码里重复写一个 8
+        gap = getResources().getDimensionPixelSize(R.dimen.touch_gap);
     }
 
     @Override

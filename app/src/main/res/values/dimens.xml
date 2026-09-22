@@ -25,7 +25,6 @@
     <!-- 比 title_gap 大：impeccable 要求"标题上方的留白多于下方" -->
     <dimen name="section_gap">32dp</dimen>
     <dimen name="title_gap">12dp</dimen>
-    <dimen name="item_gap">8dp</dimen>
     <dimen name="card_padding">16dp</dimen>
 
     <!-- ==================== 形状：Material 3 形状阶 ==================== -->
@@ -51,7 +50,10 @@
     <dimen name="icon_size_sm">20dp</dimen>
     <dimen name="button_height">48dp</dimen>
     <dimen name="field_height">56dp</dimen>
-    <dimen name="chip_height">36dp</dimen>
+    <!-- 芯片的可见药丸上下各内缩这么多：
+         控件本身 48dp（touch_min），视觉高度 48 - 2*6 = 36dp。
+         视觉尺寸和可点尺寸是两件事，见 bg_chip.xml -->
+    <dimen name="chip_inset">6dp</dimen>
     <dimen name="progress_height">4dp</dimen>
 
     <!-- ==================== 其他 ==================== -->

@@ -131,7 +131,9 @@ public class DownloadService extends Service {
         task.audioOnly = intent.getBooleanExtra(EXTRA_AUDIO_ONLY, false);
 
         // 必须在 5 秒内调用 startForeground
-        Notification preparing = buildNotification("准备中…", "正在解析 " + task.title, 0, true);
+        Notification preparing = buildNotification(
+                getString(R.string.stage_preparing),
+                getString(R.string.stage_preparing_detail, task.title), 0, true);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             startForeground(NOTIF_ID, preparing,
                     android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC);
@@ -148,12 +150,13 @@ public class DownloadService extends Service {
                 try {
                     location = runTask(task);
                     ok = true;
-                    message = "已保存到 " + location;
+                    message = getString(R.string.saved_to, location);
                 } catch (Exception e) {
                     Log.w(TAG, "download failed", e);
                     message = describe(e);
                 }
-                emitProgress(ok ? "完成" : "失败", 100);
+                emitProgress(ok ? getString(R.string.stage_done)
+                        : getString(R.string.stage_failed), 100);
                 emitFinished(ok, message, location);
                 notifyDone(ok, task.title, message);
                 stopForeground(true);
@@ -186,12 +189,13 @@ public class DownloadService extends Service {
 
         File work = new File(getExternalFilesDir(null), "work");
         if (!work.exists() && !work.mkdirs()) {
-            throw new IOException("无法创建临时目录");
+            throw new IOException(getString(R.string.err_tmp_dir));
         }
         clearDir(work);
 
-        emitProgress("解析播放地址", 2);
-        updateNotification("解析播放地址", task.title, 2);
+        String stageResolve = getString(R.string.stage_resolve);
+        emitProgress(stageResolve, 2);
+        updateNotification(stageResolve, task.title, 2);
 
         Model.PlayInfo info = BiliApi.playurl(task.bvid, task.cid, task.qn, cookie);
 
@@ -201,36 +205,39 @@ public class DownloadService extends Service {
         if (!task.audioOnly) {
             Model.Stream v = info.videoByQuality(task.qn, prefs.preferAvc());
             if (v == null) {
-                throw new IOException("该稿件没有可用的视频流");
+                throw new IOException(getString(R.string.err_no_video_stream));
             }
             vFile = new File(work, "video.m4s");
-            String label = "视频流 " + v.width + "x" + v.height
-                    + " · " + Model.codecName(v.codecId);
-            emitProgress("下载" + label, 5);
-            downloadStream(v, vFile, cookie, 5, 50, "下载" + label, task.title);
+            String label = getString(R.string.stage_video,
+                    v.width + "x" + v.height, Model.codecName(v.codecId));
+            emitProgress(label, 5);
+            downloadStream(v, vFile, cookie, 5, 50, label, task.title);
         }
 
         Model.Stream a = info.bestAudio();
         if (a != null) {
             aFile = new File(work, "audio.m4s");
             int lo = task.audioOnly ? 5 : 50;
-            emitProgress("下载音频流", lo);
-            downloadStream(a, aFile, cookie, lo, 85, "下载音频流", task.title);
+            String stageAudio = getString(R.string.stage_audio);
+            emitProgress(stageAudio, lo);
+            downloadStream(a, aFile, cookie, lo, 85, stageAudio, task.title);
         } else if (task.audioOnly) {
-            throw new IOException("该稿件没有可用的音频流");
+            throw new IOException(getString(R.string.err_no_audio_stream));
         }
 
         File outFile = new File(work, "output.mp4");
-        emitProgress("合成 MP4", 88);
-        updateNotification("合成 MP4", task.title, 88);
+        String stageMux = getString(R.string.stage_mux);
+        emitProgress(stageMux, 88);
+        updateNotification(stageMux, task.title, 88);
         MuxUtil.mux(vFile, aFile, outFile);
 
         if (!task.audioOnly && !MuxUtil.hasVideoTrack(outFile)) {
-            throw new IOException("合成结果缺少视频轨，请改用 H.264 画质后重试");
+            throw new IOException(getString(R.string.err_no_video_track));
         }
 
-        emitProgress("写入媒体库", 95);
-        updateNotification("写入媒体库", task.title, 95);
+        String stageSave = getString(R.string.stage_save_library);
+        emitProgress(stageSave, 95);
+        updateNotification(stageSave, task.title, 95);
         String location = MediaStoreSaver.save(this, outFile, task.displayName(), task.audioOnly);
 
         clearDir(work);
@@ -241,7 +248,7 @@ public class DownloadService extends Service {
                                 int lo, int hi, String stage, String title) throws IOException {
         List<String> urls = s.candidates();
         if (urls.isEmpty()) {
-            throw new IOException("接口未给出下载地址");
+            throw new IOException(getString(R.string.err_no_url));
         }
         IOException last = null;
         for (int i = 0; i < urls.size(); i++) {
@@ -260,7 +267,7 @@ public class DownloadService extends Service {
                 }
             }
         }
-        throw last != null ? last : new IOException("所有下载地址均不可用");
+        throw last != null ? last : new IOException(getString(R.string.err_all_urls_failed));
     }
 
     private void downloadUrl(String url, File dst, String cookie,
@@ -270,7 +277,7 @@ public class DownloadService extends Service {
         try {
             int code = c.getResponseCode();
             if (code >= 400) {
-                throw new IOException("CDN 返回 HTTP " + code);
+                throw new IOException(getString(R.string.err_cdn_http, code));
             }
             long total = c.getContentLengthLong();
             if (total <= 0) {
@@ -328,16 +335,16 @@ public class DownloadService extends Service {
     // 工具
     // ------------------------------------------------------------------
 
-    private static String describe(Exception e) {
+    private String describe(Exception e) {
         String m = e.getMessage();
         if (m == null || m.isEmpty()) {
             m = e.getClass().getSimpleName();
         }
         if (e instanceof java.net.SocketTimeoutException) {
-            return "网络超时，请检查网络后重试";
+            return getString(R.string.err_download_timeout);
         }
         if (e instanceof java.net.UnknownHostException) {
-            return "无法解析域名，请检查网络连接";
+            return getString(R.string.err_download_dns);
         }
         return m;
     }
@@ -363,9 +370,10 @@ public class DownloadService extends Service {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O || notifMgr == null) {
             return;
         }
-        NotificationChannel ch = new NotificationChannel(CHANNEL_ID, "下载任务",
+        NotificationChannel ch = new NotificationChannel(CHANNEL_ID,
+                getString(R.string.notif_channel_name),
                 NotificationManager.IMPORTANCE_LOW);
-        ch.setDescription("B 站视频下载进度");
+        ch.setDescription(getString(R.string.notif_channel_desc));
         ch.setShowBadge(false);
         notifMgr.createNotificationChannel(ch);
     }
@@ -420,7 +428,8 @@ public class DownloadService extends Service {
             PendingIntent pi = PendingIntent.getActivity(this, 0, open,
                     Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
                             ? PendingIntent.FLAG_IMMUTABLE : 0);
-            b.setContentTitle(ok ? "下载完成" : "下载失败")
+            b.setContentTitle(getString(ok ? R.string.notif_done_title
+                            : R.string.notif_failed_title))
                     .setContentText(title + " · " + message)
                     .setSmallIcon(R.drawable.ic_notification)
                     .setContentIntent(pi)

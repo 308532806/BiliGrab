@@ -105,6 +105,13 @@
         <item name="android:includeFontPadding">false</item>
     </style>
 
+    <!-- 机器文本：原始错误码、接口返回这类内容。等宽在这里是语义需要，
+         因为它们本身就是代码，不是为了"看起来技术感" -->
+    <style name="Text.Code" parent="Text.BodySmall">
+        <item name="android:fontFamily">monospace</item>
+        <item name="android:letterSpacing">0</item>
+    </style>
+
     <!-- Label：按钮、芯片、字段标签 -->
     <style name="Text.LabelLarge">
         <item name="android:textSize">14sp</item>
@@ -170,13 +177,16 @@
         <item name="android:paddingBottom">@dimen/space_md</item>
     </style>
 
-    <!-- 芯片：可选中的画质筛选项 -->
+    <!-- 芯片：可选中的画质 / 主题筛选项。
+         minHeight 用 touch_min 而不是 chip_height —— 视觉高度靠 bg_chip 的
+         inset 压到 36dp，可点区域必须保持 48dp -->
     <style name="Widget.Chip">
         <item name="android:background">@drawable/bg_chip</item>
         <item name="android:textColor">@color/state_chip_text</item>
         <item name="android:textAppearance">@style/Text.LabelLarge</item>
         <item name="android:textAllCaps">false</item>
-        <item name="android:minHeight">@dimen/chip_height</item>
+        <item name="android:minHeight">@dimen/touch_min</item>
+        <item name="android:minWidth">@dimen/touch_min</item>
         <item name="android:paddingStart">@dimen/space_lg</item>
         <item name="android:paddingEnd">@dimen/space_lg</item>
         <item name="android:gravity">center</item>
@@ -207,13 +217,6 @@
     <!-- 分区标题 -->
     <style name="Widget.SectionTitle" parent="Text.TitleMedium">
         <item name="android:textColor">@color/m3_on_surface</item>
-    </style>
-
-    <!-- 分隔线 -->
-    <style name="Widget.Divider">
-        <item name="android:layout_width">match_parent</item>
-        <item name="android:layout_height">@dimen/stroke</item>
-        <item name="android:background">@color/m3_outline_variant</item>
     </style>
 
 </resources>

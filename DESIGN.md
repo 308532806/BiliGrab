@@ -175,6 +175,35 @@ Snackbar 出现在底部、不夺焦点、能带一个动作、新消息会顶�
 
 - 原始错误信息也展示出来，用户反馈问题时不用去翻日志
 
+### 所有用户可见文案都在 strings.xml
+
+代码里不出现面向用户的中文字面量 —— 包括通知栏的频道名、下载阶段文字、以及 `DownloadService` 抛出的失败原因。
+
+### 核心层抛错误码，界面层做映射
+
+纯 Java 核心（`Http` / `WbiSigner` / `Json` / `BiliApi` / `Model`）**刻意不依赖任何 Android API**，所以它不能调用 `getString()`。这是为了让 `tools/desktop-verify/TestApi` 能在桌面上直接跑真实接口。
+
+解法不是把 Android 拖进核心层，而是：
+
+1. `BiliApi` 抛出带 `code` 字段的 `ApiException`，原样保留接口返回的业务码
+2. 界面层按 `code` 分派到对应的 `strings.xml` 条目
+
+**界面绝不匹配异常消息里的中文子串来决定显示哪条错误。** 那种写法只要改一个字的文案，映射就会静默失效，而且不会有任何编译错误。
+
+核心层异常消息里剩下的中文是给日志和桌面测试输出看的，不是界面文案。
+
+### 一个按钮可以承担互斥的两件事
+
+输入框尾部的按钮在**空**时是「粘贴」，**有内容**时是「清空」，图标与 `contentDescription` 一起切换。
+
+换一个视频下载时最常见的动作是清掉旧链接，而长按输入框仍能粘贴，所以这不是把粘贴入口拿走了 —— 只是在同一个位置上放当前更可能用到的那一个。
+
+### 视觉尺寸和可点尺寸是两件事
+
+芯片看起来高 36dp，实际可点区域 48dp：`Widget.Chip` 的 `minHeight` 取 `touch_min`，`bg_chip.xml` 外面套一层 inset 把可见药丸上下各压 6dp。
+
+不要在布局里直接写 `android:textSize="11sp"` 或 `minHeight="36dp"` 这类数值 —— 尺寸和字号一律走 `dimens.xml` / `styles.xml` 的角色令牌。审计脚本会扫描字面量。
+
 ---
 
 ## 7. 五种互斥状态
@@ -256,8 +285,9 @@ app/src/main/res/
 │   ├── activity_main.xml   主界面（五种状态）
 │   ├── item_part.xml       分 P 列表项
 │   ├── sheet_settings.xml  设置底部表单
+│   ├── view_chip.xml       芯片（样式走 @style/Widget.Chip）
 │   └── view_snackbar.xml   Snackbar
-└── mipmap-anydpi-v26/      自适应启动图标
+└── mipmap-anydpi-v26/      自适应启动图标（含主题图标单色层）
 ```
 
 Java 侧的界面支撑组件：
@@ -265,6 +295,8 @@ Java 侧的界面支撑组件：
 - `FlowLayout.java` —— 可换行的芯片容器
 - `Snackbar.java` —— M3 Snackbar 宿主
 - `MainActivity.java` —— 状态机与全部交互
+- `DownloadService.java` —— 前台服务，文案全部取自 `strings.xml`
+- `BiliApi.ApiException` —— 核心层与界面层之间的错误码契约
 
 ---
 
@@ -276,3 +308,18 @@ python tools/gen_palette.py            # 重新生成两套色板并跑对比度
 ```
 
 改品牌色编辑 `tools/gen_palette.py` 顶部的种子值，然后重新构建。
+
+---
+
+## 每次改动后的自检
+
+规范写在文档里没有用，得能被执行。下面四项每次改完界面都要重跑：
+
+1. **对比度** —— `python tools/gen_palette.py`，要求两套主题都「失败 0 项」
+2. **无字号字面量** —— 扫描 `res/` 里的 `android:textSize="数字` 与 Java 里的 `setTextSize(`，应为 0 处
+3. **无死资源** —— 统计每个 `dimen` / `style` / `string` / `drawable` / `layout` 的引用数（XML 认 `@type/name` 与 `parent="..."`，Java 认 `R.type.name`），应为 0 项
+4. **无硬编码文案** —— 扫描 Java 里的中文字面量。允许的例外只有纯 Java 核心层（`BiliApi` / `Json` / `Model` / `MuxUtil` / `MediaStoreSaver` / `WbiSigner`）里给日志和桌面测试看的消息
+
+`space_2xl` 是唯一允许「引用数为 0」的令牌：它是 4dp 间距阶里的一级，留白是为了让比例完整，不是因为某处用了它。
+
+还有一个不看代码的检查：**改完必须能装上跑一遍**。深色模式、系统「移除动画」、字体放大到最大、以及从 B 站 App 分享过来的 Intent，这四种情况各过一遍。
