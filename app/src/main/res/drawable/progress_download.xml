@@ -1,21 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  M3 线性进度指示器
-  轨道用 secondary_container，指示条用 primary —— 两个都是色角色，自动跟随明暗。
+  下载进度条。
+  轨道是凹槽（内容还没填进去），已完成段是主色的实心条。
+  两层同高同圆角，靠 ClipDrawable 的 level 裁剪出进度。
 -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+
     <item android:id="@android:id/background">
         <shape android:shape="rectangle">
-            <corners android:radius="@dimen/shape_full" />
-            <solid android:color="@color/m3_secondary_container" />
+            <solid android:color="@color/hyper_divider" />
+            <corners android:radius="@dimen/radius_pill" />
         </shape>
     </item>
+
     <item android:id="@android:id/progress">
         <clip>
             <shape android:shape="rectangle">
-                <corners android:radius="@dimen/shape_full" />
-                <solid android:color="@color/m3_primary" />
+                <solid android:color="@color/scheme_0_primary" />
+                <corners android:radius="@dimen/radius_pill" />
             </shape>
         </clip>
     </item>
+
 </layer-list>

@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 分 P 序号徽标：用 tertiary_container 把序号与正文区分开 -->
+<!-- 分 P 序号徽标。用主色底 + 主色字，深浅模式各有一套值 -->
 <shape xmlns:android="http://schemas.android.com/apk/res/android"
-    android:shape="rectangle">
-    <corners android:radius="@dimen/shape_sm" />
-    <solid android:color="@color/m3_tertiary_container" />
+    android:shape="oval">
+    <solid android:color="@color/hyper_badge_bg" />
 </shape>

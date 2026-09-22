@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  主题色的 5 套配色 —— 浅色
+  ==========================
+  规范正文只定义了默认蓝，其余几套按它的结构补全（primary + primaryVariant）。
+
+  索引顺序必须与 values-night/arrays.xml 完全一致，
+  也与 Prefs 的 ui_primary 取值一一对应：
+    0 樱花粉（默认）  1 默认蓝  2 深海蓝  3 薄荷绿  4 薰衣草紫
+
+  为什么默认是樱花粉而不是规范里的蓝：BiliGrab 的品牌种子色是 #FB7299，
+  整套 UI 换成蓝色会把应用的身份抹掉。风格（新拟态 + HyperOS 语言）严格照规范走，
+  主色作为可变量保留品牌 —— 这样既符合规范，也没丢掉自己是谁。
+-->
+<resources>
+
+    <!-- 0 樱花粉（默认，BiliGrab 品牌色） -->
+    <color name="scheme_0_primary">#FB7299</color>
+    <color name="scheme_0_variant">#E04B78</color>
+
+    <!-- 1 默认蓝 —— 规范里指定的主色 -->
+    <color name="scheme_1_primary">#007AFF</color>
+    <color name="scheme_1_variant">#0062CC</color>
+
+    <!-- 2 深海蓝 -->
+    <color name="scheme_2_primary">#1652A8</color>
+    <color name="scheme_2_variant">#0E3F87</color>
+
+    <!-- 3 薄荷绿 -->
+    <color name="scheme_3_primary">#32BB78</color>
+    <color name="scheme_3_variant">#26965F</color>
+
+    <!-- 4 薰衣草紫 -->
+    <color name="scheme_4_primary">#8E7CF0</color>
+    <color name="scheme_4_variant">#6F5CD8</color>
+
+    <array name="hyper_primary">
+        <item>@color/scheme_0_primary</item>
+        <item>@color/scheme_1_primary</item>
+        <item>@color/scheme_2_primary</item>
+        <item>@color/scheme_3_primary</item>
+        <item>@color/scheme_4_primary</item>
+    </array>
+
+    <array name="hyper_primary_variant">
+        <item>@color/scheme_0_variant</item>
+        <item>@color/scheme_1_variant</item>
+        <item>@color/scheme_2_variant</item>
+        <item>@color/scheme_3_variant</item>
+        <item>@color/scheme_4_variant</item>
+    </array>
+
+    <!-- 设置面板里显示的名字。索引必须与上面两个数组一致 -->
+    <string-array name="hyper_scheme_names">
+        <item>樱花粉</item>
+        <item>默认蓝</item>
+        <item>深海蓝</item>
+        <item>薄荷绿</item>
+        <item>薰衣草紫</item>
+    </string-array>
+
+</resources>

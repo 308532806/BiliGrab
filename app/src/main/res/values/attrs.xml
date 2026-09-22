@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  新拟态自定义属性
+  ================
+  这些属性让新拟态可以写在 XML 与 style 里，而不是在 Java 里到处 findViewById
+  再手工铺背景。
+
+  典型用法 —— 定义一次，到处用：
+
+      <style name="Widget.Card" parent="">
+          <item name="neuStyle">convex</item>
+          <item name="neuRadius">@dimen/radius_card</item>
+          <item name="neuElevation">@dimen/elev_card</item>
+      </style>
+
+  配套的 View 类在 com.biligrab.downloader.ui 下（NeuLayout / NeuFrame /
+  NeuText / NeuButton / NeuImage / NeuImageButton / NeuEdit），
+  它们构造时读取这些属性并交给 NeumorphicSurface。
+-->
+<resources>
+
+    <declare-styleable name="Neumorphic">
+        <!-- 凸起（默认）或凹陷。凹陷画的是内阴影，方向与凸起相反 -->
+        <attr name="neuStyle" format="enum">
+            <enum name="convex" value="0" />
+            <enum name="concave" value="1" />
+            <enum name="none" value="2" />
+        </attr>
+
+        <!-- 圆角。取值见 dimens.xml 的 radius_* 一组 -->
+        <attr name="neuRadius" format="dimension" />
+
+        <!-- 浮雕高度。同时决定模糊半径与阴影偏移，取值见 dimens.xml 的 elev_* 一组 -->
+        <attr name="neuElevation" format="dimension" />
+
+        <!-- 覆盖底色。留空时用主题的 neumBase（页面背景色）——
+             新拟态的默认约定是卡片与页面同色，靠阴影表达层级 -->
+        <attr name="neuFill" format="color" />
+
+        <!-- 装上无涟漪点击（缩放 + 浮雕形变 + 触觉反馈）。
+             真的点击行为仍需在 Java 里设置。 -->
+        <attr name="neuPress" format="boolean" />
+
+        <!-- 主色描边，用于输入框聚焦态、选中态 -->
+        <attr name="neuStroke" format="boolean" />
+
+        <!-- 玻璃态下的描边开关。玻璃面默认带顶部高光，卡片类不需要 -->
+        <attr name="neuGlassFlat" format="boolean" />
+    </declare-styleable>
+
+</resources>

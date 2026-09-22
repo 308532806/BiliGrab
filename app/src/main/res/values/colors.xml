@@ -1,45 +1,84 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  由 tools/gen_palette.py 自动生成，请勿手改。
-  种子色 #FB7299，色空间 OKLCH，映射遵循 Material 3 色角色。
-  重新生成：python tools/gen_palette.py
+  Hyper-Neumorphic 色板 —— 浅色
+  ==============================
+  来源：Yang-Ya-Chao/android-design-system-skills 的 hyper-neumorphic 规范
+  （见 docs/design-refs/hyper-neumorphic.md）。
+
+  与原先的 Material 3 色板是两套体系，不要混用：
+    M3 靠色角色（primary/onPrimary/surfaceContainer…）表达层级，
+    新拟态靠**浮雕**表达层级 —— 背景和卡片几乎是同一个色，
+    凸起与凹陷由亮面高光 + 暗面投影画出来，而不是靠色阶差。
+
+  所以这里刻意没有 container/on-container 那一族：
+  色角色少而语义明确，层级交给 NeumorphicDrawable。
+
+  阴影两色是整个体系的地基，缺一不可：
+    neum_light 左上高光 —— 模拟光源
+    neum_dark  右下投影 —— 模拟厚度
+  深色模式下这两色要换成各自的反向值，否则浮雕会消失（见 values-night）。
 -->
 <resources>
 
+    <!-- ═══ 表面 ═══ -->
+    <!-- 页面底色。卡片与它同色，靠浮雕区分，这是新拟态的核心约定 -->
+    <color name="hyper_background">#F2F4F8</color>
+    <color name="hyper_card">#FFFFFF</color>
 
-    <!-- 浅色主题 — Material 3 色角色 -->
+    <!-- 页面渐变。浅色下极淡，只用来打破纯色的平板感 -->
+    <color name="hyper_gradient_top">#EAF1FF</color>
+    <color name="hyper_gradient_mid">#F5F6FB</color>
+    <color name="hyper_gradient_bottom">#FFFFFF</color>
 
-    <color name="m3_primary">#A62152</color>
-    <color name="m3_on_primary">#FFFFFF</color>
-    <color name="m3_primary_container">#FFD6DF</color>
-    <color name="m3_on_primary_container">#3A0016</color>
-    <color name="m3_secondary">#79515A</color>
-    <color name="m3_on_secondary">#FFFFFF</color>
-    <color name="m3_secondary_container">#FFD6DF</color>
-    <color name="m3_on_secondary_container">#300F18</color>
-    <color name="m3_tertiary">#884F00</color>
-    <color name="m3_on_tertiary">#FFFFFF</color>
-    <color name="m3_tertiary_container">#FFDBBA</color>
-    <color name="m3_on_tertiary_container">#2C1500</color>
-    <color name="m3_error">#B10E16</color>
-    <color name="m3_on_error">#FFFFFF</color>
-    <color name="m3_error_container">#FFD8D3</color>
-    <color name="m3_on_error_container">#3C0002</color>
-    <color name="m3_surface_dim">#DED8D9</color>
-    <color name="m3_surface">#FDF8F9</color>
-    <color name="m3_surface_bright">#FDF8F9</color>
-    <color name="m3_surface_container_lowest">#FFFFFF</color>
-    <color name="m3_surface_container_low">#F7F2F3</color>
-    <color name="m3_surface_container">#F2ECED</color>
-    <color name="m3_surface_container_high">#ECE7E8</color>
-    <color name="m3_surface_container_highest">#E6E1E2</color>
-    <color name="m3_on_surface">#1E1A1B</color>
-    <color name="m3_surface_variant">#EFDDE1</color>
-    <color name="m3_on_surface_variant">#514245</color>
-    <color name="m3_outline">#827275</color>
-    <color name="m3_outline_variant">#D3C1C5</color>
-    <color name="m3_inverse_surface">#332F30</color>
-    <color name="m3_inverse_on_surface">#F5EFF0</color>
-    <color name="m3_inverse_primary">#FFABBE</color>
-    <color name="m3_surface_tint">#A62152</color>
+    <!-- ═══ 文字 ═══ -->
+    <color name="hyper_text_primary">#111111</color>
+    <color name="hyper_text_secondary">#6F7280</color>
+    <color name="hyper_text_tertiary">#B5B5C0</color>
+
+    <!-- ═══ 语义色 ═══ -->
+    <color name="hyper_success">#32BB78</color>
+    <color name="hyper_warning">#FFB300</color>
+    <color name="hyper_error">#FF5252</color>
+
+    <!-- ═══ 描边与分隔 ═══ -->
+    <color name="hyper_border">#E5E5E5</color>
+    <color name="hyper_divider">#F0F0F0</color>
+
+    <!-- ═══ 附属面 ═══ -->
+    <color name="hyper_icon_bg">#F2F4F8</color>
+    <color name="hyper_badge_bg">#E8F4FF</color>
+    <color name="hyper_badge_text">#007AFF</color>
+
+    <!-- ═══ 浮雕阴影 ═══ -->
+    <color name="neum_light">#FFFFFF</color>
+    <color name="neum_dark">#D1D9E6</color>
+
+    <!-- ═══ 玻璃态（第二引擎）═══
+         全局只由 GlassMeshDrawable 绘制一次 mesh，
+         玻璃面只做半透明叠加，让底下的光斑自然透出 -->
+    <color name="glass_mesh_base">#F3EFEA</color>
+    <!--
+      玻璃面的叠加色。规范给的是 #2EFFFFFF（18% 白），实机偏薄：
+      网格一旦有颜色，18% 的白不足以把卡片从背景里托出来。
+      提到 36% 之后卡片才有"磨砂玻璃"的实体感，同时仍然透得过光斑。
+    -->
+    <color name="glass_tint_convex">#5CFFFFFF</color>
+    <!--
+      凹面的叠加压得很轻（4%）。玻璃的凹陷靠方向光表达，不靠压暗：
+      凹槽通常落在不透明的容器里（例如设置面板），背后没有网格可透，
+      这时候 12% 的黑会退化成一个平灰方块，完全没有深度。
+    -->
+    <color name="glass_tint_concave">#0A000000</color>
+    <color name="glass_border_hi">#CCFFFFFF</color>
+    <color name="glass_border_lo">#1F000000</color>
+    <color name="glass_inner_highlight">#80FFFFFF</color>
+    <color name="glass_outer_shadow">#33737D99</color>
+
+    <!-- ═══ 遮罩 ═══ -->
+    <color name="hyper_scrim">#66000000</color>
+    <color name="hyper_edit_overlay">#CC1F2937</color>
+
+    <!-- ═══ 通知栏 ═══ -->
+    <color name="hyper_notification_icon">#FFFFFF</color>
+
 </resources>

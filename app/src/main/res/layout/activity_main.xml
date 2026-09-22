@@ -1,8 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  主界面
-  =======
-  结构遵循 Material 3：小顶栏 + 可滚动内容。
+  主界面 —— Hyper-Neumorphic
+  ===========================
+  与前一版（Material 3）的结构关系：元素顺序、每个 id 承载的语义完全等价，
+  只是把系统控件换成 com.biligrab.downloader.ui.* 的自定义 View，
+  并把底色/描边/涟漪换成新拟态的浮雕。
+
+  四条贯穿全文的约定：
+
+    1. 页面与卡片同色。层级靠浮雕表达，不靠底色差 ——
+       所以这里几乎看不到 background="..."，样式把 neuStyle 一次性装好。
+    2. 卡片"里面"的行是平的。Neu* 的浮雕只出现在卡片这一层，
+       卡片内部再用浮雕会让厚度语义失效，所以内部容器一律不带 style。
+    3. 没有涟漪。主题已把 colorControlHighlight / selectableItemBackground 压成
+       透明，这里也不再引用任何状态背景。
+    4. 主色不写死。使用主色的地方统一写 @color/scheme_0_primary 兜底，
+       运行时由 MainActivity / HyperTheme 覆盖。
 
   四种状态互斥显示，全部在同一棵视图树里，靠可见性切换：
     空        emptyBox    —— 引导用户完成第一步
@@ -10,48 +23,51 @@
     错误      errorBox    —— 说明问题 + 给出恢复动作
     结果      resultBox   —— 预览播放器 / 标题 / 分 P / 按画质列举的下载行
 
-  顶层是 FrameLayout 而不是 LinearLayout：它是 Snackbar 的悬浮锚点，
+  顶层是 NeuFrame（即 FrameLayout）而不是 LinearLayout：它是 Snackbar 的悬浮锚点，
   需要叠在内容之上，而不是把内容挤开。
+
+  卡片之间的关系由父容器统一给出：外层 padding = screen_margin，
+  子元素间距 = card_gap，于是每个"卡片块"自带 12dp 间隔，卡片之间自然分开。
+  区块之间另外再加一段留白（space_2xl，与 section_gap 对齐）。
 -->
-<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<com.biligrab.downloader.ui.NeuFrame xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/m3_surface">
+    android:background="@color/hyper_background">
 
-    <LinearLayout
+    <com.biligrab.downloader.ui.NeuLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:orientation="vertical">
 
         <!-- ==================== 顶栏 ==================== -->
-        <!-- 高度 64dp，顶部 padding 由代码按状态栏 inset 补齐 -->
+        <!-- 高度 64dp，实体高度由代码按状态栏 inset 抬高（见 applyWindowInsets） -->
 
-        <LinearLayout
+        <com.biligrab.downloader.ui.NeuLayout
             android:id="@+id/topBar"
             android:layout_width="match_parent"
             android:layout_height="@dimen/top_app_bar_height"
-            android:background="@color/m3_surface"
             android:gravity="center_vertical"
             android:orientation="horizontal"
-            android:paddingStart="@dimen/space_lg"
-            android:paddingEnd="@dimen/space_xs">
+            android:paddingStart="@dimen/screen_margin"
+            android:paddingEnd="@dimen/space_sm">
 
-            <TextView
+            <com.biligrab.downloader.ui.NeuText
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:text="@string/title_main"
-                android:textAppearance="@style/Text.TitleLarge" />
+                android:textAppearance="@style/Text.AppBar" />
 
-            <ImageButton
+            <com.biligrab.downloader.ui.NeuImageButton
                 android:id="@+id/btnSettings"
                 style="@style/Widget.IconButton"
                 android:contentDescription="@string/cd_settings"
                 android:src="@drawable/ic_settings"
-                android:tint="@color/m3_on_surface_variant" />
-        </LinearLayout>
+                android:tint="@color/hyper_text_secondary" />
+        </com.biligrab.downloader.ui.NeuLayout>
 
         <!-- ==================== 内容 ==================== -->
 
@@ -62,128 +78,138 @@
             android:layout_weight="1"
             android:clipToPadding="false"
             android:fillViewport="true"
-            android:paddingBottom="104dp"
+            android:paddingBottom="@dimen/space_3xl"
             android:scrollbarStyle="outsideOverlay">
 
-            <LinearLayout
+            <com.biligrab.downloader.ui.NeuLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
                 android:paddingStart="@dimen/screen_margin"
-                android:paddingEnd="@dimen/screen_margin">
+                android:paddingEnd="@dimen/screen_margin"
+                android:paddingBottom="@dimen/space_xl">
 
-                <!-- == 链接输入 == -->
+                <!-- == 链接输入：整张卡片是一个作业面，凸 28dp/6dp == -->
 
-                <TextView
-                    android:id="@+id/labelUrl"
-                    style="@style/Widget.FieldLabel"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginBottom="@dimen/space_sm"
-                    android:labelFor="@id/inputUrl"
-                    android:text="@string/label_url" />
-
-                <!-- 字段与尾部图标按钮叠放，按钮 48dp 触控区 -->
-                <FrameLayout
+                <com.biligrab.downloader.ui.NeuLayout
+                    style="@style/Widget.Card"
                     android:layout_width="match_parent"
-                    android:layout_height="wrap_content">
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="@dimen/card_padding">
 
-                    <EditText
-                        android:id="@+id/inputUrl"
-                        style="@style/Widget.TextField"
+                    <com.biligrab.downloader.ui.NeuText
+                        android:id="@+id/labelUrl"
+                        style="@style/Widget.FieldLabel"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="@dimen/space_sm"
+                        android:labelFor="@id/inputUrl"
+                        android:text="@string/label_url" />
+
+                    <!-- 字段与尾部图标按钮叠放：字段右内边距留出按钮的触控区 -->
+                    <com.biligrab.downloader.ui.NeuFrame
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content">
+
+                        <com.biligrab.downloader.ui.NeuEdit
+                            android:id="@+id/inputUrl"
+                            style="@style/Widget.TextField"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:hint="@string/hint_url"
+                            android:imeOptions="actionSearch"
+                            android:importantForAutofill="no"
+                            android:inputType="textUri"
+                            android:paddingEnd="56dp"
+                            android:selectAllOnFocus="false"
+                            tools:ignore="TextViewEdits" />
+
+                        <!-- 一钮两用：输入框为空时是「粘贴」，有内容时变「清空」。
+                             图标与 contentDescription 由 MainActivity 随文本切换 -->
+                        <com.biligrab.downloader.ui.NeuImageButton
+                            android:id="@+id/btnPaste"
+                            style="@style/Widget.IconButton"
+                            android:layout_gravity="end|center_vertical"
+                            android:contentDescription="@string/cd_paste"
+                            android:src="@drawable/ic_paste"
+                            android:tint="@color/hyper_text_secondary" />
+                    </com.biligrab.downloader.ui.NeuFrame>
+
+                    <com.biligrab.downloader.ui.NeuText
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:hint="@string/hint_url"
-                        android:imeOptions="actionSearch"
-                        android:importantForAutofill="no"
-                        android:inputType="textUri"
-                        android:paddingEnd="56dp"
-                        android:selectAllOnFocus="false"
-                        tools:ignore="TextViewEdits" />
+                        android:layout_marginTop="@dimen/space_sm"
+                        android:text="@string/helper_url"
+                        android:textAppearance="@style/Text.BodySmall" />
+                </com.biligrab.downloader.ui.NeuLayout>
 
-                    <!-- 一钮两用：输入框为空时是「粘贴」，有内容时变「清空」。
-                         图标与 contentDescription 由 MainActivity 随文本切换 -->
-                    <ImageButton
-                        android:id="@+id/btnPaste"
-                        style="@style/Widget.IconButton"
-                        android:layout_gravity="end|center_vertical"
-                        android:contentDescription="@string/cd_paste"
-                        android:src="@drawable/ic_paste"
-                        android:tint="@color/m3_on_surface_variant" />
-                </FrameLayout>
+                <!-- 主按钮：26dp/6dp，高 52dp，文字用主色（运行时会被再覆盖一次） -->
 
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="@dimen/space_sm"
-                    android:text="@string/helper_url"
-                    android:textAppearance="@style/Text.BodySmall" />
-
-                <Button
+                <com.biligrab.downloader.ui.NeuButton
                     android:id="@+id/btnParse"
                     style="@style/Widget.Button.Filled"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="@dimen/space_lg"
                     android:text="@string/action_parse" />
 
                 <!-- == 错误：问题 + 恢复动作 == -->
+                <!-- 和其余三种状态放在一起，解析失败时替换掉结果区，而不是夹在按钮和结果中间 -->
 
-                <LinearLayout
+                <com.biligrab.downloader.ui.NeuLayout
                     android:id="@+id/errorBox"
+                    style="@style/Widget.Card"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="@dimen/content_gap"
-                    android:background="@drawable/bg_error_banner"
                     android:gravity="center_vertical"
                     android:orientation="horizontal"
                     android:padding="@dimen/card_padding"
                     android:visibility="gone"
                     tools:visibility="visible">
 
-                    <ImageView
+                    <com.biligrab.downloader.ui.NeuImage
                         android:layout_width="@dimen/icon_size"
                         android:layout_height="@dimen/icon_size"
                         android:contentDescription="@null"
                         android:src="@drawable/ic_error"
-                        android:tint="@color/m3_on_error_container" />
+                        android:tint="@color/hyper_error" />
 
-                    <LinearLayout
+                    <com.biligrab.downloader.ui.NeuLayout
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
-                        android:layout_marginStart="@dimen/space_md"
+                        android:layout_marginStart="@dimen/card_inner_gap"
                         android:layout_weight="1"
                         android:orientation="vertical">
 
-                        <TextView
+                        <com.biligrab.downloader.ui.NeuText
                             android:id="@+id/errorTitle"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:textAppearance="@style/Text.TitleSmall"
-                            android:textColor="@color/m3_on_error_container" />
+                            android:textColor="@color/hyper_error" />
 
-                        <TextView
+                        <com.biligrab.downloader.ui.NeuText
                             android:id="@+id/errorFix"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:layout_marginTop="2dp"
+                            android:layout_marginTop="@dimen/space_xs"
                             android:textAppearance="@style/Text.BodySmall"
-                            android:textColor="@color/m3_on_error_container" />
+                            android:textColor="@color/hyper_text_primary" />
 
                         <!-- 原始错误信息：出现问题时用户能据此反馈，不必去翻日志 -->
-                        <TextView
+                        <com.biligrab.downloader.ui.NeuText
                             android:id="@+id/errorDetail"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:layout_marginTop="@dimen/space_xs"
                             android:textAppearance="@style/Text.Code"
-                            android:textColor="@color/m3_on_error_container"
+                            android:textColor="@color/hyper_text_secondary"
                             android:visibility="gone"
                             tools:text="code=-403 请求被拒绝"
                             tools:visibility="visible" />
-                    </LinearLayout>
+                    </com.biligrab.downloader.ui.NeuLayout>
 
-                    <Button
+                    <com.biligrab.downloader.ui.NeuButton
                         android:id="@+id/btnRetry"
                         style="@style/Widget.Button.Outlined"
                         android:layout_width="wrap_content"
@@ -191,35 +217,35 @@
                         android:layout_marginStart="@dimen/space_sm"
                         android:drawableStart="@drawable/ic_refresh"
                         android:drawablePadding="@dimen/space_sm"
-                        android:drawableTint="@color/state_button_outlined_text"
+                        android:drawableTint="@color/hyper_text_secondary"
                         android:text="@string/action_retry" />
-                </LinearLayout>
+                </com.biligrab.downloader.ui.NeuLayout>
 
                 <!-- == 空状态 == -->
 
-                <LinearLayout
+                <com.biligrab.downloader.ui.NeuLayout
                     android:id="@+id/emptyBox"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="@dimen/space_3xl"
+                    android:layout_marginTop="@dimen/section_gap"
                     android:gravity="center_horizontal"
                     android:orientation="vertical">
 
-                    <FrameLayout
+                    <com.biligrab.downloader.ui.NeuFrame
+                        style="@style/Widget.IconPlate"
                         android:layout_width="96dp"
-                        android:layout_height="96dp"
-                        android:background="@drawable/bg_empty_icon">
+                        android:layout_height="96dp">
 
-                        <ImageView
+                        <com.biligrab.downloader.ui.NeuImage
                             android:layout_width="44dp"
                             android:layout_height="44dp"
                             android:layout_gravity="center"
                             android:contentDescription="@null"
                             android:src="@drawable/ic_search"
-                            android:tint="@color/m3_on_secondary_container" />
-                    </FrameLayout>
+                            android:tint="@color/scheme_0_primary" />
+                    </com.biligrab.downloader.ui.NeuFrame>
 
-                    <TextView
+                    <com.biligrab.downloader.ui.NeuText
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="@dimen/space_xl"
@@ -227,7 +253,7 @@
                         android:text="@string/empty_title"
                         android:textAppearance="@style/Text.HeadlineSmall" />
 
-                    <TextView
+                    <com.biligrab.downloader.ui.NeuText
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="@dimen/space_sm"
@@ -236,121 +262,125 @@
                         android:textAppearance="@style/Text.BodyMedium" />
 
                     <!-- 两条能力提示，各带图标，不靠颜色区分 -->
-                    <LinearLayout
+                    <com.biligrab.downloader.ui.NeuLayout
                         style="@style/Widget.Card"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="@dimen/content_gap"
-                        android:orientation="vertical">
+                        android:layout_marginTop="@dimen/card_gap"
+                        android:orientation="vertical"
+                        android:padding="@dimen/card_padding">
 
-                        <LinearLayout
+                        <!-- 卡片内部的行是平的：不带 style，也不带浮雕 -->
+                        <com.biligrab.downloader.ui.NeuLayout
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:gravity="center_vertical"
                             android:orientation="horizontal">
 
-                            <ImageView
+                            <com.biligrab.downloader.ui.NeuImage
                                 android:layout_width="@dimen/icon_size_sm"
                                 android:layout_height="@dimen/icon_size_sm"
                                 android:contentDescription="@null"
                                 android:src="@drawable/ic_link"
-                                android:tint="@color/m3_on_surface_variant" />
+                                android:tint="@color/hyper_text_secondary" />
 
-                            <TextView
+                            <com.biligrab.downloader.ui.NeuText
                                 android:layout_width="0dp"
                                 android:layout_height="wrap_content"
                                 android:layout_marginStart="@dimen/space_md"
                                 android:layout_weight="1"
                                 android:text="@string/empty_hint_link"
                                 android:textAppearance="@style/Text.BodySmall" />
-                        </LinearLayout>
+                        </com.biligrab.downloader.ui.NeuLayout>
 
-                        <LinearLayout
+                        <com.biligrab.downloader.ui.NeuLayout
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:layout_marginTop="@dimen/space_md"
+                            android:layout_marginTop="@dimen/card_inner_gap"
                             android:gravity="center_vertical"
                             android:orientation="horizontal">
 
-                            <ImageView
+                            <com.biligrab.downloader.ui.NeuImage
                                 android:layout_width="@dimen/icon_size_sm"
                                 android:layout_height="@dimen/icon_size_sm"
                                 android:contentDescription="@null"
                                 android:src="@drawable/ic_music"
-                                android:tint="@color/m3_on_surface_variant" />
+                                android:tint="@color/hyper_text_secondary" />
 
-                            <TextView
+                            <com.biligrab.downloader.ui.NeuText
                                 android:layout_width="0dp"
                                 android:layout_height="wrap_content"
                                 android:layout_marginStart="@dimen/space_md"
                                 android:layout_weight="1"
                                 android:text="@string/empty_hint_login"
                                 android:textAppearance="@style/Text.BodySmall" />
-                        </LinearLayout>
-                    </LinearLayout>
-                </LinearLayout>
+                        </com.biligrab.downloader.ui.NeuLayout>
+                    </com.biligrab.downloader.ui.NeuLayout>
+                </com.biligrab.downloader.ui.NeuLayout>
 
                 <!-- == 加载骨架 == -->
+                <!-- 骨架条自下而上收敛，宽度也收窄，读起来像"内容正在长出来"。
+                     骨架条本身是纯粹的占位物（不是控件、也不是浮雕），
+                     所以这里保留 bg_skeleton 作为它的底色，不套 neuen 样式。 -->
 
-                <LinearLayout
+                <com.biligrab.downloader.ui.NeuLayout
                     android:id="@+id/loadingBox"
+                    style="@style/Widget.Card"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="@dimen/content_gap"
                     android:orientation="vertical"
+                    android:padding="@dimen/card_padding"
                     android:visibility="gone">
 
-                    <View
+                    <com.biligrab.downloader.ui.NeuLayout
                         android:layout_width="match_parent"
                         android:layout_height="@dimen/cover_height"
                         android:background="@drawable/bg_skeleton" />
 
-                    <View
+                    <com.biligrab.downloader.ui.NeuLayout
                         android:layout_width="match_parent"
                         android:layout_height="22dp"
                         android:layout_marginTop="@dimen/space_lg"
                         android:background="@drawable/bg_skeleton" />
 
-                    <View
+                    <com.biligrab.downloader.ui.NeuLayout
                         android:layout_width="180dp"
                         android:layout_height="16dp"
                         android:layout_marginTop="@dimen/space_md"
                         android:background="@drawable/bg_skeleton" />
 
-                    <LinearLayout
+                    <com.biligrab.downloader.ui.NeuLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="@dimen/content_gap"
+                        android:layout_marginTop="@dimen/card_gap"
                         android:gravity="center_vertical"
                         android:orientation="horizontal">
 
                         <ProgressBar
-                            android:id="@+id/loadingSpinner"
-                            style="?android:attr/progressBarStyleSmall"
-                            android:layout_width="20dp"
-                            android:layout_height="20dp"
-                            android:indeterminateTint="@color/m3_primary" />
+                            android:layout_width="@dimen/icon_size_sm"
+                            android:layout_height="@dimen/icon_size_sm"
+                            android:indeterminateTint="@color/scheme_0_primary" />
 
-                        <TextView
+                        <com.biligrab.downloader.ui.NeuText
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
                             android:layout_marginStart="@dimen/space_md"
                             android:layout_weight="1"
                             android:text="@string/loading_title"
                             android:textAppearance="@style/Text.TitleSmall" />
-                    </LinearLayout>
+                    </com.biligrab.downloader.ui.NeuLayout>
 
-                    <TextView
+                    <com.biligrab.downloader.ui.NeuText
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="@dimen/space_xs"
                         android:text="@string/loading_body"
                         android:textAppearance="@style/Text.BodySmall" />
-                </LinearLayout>
+                </com.biligrab.downloader.ui.NeuLayout>
 
                 <!-- == 解析结果 == -->
 
-                <LinearLayout
+                <com.biligrab.downloader.ui.NeuLayout
                     android:id="@+id/resultBox"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
@@ -368,11 +398,10 @@
                       按视频实际比例调整（并设上限，避免竖屏视频撑满整屏）。
                     -->
 
-                    <FrameLayout
+                    <com.biligrab.downloader.ui.NeuFrame
                         android:id="@+id/previewBox"
                         android:layout_width="match_parent"
                         android:layout_height="@dimen/cover_height"
-                        android:layout_marginTop="@dimen/content_gap"
                         android:background="@drawable/bg_preview_frame"
                         android:clipToOutline="true">
 
@@ -385,6 +414,9 @@
                           而且 SurfaceView 必须常驻可见：Surface 只在视图可见时
                           才存在，而 setDisplay() 需要一个有效的 Surface。
                           "还没在播"由叠在上面的封面来表达，不靠隐藏 Surface。
+
+                          SurfaceView 没有新拟态对应物：它是系统提供的合成层，
+                          浮雕对它没有意义，所以保持系统控件。
                         -->
                         <SurfaceView
                             android:id="@+id/videoView"
@@ -392,15 +424,15 @@
                             android:layout_height="match_parent"
                             android:layout_gravity="center" />
 
-                        <ImageView
+                        <com.biligrab.downloader.ui.NeuImage
                             android:id="@+id/ivCover"
                             android:layout_width="match_parent"
                             android:layout_height="match_parent"
                             android:contentDescription="@null"
                             android:scaleType="centerCrop" />
 
-                        <!-- 大播放键：封面上唯一的主要动作 -->
-                        <ImageButton
+                        <!-- 大播放键：封面上唯一的主要动作。全圆 6dp，不用涟漪 -->
+                        <com.biligrab.downloader.ui.NeuImageButton
                             android:id="@+id/btnPlay"
                             style="@style/Widget.PlayButton"
                             android:layout_gravity="center" />
@@ -411,116 +443,117 @@
                             android:layout_width="@dimen/icon_size"
                             android:layout_height="@dimen/icon_size"
                             android:layout_gravity="center"
-                            android:indeterminateTint="@color/m3_primary"
+                            android:indeterminateTint="@color/scheme_0_primary"
                             android:visibility="gone" />
-                    </FrameLayout>
+
+                        <!-- 预览失败：盖住封面区，但仍然明确指向"可以照常下载" -->
+                        <com.biligrab.downloader.ui.NeuLayout
+                            android:id="@+id/previewError"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_gravity="center"
+                            android:gravity="center"
+                            android:orientation="vertical"
+                            android:padding="@dimen/card_padding"
+                            android:visibility="gone"
+                            tools:visibility="visible">
+
+                            <com.biligrab.downloader.ui.NeuImage
+                                android:layout_width="@dimen/icon_size"
+                                android:layout_height="@dimen/icon_size"
+                                android:contentDescription="@null"
+                                android:src="@drawable/ic_error"
+                                android:tint="@color/hyper_error" />
+
+                            <com.biligrab.downloader.ui.NeuText
+                                android:id="@+id/tvPreviewError"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="@dimen/space_sm"
+                                android:gravity="center"
+                                android:textAppearance="@style/Text.BodySmall"
+                                android:textColor="@color/scheme_0_primary"
+                                tools:text="预览加载失败，仍可直接下载" />
+                        </com.biligrab.downloader.ui.NeuLayout>
+                    </com.biligrab.downloader.ui.NeuFrame>
 
                     <!-- 播放控制条：视频准备好之后才出现。
-                         进度条可拖动 —— 预览要能跳到任意位置看。 -->
-                    <LinearLayout
+                         进度条可拖动 —— 预览要能跳到任意位置看。
+                         被"挖进去"的一条凹槽：它是贴在预览下方的附属面，
+                         用凹面表示它属于预览、而不是另一张卡片。 -->
+                    <com.biligrab.downloader.ui.NeuLayout
                         android:id="@+id/previewBar"
-                        style="@style/Widget.Card"
+                        style="@style/Widget.Card.Concave"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="@dimen/space_sm"
                         android:gravity="center_vertical"
                         android:orientation="horizontal"
-                        android:paddingEnd="@dimen/card_padding"
                         android:paddingStart="@dimen/space_xs"
+                        android:paddingEnd="@dimen/card_padding"
                         android:visibility="gone"
                         tools:visibility="visible">
 
-                        <ImageButton
+                        <com.biligrab.downloader.ui.NeuImageButton
                             android:id="@+id/btnPlayPause"
                             style="@style/Widget.IconButton"
                             android:contentDescription="@string/cd_pause"
                             android:src="@drawable/ic_pause"
-                            android:tint="@color/m3_primary" />
+                            android:tint="@color/scheme_0_primary" />
 
                         <SeekBar
                             android:id="@+id/seekPreview"
                             style="@style/Widget.SeekBar"
                             android:layout_width="0dp"
                             android:layout_height="@dimen/touch_min"
-                            android:layout_marginEnd="@dimen/space_md"
                             android:layout_marginStart="@dimen/space_sm"
+                            android:layout_marginEnd="@dimen/space_md"
                             android:layout_weight="1"
                             android:contentDescription="@string/cd_preview_seek"
                             android:max="1000" />
 
-                        <TextView
+                        <com.biligrab.downloader.ui.NeuText
                             android:id="@+id/tvPreviewTime"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:fontFeatureSettings="tnum"
                             android:textAppearance="@style/Text.LabelMedium"
-                            android:textColor="@color/m3_on_surface_variant"
+                            android:textColor="@color/hyper_text_secondary"
                             tools:text="01:24 / 13:05" />
-                    </LinearLayout>
+                    </com.biligrab.downloader.ui.NeuLayout>
 
-                    <!-- 预览失败时替代控制条出现 -->
-                    <LinearLayout
-                        android:id="@+id/previewError"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="@dimen/space_sm"
-                        android:gravity="center_vertical"
-                        android:orientation="horizontal"
-                        android:visibility="gone"
-                        tools:visibility="visible">
-
-                        <ImageView
-                            android:layout_width="@dimen/icon_size_sm"
-                            android:layout_height="@dimen/icon_size_sm"
-                            android:contentDescription="@null"
-                            android:src="@drawable/ic_error"
-                            android:tint="@color/m3_error" />
-
-                        <TextView
-                            android:id="@+id/tvPreviewError"
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_marginStart="@dimen/space_md"
-                            android:layout_weight="1"
-                            android:textAppearance="@style/Text.BodySmall"
-                            tools:text="预览加载失败，仍可直接下载" />
-                    </LinearLayout>
-
-                    <TextView
+                    <com.biligrab.downloader.ui.NeuText
                         android:id="@+id/tvTitle"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="@dimen/space_lg"
+                        android:layout_marginTop="@dimen/space_md"
                         android:textAppearance="@style/Text.TitleLarge" />
 
-                    <TextView
+                    <com.biligrab.downloader.ui.NeuText
                         android:id="@+id/tvMeta"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="@dimen/space_xs"
                         android:textAppearance="@style/Text.BodyMedium" />
 
                     <!-- 仅在「未登录导致画质受限」时出现：说明原因，并直接给出动作 -->
-                    <LinearLayout
+                    <com.biligrab.downloader.ui.NeuLayout
                         android:id="@+id/qualityHintBox"
                         style="@style/Widget.Card"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="@dimen/space_lg"
                         android:gravity="center_vertical"
                         android:orientation="horizontal"
-                        android:paddingEnd="@dimen/space_sm"
+                        android:padding="@dimen/card_padding"
                         android:visibility="gone"
                         tools:visibility="visible">
 
-                        <ImageView
+                        <com.biligrab.downloader.ui.NeuImage
                             android:layout_width="@dimen/icon_size_sm"
                             android:layout_height="@dimen/icon_size_sm"
                             android:contentDescription="@null"
                             android:src="@drawable/ic_info"
-                            android:tint="@color/m3_primary" />
+                            android:tint="@color/scheme_0_primary" />
 
-                        <TextView
+                        <com.biligrab.downloader.ui.NeuText
                             android:id="@+id/tvQualityHint"
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
@@ -529,31 +562,32 @@
                             android:textAppearance="@style/Text.BodySmall" />
 
                         <!-- 这是「建议」而不是「恢复」动作，用色调按钮表达中等强调度 -->
-                        <Button
+                        <com.biligrab.downloader.ui.NeuButton
                             android:id="@+id/btnQualityHintAction"
                             style="@style/Widget.Button.Tonal"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:layout_marginStart="@dimen/space_sm"
                             android:text="@string/action_open_settings" />
-                    </LinearLayout>
+                    </com.biligrab.downloader.ui.NeuLayout>
 
-                    <!-- 分 P 选择 -->
+                    <!-- ==================== 分 P 选择 ==================== -->
 
-                    <TextView
+                    <com.biligrab.downloader.ui.NeuText
                         android:id="@+id/tvPartsLabel"
                         style="@style/Widget.SectionTitle"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="@dimen/section_gap"
+                        android:layout_marginTop="@dimen/space_2xl"
                         android:text="@string/section_parts" />
 
+                    <!-- 行由 item_part.xml 渲染。ListView 本身没有新拟态对应物，
+                         浮雕装在它作为整体的容器上：外层就是卡片本身。 -->
                     <ListView
                         android:id="@+id/listParts"
                         style="@style/Widget.Card"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="@dimen/title_gap"
                         android:divider="@null"
                         android:dividerHeight="0dp"
                         android:maxHeight="@dimen/parts_list_max_height"
@@ -561,43 +595,49 @@
                         android:padding="@dimen/space_sm"
                         android:scrollbarStyle="outsideOverlay" />
 
-                    <!-- 下载：每个可用画质一行，行尾一个下载按钮 -->
+                    <!-- ==================== 下载 ==================== -->
 
-                    <TextView
+                    <com.biligrab.downloader.ui.NeuText
                         android:id="@+id/tvDownloadLabel"
                         style="@style/Widget.SectionTitle"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="@dimen/section_gap"
+                        android:layout_marginTop="@dimen/space_2xl"
                         android:text="@string/section_download" />
 
                     <!--
                       行由代码生成：可用档位的数量和名称都来自接口，
                       写死在布局里会跟着接口变而变错。
                       最后一行固定是「仅音频」。
+
+                      注意：这里是 LinearLayout（新拟态版 NeuLayout，代码用 addView 手工加行），
+                      不是 ListView —— 档位数量少且每次解析都变，复用没有意义。
+
+                      这个容器**刻意不带浮雕**：每一行自己就是一张卡（Widget.DownloadRow）。
+                      外面再套一层凸起的话，两层阴影会互相糊在一起，
+                      整块看着像一张长毛边的纸 —— 卡片套卡片是这套设计里的反模式。
+                      这里只需要给出卡片之间的间距。
                     -->
-                    <LinearLayout
+                    <com.biligrab.downloader.ui.NeuLayout
                         android:id="@+id/listDownloads"
-                        style="@style/Widget.Card"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="@dimen/title_gap"
                         android:orientation="vertical"
-                        android:padding="@dimen/space_sm" />
+                        android:paddingTop="@dimen/card_gap"
+                        android:paddingBottom="@dimen/card_gap" />
 
                     <!-- 下载完成后指出文件在哪，否则用户只能去文件管理器里翻 -->
-                    <TextView
+                    <com.biligrab.downloader.ui.NeuText
                         android:id="@+id/tvSavedTo"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="@dimen/space_md"
                         android:drawableStart="@drawable/ic_folder"
                         android:drawablePadding="@dimen/space_sm"
-                        android:drawableTint="@color/m3_on_surface_variant"
+                        android:drawableTint="@color/hyper_text_secondary"
                         android:textAppearance="@style/Text.BodySmall"
                         android:visibility="gone" />
-                </LinearLayout>
-            </LinearLayout>
+                </com.biligrab.downloader.ui.NeuLayout>
+            </com.biligrab.downloader.ui.NeuLayout>
         </ScrollView>
-    </LinearLayout>
-</FrameLayout>
+    </com.biligrab.downloader.ui.NeuLayout>
+</com.biligrab.downloader.ui.NeuFrame>

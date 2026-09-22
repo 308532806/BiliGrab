@@ -119,6 +119,9 @@ public final class PreviewController {
         this.bar = host.findViewById(R.id.previewBar);
         this.btnPlayPause = host.findViewById(R.id.btnPlayPause);
         this.seek = host.findViewById(R.id.seekPreview);
+        // 槽改成凹陷、滑块改成凸起圆盘。放在 setOnSeekBarChangeListener 之前 ——
+        // dressSeekBar 只换 drawable，不动监听器，但顺序清楚一点更不容易出错。
+        com.biligrab.downloader.ui.NeumorphicControls.dressSeekBar(seek);
         this.time = host.findViewById(R.id.tvPreviewTime);
         this.errorBox = host.findViewById(R.id.previewError);
         this.errorText = host.findViewById(R.id.tvPreviewError);

@@ -1,9 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 底部表单：只有上方两个角是圆的（M3 bottom sheet） -->
+<!--
+  底部面板背景。
+  只有上方两个角是圆的：面板贴着屏幕底边，
+  下面再画圆角会在屏幕外多出两条看不见的弧。
+-->
 <shape xmlns:android="http://schemas.android.com/apk/res/android"
     android:shape="rectangle">
+    <solid android:color="@color/hyper_background" />
     <corners
-        android:topLeftRadius="@dimen/shape_xl"
-        android:topRightRadius="@dimen/shape_xl" />
-    <solid android:color="@color/m3_surface_container_low" />
+        android:topLeftRadius="@dimen/radius_dialog"
+        android:topRightRadius="@dimen/radius_dialog" />
 </shape>

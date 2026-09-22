@@ -1,27 +1,31 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  深色主题
-  ========
-  刻意与浅色分别设计（colorize.md: "Light and dark themes are each composed,
-  not mechanically inverted"）：表面用 neutral tone 6，层级靠 tone 递进，
-  系统栏图标转为浅色。
+  深色主题 —— Hyper-Neumorphic
+  ============================
+  刻意与浅色分别设计，不是机械反转：系统栏图标转为浅色，
+  强调色用深色专用的那一套（见 values-night/arrays.xml）。
+
+  同样把 colorControlHighlight 压成透明：新拟态不使用涟漪。
 -->
 <resources xmlns:tools="http://schemas.android.com/tools">
 
     <style name="Theme.BiliGrab" parent="@android:style/Theme.Material.NoActionBar">
 
-        <item name="android:windowBackground">@color/m3_surface</item>
-        <item name="android:colorBackground">@color/m3_surface</item>
-        <item name="android:textColorPrimary">@color/m3_on_surface</item>
-        <item name="android:textColorSecondary">@color/m3_on_surface_variant</item>
-        <item name="android:textColorHint">@color/m3_on_surface_variant</item>
+        <item name="android:windowBackground">@color/hyper_background</item>
+        <item name="android:colorBackground">@color/hyper_background</item>
+        <item name="android:textColorPrimary">@color/hyper_text_primary</item>
+        <item name="android:textColorSecondary">@color/hyper_text_secondary</item>
+        <item name="android:textColorHint">@color/hyper_text_tertiary</item>
 
-        <item name="android:colorPrimary">@color/m3_primary</item>
-        <item name="android:colorPrimaryDark">@color/m3_surface</item>
-        <item name="android:colorAccent">@color/m3_primary</item>
-        <item name="android:colorControlActivated">@color/m3_primary</item>
-        <item name="android:colorControlNormal">@color/m3_on_surface_variant</item>
-        <item name="android:colorControlHighlight">@color/ripple_on_surface</item>
+        <item name="android:colorPrimary">@color/scheme_0_primary</item>
+        <item name="android:colorPrimaryDark">@color/hyper_background</item>
+        <item name="android:colorAccent">@color/scheme_0_primary</item>
+        <item name="android:colorControlActivated">@color/scheme_0_primary</item>
+        <item name="android:colorControlNormal">@color/hyper_text_secondary</item>
+        <item name="android:colorControlHighlight">@android:color/transparent</item>
+
+        <item name="android:selectableItemBackground">@null</item>
+        <item name="android:selectableItemBackgroundBorderless">@null</item>
 
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
@@ -32,8 +36,8 @@
 
         <item name="android:allowBackup">true</item>
 
-        <item name="android:colorBackgroundFloating">@color/m3_surface_container_high</item>
-        <item name="android:textColorPrimaryInverse">@color/m3_inverse_on_surface</item>
+        <item name="android:colorBackgroundFloating">@color/hyper_card</item>
+        <item name="android:textColorPrimaryInverse">@color/hyper_text_primary</item>
 
         <item name="android:forceDarkAllowed" tools:targetApi="29">false</item>
     </style>
@@ -41,11 +45,12 @@
     <style name="Theme.BiliGrab.BottomSheet" parent="@android:style/Theme.Material.Dialog">
         <item name="android:windowIsFloating">false</item>
         <item name="android:windowBackground">@android:color/transparent</item>
-        <item name="android:backgroundDimAmount">0.5</item>
+        <item name="android:backgroundDimAmount">0.6</item>
         <item name="android:windowAnimationStyle">@style/Animation.BiliGrab.Sheet</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
         <item name="android:windowLightStatusBar">false</item>
+        <item name="android:colorControlHighlight">@android:color/transparent</item>
     </style>
 
     <style name="Animation.BiliGrab.Sheet" parent="@android:style/Animation.Dialog">

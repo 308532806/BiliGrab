@@ -1,15 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  尺寸令牌
-  =========
-  命名描述**用途**而不是数值（impeccable: "Role names and tokens should
-  describe purpose rather than values"），这样调整比例时调用方不需要改。
+  尺寸令牌 —— Hyper-Neumorphic
+  ============================
+  来源：docs/design-refs/hyper-neumorphic.md 的 AppSpacing + 「圆角层级」表。
 
-  间距遵循 4dp 栅格；形状遵循 Material 3 形状阶。
+  命名描述**用途**而不是数值，调整比例时调用方不需要改。
+
+  与前一版的区别：
+    - 屏边距 16dp → 24dp。新拟态靠浮雕表达层级，卡片边缘需要更多留白
+      才能让投影落下去；间距太紧时相邻卡片的阴影会互相糊在一起。
+    - 圆角整体放大到 28dp 体系。小圆角配大面积柔和阴影是不成立的 ——
+      阴影越软，形状越要圆，否则看着像"没对齐的方盒子"。
 -->
 <resources>
 
-    <!-- ==================== 间距：4dp 栅格 ==================== -->
+    <!-- ==================== 间距 ==================== -->
 
     <dimen name="space_xs">4dp</dimen>
     <dimen name="space_sm">8dp</dimen>
@@ -19,24 +24,57 @@
     <dimen name="space_2xl">32dp</dimen>
     <dimen name="space_3xl">48dp</dimen>
 
-    <!-- 语义化间距 -->
-    <dimen name="screen_margin">16dp</dimen>
-    <dimen name="content_gap">24dp</dimen>
-    <!-- 比 title_gap 大：impeccable 要求"标题上方的留白多于下方" -->
-    <dimen name="section_gap">32dp</dimen>
-    <dimen name="title_gap">12dp</dimen>
+    <!-- 屏边距。24dp 是规范里的 safeHorizontal -->
+    <dimen name="screen_margin">24dp</dimen>
+    <!-- 卡片之间 -->
+    <dimen name="card_gap">12dp</dimen>
+    <!-- 卡片内边距 / 卡片内元素间距 -->
     <dimen name="card_padding">16dp</dimen>
+    <dimen name="card_inner_gap">12dp</dimen>
+    <!-- 区块之间（比卡片间距大一档，用来分组） -->
+    <dimen name="section_gap">32dp</dimen>
+    <dimen name="content_gap">24dp</dimen>
+    <dimen name="title_gap">12dp</dimen>
 
-    <!-- ==================== 形状：Material 3 形状阶 ==================== -->
+    <!-- ==================== 圆角 ==================== -->
+    <!-- 数值取自规范的「圆角层级」表，不要随手改：
+         每个层级都配了固定的 elevation，两者是一组参数 -->
 
-    <dimen name="shape_xs">4dp</dimen>
-    <dimen name="shape_sm">8dp</dimen>
-    <dimen name="shape_md">12dp</dimen>
-    <dimen name="shape_lg">16dp</dimen>
-    <dimen name="shape_xl">28dp</dimen>
-    <dimen name="shape_full">999dp</dimen>
+    <!-- 页面卡片 -->
+    <dimen name="radius_card">28dp</dimen>
+    <!-- 对话框 / 底部面板 -->
+    <dimen name="radius_dialog">24dp</dimen>
+    <!-- 按钮 -->
+    <dimen name="radius_button">26dp</dimen>
+    <!-- 输入框 -->
+    <dimen name="radius_field">16dp</dimen>
+    <!-- 开关轨道 -->
+    <dimen name="radius_switch_track">14dp</dimen>
+    <!-- 芯片 -->
+    <dimen name="radius_chip">14dp</dimen>
+    <!-- 图标按钮 -->
+    <dimen name="radius_icon_button">18dp</dimen>
+    <!-- 药丸 / 全圆 -->
+    <dimen name="radius_pill">999dp</dimen>
 
-    <!-- ==================== 触控：Material 3 可达性下限 ==================== -->
+
+    <!-- ==================== 浮雕高度 ==================== -->
+    <!-- 与新拟态的圆角层级一一对应。按下时降到 press 档 -->
+    <!-- 注意这不是 Material 的 elevation：
+         它同时决定模糊半径和偏移量（偏移 = 0.5 × 该值） -->
+
+    <dimen name="elev_card">6dp</dimen>
+    <dimen name="elev_dialog">8dp</dimen>
+    <dimen name="elev_button">6dp</dimen>
+    <dimen name="elev_button_pressed">4dp</dimen>
+    <dimen name="elev_button_disabled">1.5dp</dimen>
+    <dimen name="elev_chip">3dp</dimen>
+    <dimen name="elev_icon_button">3dp</dimen>
+    <dimen name="elev_field">2dp</dimen>
+    <dimen name="elev_switch">1.5dp</dimen>
+    <dimen name="elev_slider_track">2dp</dimen>
+
+    <!-- ==================== 触控 ==================== -->
 
     <!-- 任何可点区域不得小于此值 -->
     <dimen name="touch_min">48dp</dimen>
@@ -48,25 +86,42 @@
     <dimen name="top_app_bar_height">64dp</dimen>
     <dimen name="icon_size">24dp</dimen>
     <dimen name="icon_size_sm">20dp</dimen>
-    <dimen name="button_height">48dp</dimen>
+    <dimen name="icon_size_xs">16dp</dimen>
+
+    <!-- 按钮 52dp，比 touch_min 高一档：新拟态按钮靠厚度成立，
+         压到 48dp 会显得扁 -->
+    <dimen name="button_height">52dp</dimen>
     <dimen name="field_height">56dp</dimen>
-    <!-- 芯片的可见药丸上下各内缩这么多：
-         控件本身 48dp（touch_min），视觉高度 48 - 2*6 = 36dp。
-         视觉尺寸和可点尺寸是两件事，见 bg_chip.xml -->
-    <dimen name="chip_inset">6dp</dimen>
+    <dimen name="chip_height">32dp</dimen>
+    <dimen name="fab_size">48dp</dimen>
+
+    <!-- 芯片的可点区域比可见药丸上下各内缩这么多：
+         控件本身 48dp（touch_min），视觉高度 32dp。
+         视觉尺寸和可点尺寸是两件事。 -->
+    <dimen name="chip_inset">8dp</dimen>
+
     <dimen name="progress_height">4dp</dimen>
-    <!-- 封面上的大播放键：比 touch_min 大一档，因为它是封面上的唯一动作 -->
+    <!-- 封面上的大播放键 -->
     <dimen name="play_button_size">64dp</dimen>
+
+    <!-- 开关：轨道 52×28，滑块 20，行程 4dp↔24dp -->
+    <dimen name="switch_width">52dp</dimen>
+    <dimen name="switch_height">28dp</dimen>
+    <dimen name="switch_thumb">20dp</dimen>
+    <dimen name="switch_thumb_margin">4dp</dimen>
+
+    <!-- 滑块：轨道 14dp 高，滑块 32dp -->
+    <dimen name="slider_track_height">14dp</dimen>
+    <dimen name="slider_thumb">32dp</dimen>
 
     <!-- ==================== 其他 ==================== -->
 
-    <!-- 描边宽度：统一 1dp，避免出现某处 2dp 的"重点边框" -->
     <dimen name="stroke">1dp</dimen>
-
-    <!-- 封面固定高度：固定值可避免图片加载造成的布局跳动 -->
     <dimen name="cover_height">180dp</dimen>
-
-    <!-- 分 P 列表最大高度：超过就滚动，避免把操作区顶出屏幕 -->
     <dimen name="parts_list_max_height">240dp</dimen>
+
+    <!-- 声明的 elevation 与实际绘制所需的外扩量：
+         阴影会画到控件边界之外，父容器必须留出这么多，否则会被裁掉 -->
+    <dimen name="neum_bleed">10dp</dimen>
 
 </resources>

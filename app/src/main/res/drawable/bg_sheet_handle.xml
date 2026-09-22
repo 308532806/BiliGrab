@@ -1,8 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 底部表单顶部的拖拽把手 -->
+<!-- 底部面板的拖拽把手：一根小横条 -->
 <shape xmlns:android="http://schemas.android.com/apk/res/android"
     android:shape="rectangle">
-    <corners android:radius="@dimen/shape_full" />
-    <solid android:color="@color/m3_outline_variant" />
-    <size android:width="32dp" android:height="4dp" />
+    <solid android:color="@color/hyper_text_tertiary" />
+    <corners android:radius="@dimen/radius_pill" />
 </shape>

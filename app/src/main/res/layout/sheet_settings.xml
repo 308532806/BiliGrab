@@ -1,13 +1,30 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  设置底部表单
-  =============
-  用底部表单而不是 AlertDialog：设置是一个不需要打断、也不需要保护焦点的任务，
-  craft-floor 明确把这类任务上的模态对话框列为反模式。
+  设置面板 —— Hyper-Neumorphic
+  ============================
+  仍然用底部表单而不是 AlertDialog：设置是一个不需要打断、也不需要保护焦点的任务。
 
-  同时提供两种关闭方式：右上角关闭按钮，以及点击外部 / 返回键（Dialog 默认行为）。
+  新拟态下的三处结构性变化：
+
+    1. 根容器是一块 24dp 圆角的浮雕面板（radius_dialog / elev_dialog），
+       底色 hyper_background —— 卡片与页面同色，层级完全交给浮雕表达。
+
+    2. 每个分区是一张 Widget.Card（凸 28dp / 6dp），分区之间 12dp（card_gap）。
+       原来的 Widget.SectionTitle 标题挪进卡片内部当第一行：标题与内容同属一块
+       表面，比"浮在卡片外的标签"更符合新拟态的厚度语义。
+
+    3. 卡片内部不再叠浮雕：标签、说明文字、状态徽标、行都是平的。只有输入框例外 ——
+       它是真的"挖进去"的凹槽，凹与凸是两套画法，叠在一起才成立。
+
+  关闭方式保持两种：右上角关闭按钮，以及点击外部 / 返回键（Dialog 默认行为）。
+
+  根容器**刻意不带 app:neu* 属性**，用一张不透明 drawable 而不是浮雕：
+  桌面是模态表面，背后只有一层压暗的界面，没有任何值得透出来的内容。
+  带浮雕的话玻璃引擎会把它变成半透明，背后的视频封面直接透上来，设置就没法读了。
+  圆角与底色仍然取自 radius_dialog / hyper_background，与浮雕那套参数一致。
 -->
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<com.biligrab.downloader.ui.NeuLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/sheetRoot"
     android:layout_width="match_parent"
@@ -16,15 +33,17 @@
     android:orientation="vertical"
     android:paddingBottom="@dimen/space_lg">
 
-    <!-- 拖拽把手 -->
-    <View
+    <!-- 拖拽把手：纯视觉提示，32×4dp 的小横条（两端口做成全圆） -->
+    <com.biligrab.downloader.ui.NeuFrame
         android:layout_width="32dp"
         android:layout_height="4dp"
         android:layout_gravity="center_horizontal"
-        android:layout_marginTop="@dimen/space_sm"
+        android:layout_marginTop="@dimen/space_md"
         android:background="@drawable/bg_sheet_handle" />
 
-    <LinearLayout
+    <!-- ==================== 顶栏 ==================== -->
+
+    <com.biligrab.downloader.ui.NeuLayout
         android:layout_width="match_parent"
         android:layout_height="@dimen/top_app_bar_height"
         android:gravity="center_vertical"
@@ -32,261 +51,311 @@
         android:paddingStart="@dimen/screen_margin"
         android:paddingEnd="@dimen/space_sm">
 
-        <TextView
+        <com.biligrab.downloader.ui.NeuText
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:text="@string/settings_title"
             android:textAppearance="@style/Text.TitleLarge" />
 
-        <ImageButton
+        <com.biligrab.downloader.ui.NeuImageButton
             android:id="@+id/btnSheetClose"
             style="@style/Widget.IconButton"
             android:contentDescription="@string/cd_close"
             android:src="@drawable/ic_close"
-            android:tint="@color/m3_on_surface_variant" />
-    </LinearLayout>
+            android:tint="@color/hyper_text_secondary" />
+    </com.biligrab.downloader.ui.NeuLayout>
+
+    <!-- ==================== 滚动区 ==================== -->
 
     <ScrollView
         android:id="@+id/sheetScroll"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:clipToPadding="false"
         android:scrollbarStyle="outsideOverlay">
 
-        <LinearLayout
+        <com.biligrab.downloader.ui.NeuLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
             android:paddingStart="@dimen/screen_margin"
-            android:paddingEnd="@dimen/screen_margin">
+            android:paddingEnd="@dimen/screen_margin"
+            android:paddingBottom="@dimen/space_lg">
 
             <!-- ==================== 账号 ==================== -->
 
-            <TextView
-                style="@style/Widget.SectionTitle"
+            <com.biligrab.downloader.ui.NeuLayout
+                style="@style/Widget.Card"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="@string/settings_account_title" />
+                android:orientation="vertical"
+                android:padding="@dimen/card_padding">
 
-            <TextView
-                android:id="@+id/labelSessdata"
-                style="@style/Widget.FieldLabel"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="@dimen/space_lg"
-                android:layout_marginBottom="@dimen/space_sm"
-                android:labelFor="@id/etSessdata"
-                android:text="@string/settings_sessdata_label" />
+                <com.biligrab.downloader.ui.NeuText
+                    style="@style/Widget.SectionTitle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/settings_account_title" />
 
-            <EditText
-                android:id="@+id/etSessdata"
-                style="@style/Widget.TextField"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:hint="@string/settings_sessdata_hint"
-                android:importantForAutofill="no"
-                android:inputType="textNoSuggestions"
-                tools:ignore="TextViewEdits" />
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="@dimen/space_sm"
-                android:text="@string/settings_sessdata_help"
-                android:textAppearance="@style/Text.BodySmall" />
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="@dimen/space_md"
-                android:gravity="center_vertical"
-                android:orientation="horizontal">
-
-                <TextView
-                    android:id="@+id/tvLoginState"
+                <com.biligrab.downloader.ui.NeuText
+                    android:id="@+id/labelSessdata"
+                    style="@style/Widget.FieldLabel"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:background="@drawable/bg_status_pill"
-                    android:paddingStart="@dimen/space_md"
-                    android:paddingTop="@dimen/space_xs"
-                    android:paddingEnd="@dimen/space_md"
-                    android:paddingBottom="@dimen/space_xs"
-                    android:textAppearance="@style/Text.LabelMedium"
-                    android:textColor="@color/m3_on_surface_variant"
-                    tools:text="@string/settings_login_state_off" />
+                    android:layout_marginTop="@dimen/space_lg"
+                    android:layout_marginBottom="@dimen/space_sm"
+                    android:labelFor="@id/etSessdata"
+                    android:text="@string/settings_sessdata_label" />
 
-                <View
-                    android:layout_width="0dp"
-                    android:layout_height="1dp"
-                    android:layout_weight="1" />
+                <com.biligrab.downloader.ui.NeuEdit
+                    android:id="@+id/etSessdata"
+                    style="@style/Widget.TextField"
+                    android:layout_width="match_parent"
+                    android:layout_height="@dimen/field_height"
+                    android:hint="@string/settings_sessdata_hint"
+                    android:importantForAutofill="no"
+                    android:inputType="textNoSuggestions"
+                    tools:ignore="TextViewEdits" />
 
-                <Button
-                    android:id="@+id/btnClearCookie"
-                    style="@style/Widget.Button.Outlined"
-                    android:layout_width="wrap_content"
+                <com.biligrab.downloader.ui.NeuText
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="@string/settings_clear_cookie" />
-            </LinearLayout>
+                    android:layout_marginTop="@dimen/space_sm"
+                    android:text="@string/settings_sessdata_help"
+                    android:textAppearance="@style/Text.BodySmall" />
+
+                <com.biligrab.downloader.ui.NeuLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/space_md"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <!-- 登录态：只读标签，用 hyper 词汇里的徽标药丸，
+                         颜色随深浅模式各有一套值 -->
+                    <com.biligrab.downloader.ui.NeuText
+                        android:id="@+id/tvLoginState"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:background="@drawable/bg_status_pill"
+                        android:paddingStart="@dimen/space_md"
+                        android:paddingTop="@dimen/space_xs"
+                        android:paddingEnd="@dimen/space_md"
+                        android:paddingBottom="@dimen/space_xs"
+                        android:textAppearance="@style/Text.LabelMedium"
+                        android:textColor="@color/hyper_badge_text"
+                        tools:text="@string/settings_login_state_off" />
+
+                    <com.biligrab.downloader.ui.NeuFrame
+                        android:layout_width="0dp"
+                        android:layout_height="1dp"
+                        android:layout_weight="1" />
+
+                    <com.biligrab.downloader.ui.NeuButton
+                        android:id="@+id/btnClearCookie"
+                        style="@style/Widget.Button.Outlined"
+                        android:layout_width="wrap_content"
+                        android:layout_height="@dimen/button_height"
+                        android:text="@string/settings_clear_cookie" />
+                </com.biligrab.downloader.ui.NeuLayout>
+            </com.biligrab.downloader.ui.NeuLayout>
 
             <!-- ==================== 下载偏好 ==================== -->
 
-            <TextView
-                style="@style/Widget.SectionTitle"
+            <com.biligrab.downloader.ui.NeuLayout
+                style="@style/Widget.Card"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="@dimen/section_gap"
-                android:text="@string/settings_playback_title" />
+                android:layout_marginTop="@dimen/card_gap"
+                android:orientation="vertical"
+                android:padding="@dimen/card_padding">
 
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="@dimen/title_gap"
-                android:gravity="center_vertical"
-                android:minHeight="@dimen/touch_min"
-                android:orientation="horizontal">
-
-                <LinearLayout
-                    android:layout_width="0dp"
+                <com.biligrab.downloader.ui.NeuText
+                    style="@style/Widget.SectionTitle"
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:orientation="vertical"
-                    android:paddingEnd="@dimen/space_lg">
+                    android:text="@string/settings_playback_title" />
 
-                    <TextView
-                        android:id="@+id/tvPreferAvcLabel"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:labelFor="@id/swPreferAvc"
-                        android:text="@string/settings_prefer_avc"
-                        android:textAppearance="@style/Text.TitleSmall" />
-
-                    <TextView
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="2dp"
-                        android:text="@string/settings_prefer_avc_desc"
-                        android:textAppearance="@style/Text.BodySmall" />
-                </LinearLayout>
-
-                <Switch
-                    android:id="@+id/swPreferAvc"
-                    android:layout_width="wrap_content"
+                <com.biligrab.downloader.ui.NeuLayout
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:thumbTint="@color/switch_thumb"
-                    android:trackTint="@color/switch_track" />
-            </LinearLayout>
+                    android:layout_marginTop="@dimen/title_gap"
+                    android:gravity="center_vertical"
+                    android:minHeight="@dimen/touch_min"
+                    android:orientation="horizontal">
+
+                    <com.biligrab.downloader.ui.NeuLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical"
+                        android:paddingEnd="@dimen/space_lg">
+
+                        <com.biligrab.downloader.ui.NeuText
+                            android:id="@+id/tvPreferAvcLabel"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:labelFor="@id/swPreferAvc"
+                            android:text="@string/settings_prefer_avc"
+                            android:textAppearance="@style/Text.TitleSmall" />
+
+                        <com.biligrab.downloader.ui.NeuText
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="2dp"
+                            android:text="@string/settings_prefer_avc_desc"
+                            android:textAppearance="@style/Text.BodySmall" />
+                    </com.biligrab.downloader.ui.NeuLayout>
+
+                    <!-- 这里保留系统 Switch：MainActivity 把 swPreferAvc 取成
+                         android.widget.Switch，换成别的类会在运行期抛
+                         ClassCastException；而 ui 包下没有对应的 Neu* 开关。
+                         配色走主题的 colorControlActivated（= 运行时主色）。 -->
+                    <Switch
+                        android:id="@+id/swPreferAvc"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" />
+                </com.biligrab.downloader.ui.NeuLayout>
+            </com.biligrab.downloader.ui.NeuLayout>
 
             <!-- ==================== YouTube ==================== -->
 
-            <TextView
-                style="@style/Widget.SectionTitle"
+            <com.biligrab.downloader.ui.NeuLayout
+                style="@style/Widget.Card"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="@dimen/section_gap"
-                android:text="@string/settings_youtube_title" />
+                android:layout_marginTop="@dimen/card_gap"
+                android:orientation="vertical"
+                android:padding="@dimen/card_padding">
 
-            <TextView
-                android:id="@+id/labelProxy"
-                style="@style/Widget.FieldLabel"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="@dimen/space_lg"
-                android:layout_marginBottom="@dimen/space_sm"
-                android:labelFor="@id/etProxy"
-                android:text="@string/settings_proxy_label" />
-
-            <EditText
-                android:id="@+id/etProxy"
-                style="@style/Widget.TextField"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:hint="@string/settings_proxy_hint"
-                android:importantForAutofill="no"
-                android:inputType="textNoSuggestions|textUri"
-                tools:ignore="TextViewEdits" />
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="@dimen/space_sm"
-                android:text="@string/settings_proxy_help"
-                android:textAppearance="@style/Text.BodySmall" />
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="@dimen/space_md"
-                android:gravity="center_vertical"
-                android:orientation="horizontal">
-
-                <TextView
-                    android:id="@+id/tvYtDlpVersion"
-                    android:layout_width="0dp"
+                <com.biligrab.downloader.ui.NeuText
+                    style="@style/Widget.SectionTitle"
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:paddingEnd="@dimen/space_md"
-                    android:textAppearance="@style/Text.BodySmall"
-                    android:textColor="@color/m3_on_surface_variant"
-                    tools:text="解析引擎 2025.11.12" />
+                    android:text="@string/settings_youtube_title" />
 
-                <Button
-                    android:id="@+id/btnUpdateYtDlp"
-                    style="@style/Widget.Button.Outlined"
+                <com.biligrab.downloader.ui.NeuText
+                    android:id="@+id/labelProxy"
+                    style="@style/Widget.FieldLabel"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="@string/settings_update_engine" />
-            </LinearLayout>
+                    android:layout_marginTop="@dimen/space_lg"
+                    android:layout_marginBottom="@dimen/space_sm"
+                    android:labelFor="@id/etProxy"
+                    android:text="@string/settings_proxy_label" />
+
+                <com.biligrab.downloader.ui.NeuEdit
+                    android:id="@+id/etProxy"
+                    style="@style/Widget.TextField"
+                    android:layout_width="match_parent"
+                    android:layout_height="@dimen/field_height"
+                    android:hint="@string/settings_proxy_hint"
+                    android:importantForAutofill="no"
+                    android:inputType="textNoSuggestions|textUri"
+                    tools:ignore="TextViewEdits" />
+
+                <com.biligrab.downloader.ui.NeuText
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/space_sm"
+                    android:text="@string/settings_proxy_help"
+                    android:textAppearance="@style/Text.BodySmall" />
+
+                <com.biligrab.downloader.ui.NeuLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/space_md"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <com.biligrab.downloader.ui.NeuText
+                        android:id="@+id/tvYtDlpVersion"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:paddingEnd="@dimen/space_md"
+                        android:textAppearance="@style/Text.BodySmall"
+                        android:textColor="@color/hyper_text_secondary"
+                        tools:text="解析引擎 2025.11.12" />
+
+                    <com.biligrab.downloader.ui.NeuButton
+                        android:id="@+id/btnUpdateYtDlp"
+                        style="@style/Widget.Button.Outlined"
+                        android:layout_width="wrap_content"
+                        android:layout_height="@dimen/button_height"
+                        android:text="@string/settings_update_engine" />
+                </com.biligrab.downloader.ui.NeuLayout>
+            </com.biligrab.downloader.ui.NeuLayout>
 
             <!-- ==================== 外观 ==================== -->
 
-            <TextView
-                style="@style/Widget.SectionTitle"
+            <com.biligrab.downloader.ui.NeuLayout
+                style="@style/Widget.Card"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="@dimen/section_gap"
-                android:text="@string/settings_theme_title" />
+                android:layout_marginTop="@dimen/card_gap"
+                android:orientation="vertical"
+                android:padding="@dimen/card_padding">
 
-            <com.biligrab.downloader.FlowLayout
-                android:id="@+id/chipTheme"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="@dimen/title_gap" />
+                <com.biligrab.downloader.ui.NeuText
+                    style="@style/Widget.SectionTitle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/settings_theme_title" />
+
+                <!-- 芯片容器必须保持 FlowLayout：芯片由 Java 侧动态塞进来。
+                     FlowLayout 是纯 ViewGroup，不吃 neu* 属性；浮雕由外层这张
+                     Widget.Card 承担，卡片里不再叠第二层卡片。 -->
+                <com.biligrab.downloader.FlowLayout
+                    android:id="@+id/chipTheme"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/title_gap" />
+            </com.biligrab.downloader.ui.NeuLayout>
 
             <!-- ==================== 关于 ==================== -->
 
-            <TextView
-                style="@style/Widget.SectionTitle"
+            <com.biligrab.downloader.ui.NeuLayout
+                style="@style/Widget.Card"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="@dimen/section_gap"
-                android:text="@string/settings_about_title" />
+                android:layout_marginTop="@dimen/card_gap"
+                android:orientation="vertical"
+                android:padding="@dimen/card_padding">
 
-            <TextView
-                android:id="@+id/tvVersion"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="@dimen/title_gap"
-                android:textAppearance="@style/Text.BodyMedium"
-                android:textColor="@color/m3_on_surface"
-                tools:text="版本 1.1.0" />
+                <com.biligrab.downloader.ui.NeuText
+                    style="@style/Widget.SectionTitle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/settings_about_title" />
 
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="@dimen/space_xs"
-                android:text="@string/settings_about_body"
-                android:textAppearance="@style/Text.BodySmall" />
+                <com.biligrab.downloader.ui.NeuText
+                    android:id="@+id/tvVersion"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/title_gap"
+                    android:textAppearance="@style/Text.BodyMedium"
+                    android:textColor="@color/hyper_text_primary"
+                    tools:text="版本 1.1.0" />
 
-            <!-- GPL-3.0 要求保留出处。放在这里而不是只在代码注释里，
-                 是因为用户能在应用内看到它。 -->
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="@dimen/space_sm"
-                android:text="@string/settings_about_license"
-                android:textAppearance="@style/Text.BodySmall"
-                android:textColor="@color/m3_on_surface_variant" />
+                <com.biligrab.downloader.ui.NeuText
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/space_xs"
+                    android:text="@string/settings_about_body"
+                    android:textAppearance="@style/Text.BodySmall" />
 
-        </LinearLayout>
+                <!-- GPL-3.0 要求保留出处。放在这里而不是只在代码注释里，
+                     是因为用户能在应用内看到它。 -->
+                <com.biligrab.downloader.ui.NeuText
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/space_sm"
+                    android:text="@string/settings_about_license"
+                    android:textAppearance="@style/Text.BodySmall"
+                    android:textColor="@color/hyper_text_tertiary" />
+            </com.biligrab.downloader.ui.NeuLayout>
+        </com.biligrab.downloader.ui.NeuLayout>
     </ScrollView>
-</LinearLayout>
+</com.biligrab.downloader.ui.NeuLayout>

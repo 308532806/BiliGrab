@@ -1,5 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- 表面上的涟漪：on_surface 12%（M3 state layer） -->
-<selector xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:color="@color/m3_on_surface" android:alpha="0.12"/>
-</selector>

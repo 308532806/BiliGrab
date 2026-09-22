@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  主题色的 5 套配色 —— 深色
+
+  深色下不能直接沿用浅色的主色值：那些颜色是按白底对比度挑的，
+  放到 #1A1B1E 上会发闷。这里统一提亮一档，与规范里
+  primary #007AFF → #0A84FF 的处理方式一致。
+
+  索引顺序必须与 values/arrays.xml 完全一致。
+-->
+<resources>
+
+    <!-- 0 樱花粉 -->
+    <color name="scheme_0_primary">#FF9DBA</color>
+    <color name="scheme_0_variant">#E87899</color>
+
+    <!-- 1 默认蓝 -->
+    <color name="scheme_1_primary">#0A84FF</color>
+    <color name="scheme_1_variant">#0070E0</color>
+
+    <!-- 2 深海蓝 -->
+    <color name="scheme_2_primary">#4A87DE</color>
+    <color name="scheme_2_variant">#3A6DB5</color>
+
+    <!-- 3 薄荷绿 -->
+    <color name="scheme_3_primary">#4FD98A</color>
+    <color name="scheme_3_variant">#3CB672</color>
+
+    <!-- 4 薰衣草紫 -->
+    <color name="scheme_4_primary">#A99BF7</color>
+    <color name="scheme_4_variant">#8F7FE0</color>
+
+    <array name="hyper_primary">
+        <item>@color/scheme_0_primary</item>
+        <item>@color/scheme_1_primary</item>
+        <item>@color/scheme_2_primary</item>
+        <item>@color/scheme_3_primary</item>
+        <item>@color/scheme_4_primary</item>
+    </array>
+
+    <array name="hyper_primary_variant">
+        <item>@color/scheme_0_variant</item>
+        <item>@color/scheme_1_variant</item>
+        <item>@color/scheme_2_variant</item>
+        <item>@color/scheme_3_variant</item>
+        <item>@color/scheme_4_variant</item>
+    </array>
+
+</resources>

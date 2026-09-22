@@ -1,62 +1,73 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  浅色主题
-  ========
-  系统栏设为透明以实现 edge-to-edge，图标明暗由 windowLightStatusBar 控制。
+  浅色主题 —— Hyper-Neumorphic
+  ============================
+  Edge-to-edge：系统栏透明，图标明暗由 windowLightStatusBar 控制。
   深色版本在 values-night/themes.xml 中覆盖。
+
+  与前一版的两处关键差异：
+
+  1. **没有涟漪。** colorControlHighlight 直接设成透明。
+     新拟态里"表面"是有厚度的实体，涟漪是水面上的效果，两者观感冲突。
+     所有点击反馈改由 HyperosClick 提供（缩放 + 浮雕形变 + 触觉）。
+
+  2. **主题色不在这里。** 主色是可运行时切换的（5 套），
+     而主题资源是编译期固定的，两者无法共存。
+     所以这里只放默认值兜底，真正的取色走 HyperTheme.primary()。
 -->
 <resources xmlns:tools="http://schemas.android.com/tools">
 
     <style name="Theme.BiliGrab" parent="@android:style/Theme.Material.Light.NoActionBar">
 
         <!-- 表面与文字 -->
-        <item name="android:windowBackground">@color/m3_surface</item>
-        <item name="android:colorBackground">@color/m3_surface</item>
-        <item name="android:textColorPrimary">@color/m3_on_surface</item>
-        <item name="android:textColorSecondary">@color/m3_on_surface_variant</item>
-        <item name="android:textColorHint">@color/m3_on_surface_variant</item>
+        <item name="android:windowBackground">@color/hyper_background</item>
+        <item name="android:colorBackground">@color/hyper_background</item>
+        <item name="android:textColorPrimary">@color/hyper_text_primary</item>
+        <item name="android:textColorSecondary">@color/hyper_text_secondary</item>
+        <item name="android:textColorHint">@color/hyper_text_tertiary</item>
 
-        <!-- 强调色走 M3 角色 -->
-        <item name="android:colorPrimary">@color/m3_primary</item>
-        <item name="android:colorPrimaryDark">@color/m3_surface</item>
-        <item name="android:colorAccent">@color/m3_primary</item>
-        <item name="android:colorControlActivated">@color/m3_primary</item>
-        <item name="android:colorControlNormal">@color/m3_on_surface_variant</item>
-        <item name="android:colorControlHighlight">@color/ripple_on_surface</item>
+        <!-- 强调色。这里是编译期兜底，运行时以 HyperTheme.primary() 为准 -->
+        <item name="android:colorPrimary">@color/scheme_0_primary</item>
+        <item name="android:colorPrimaryDark">@color/hyper_background</item>
+        <item name="android:colorAccent">@color/scheme_0_primary</item>
+        <item name="android:colorControlActivated">@color/scheme_0_primary</item>
+        <item name="android:colorControlNormal">@color/hyper_text_secondary</item>
+        <!-- 涟漪色设为全透明：新拟态不使用涟漪 -->
+        <item name="android:colorControlHighlight">@android:color/transparent</item>
 
-        <!-- Edge-to-edge：系统栏透明，内容区用 insets 自行避让 -->
+        <!-- 系统默认的按钮/输入框按下态也要一并压掉，
+             否则控件自带的水波纹会从我们手写的浮雕底下透出来 -->
+        <item name="android:selectableItemBackground">@null</item>
+        <item name="android:selectableItemBackgroundBorderless">@null</item>
+
+        <!-- Edge-to-edge -->
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
         <item name="android:windowLightStatusBar">true</item>
         <item name="android:windowLightNavigationBar" tools:targetApi="27">true</item>
         <item name="android:windowDrawsSystemBarBackgrounds">true</item>
 
-        <!-- 系统字体缩放必须生效 -->
         <item name="android:allowBackup">true</item>
 
-        <!-- 对话框/弹窗表面跟随主题 -->
-        <item name="android:colorBackgroundFloating">@color/m3_surface_container_high</item>
-        <item name="android:textColorPrimaryInverse">@color/m3_inverse_on_surface</item>
+        <item name="android:colorBackgroundFloating">@color/hyper_card</item>
+        <item name="android:textColorPrimaryInverse">@color/hyper_text_primary</item>
 
-        <!-- 光标与选择手柄用主色，避免系统默认的荧光绿 -->
-        <item name="android:colorControlActivated">@color/m3_primary</item>
-
-        <!-- 禁止系统的强制变暗，深色由我们的主题明确设计 -->
+        <!-- 禁止系统强制变暗，深色由我们明确设计 -->
         <item name="android:forceDarkAllowed" tools:targetApi="29">false</item>
     </style>
 
-    <!-- 底部表单：只有上方圆角，背景透明以便自定义圆角生效 -->
+    <!-- 底部表单：背景透明以便自定义圆角生效 -->
     <style name="Theme.BiliGrab.BottomSheet" parent="@android:style/Theme.Material.Light.Dialog">
         <item name="android:windowIsFloating">false</item>
         <item name="android:windowBackground">@android:color/transparent</item>
-        <item name="android:backgroundDimAmount">0.4</item>
+        <item name="android:backgroundDimAmount">0.45</item>
         <item name="android:windowAnimationStyle">@style/Animation.BiliGrab.Sheet</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
         <item name="android:windowLightStatusBar">true</item>
+        <item name="android:colorControlHighlight">@android:color/transparent</item>
     </style>
 
-    <!-- M3 emphasised decelerate：进场快、收尾慢 -->
     <style name="Animation.BiliGrab.Sheet" parent="@android:style/Animation.Dialog">
         <item name="android:windowEnterAnimation">@anim/sheet_enter</item>
         <item name="android:windowExitAnimation">@anim/sheet_exit</item>

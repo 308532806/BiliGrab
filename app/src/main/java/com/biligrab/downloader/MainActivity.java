@@ -34,6 +34,14 @@ import android.widget.ScrollView;
 import android.widget.Switch;
 import android.widget.TextView;
 
+import com.biligrab.downloader.ui.GlassMeshDrawable;
+import com.biligrab.downloader.ui.HyperTheme;
+import com.biligrab.downloader.ui.HyperosClick;
+import com.biligrab.downloader.ui.NeumorphicControls;
+import com.biligrab.downloader.ui.NeumorphicDrawable;
+import com.biligrab.downloader.ui.NeumorphicSurface;
+import com.biligrab.downloader.ui.StaggerEnter;
+
 import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.SocketTimeoutException;
@@ -95,6 +103,14 @@ public class MainActivity extends Activity implements DownloadService.Listener {
     private TextView errorFix;
     private TextView errorDetail;
     private Button btnRetry;
+
+    /**
+     * 当前主题色（已解析成 ARGB）。
+     *
+     * <p>缓存一份是因为列表行会反复绑定，而 {@code HyperTheme.primary()} 每次
+     * 都要 obtainTypedArray —— 单次调用不算贵，放进 getView 里就贵了。</p>
+     */
+    private int primaryColor = android.graphics.Color.GRAY;
 
     // ---- 结果 ----
     private PreviewController preview;
@@ -202,6 +218,7 @@ public class MainActivity extends Activity implements DownloadService.Listener {
         prefs = new Prefs(this);
 
         bindViews();
+        applyNeumorphicTheme();
         applyWindowInsets();
         // PreviewController 自己 findViewById 绑定预览区，
         // 必须在 setContentView 之后构造
@@ -319,6 +336,79 @@ public class MainActivity extends Activity implements DownloadService.Listener {
     // ==================================================================
     // 视图绑定与初始化
     // ==================================================================
+
+    /**
+     * 应用 Hyper-Neumorphic 主题。
+     *
+     * <p>布局里的浮雕由 {@code Neu*} 系列 View 在构造时自动铺好，
+     * 这里只处理两件它们在 XML 阶段做不了的事：</p>
+     *
+     * <ol>
+     *   <li><b>玻璃引擎的整屏网格。</b>mesh 必须<b>只画一份</b>、
+     *       挂在根容器上。如果每个玻璃面各画一份，光斑会在每个面上重复，
+     *       整屏会像贴满了彩色贴纸，而不是"透过玻璃看同一片背景"。</li>
+     *   <li><b>主色。</b>主色是运行时可切换的（5 套），而主题资源是编译期固定的，
+     *       两者无法共存 —— 所以 XML 里只放默认值兜底，真正的取色在这里覆盖。</li>
+     * </ol>
+     */
+    private void applyNeumorphicTheme() {
+        View root = findViewById(R.id.root);
+        if (root != null) {
+            if (HyperTheme.isGlass(this)) {
+                root.setBackground(new GlassMeshDrawable(HyperTheme.isDark(this)));
+            } else {
+                root.setBackgroundColor(HyperTheme.background(this));
+            }
+        }
+
+        int p = HyperTheme.primary(this);
+        primaryColor = p;
+
+        // 主按钮的文字色。三颗按钮在 XML 里用的是 scheme_0_primary 兜底，
+        // 用户换了主题色之后必须在这里跟着走。
+        applyAccent(findViewById(R.id.btnParse), p);
+        applyAccent(findViewById(R.id.btnRetry), p);
+        applyAccent(findViewById(R.id.btnQualityHintAction), p);
+
+        // 输入框的光标与选中高亮。不改的话换主题色后光标还是默认蓝，
+        // 在粉色主题下非常跳。
+        applyCaret(inputUrl, p);
+    }
+
+    /**
+     * 把一块药丸刷成主色系：15% 透明度的主色底 + 主色文字。
+     *
+     * <p>底色必须留透明度：全不透明的主色底配主色文字会糊成一片，
+     * 药丸是"标签"而不是"按钮"，不需要那么强的对比。</p>
+     */
+    private void applyPill(TextView tv, int primary) {
+        if (tv == null) return;
+        android.graphics.drawable.GradientDrawable g = new android.graphics.drawable.GradientDrawable();
+        g.setShape(android.graphics.drawable.GradientDrawable.RECTANGLE);
+        g.setCornerRadius(999);
+        g.setColor((primary & 0x00FFFFFF) | 0x26000000);
+        tv.setBackground(g);
+        tv.setTextColor(primary);
+    }
+
+    private void applyAccent(View v, int color) {
+        if (v instanceof TextView) {
+            ((TextView) v).setTextColor(color);
+        }
+    }
+
+    /**
+     * 输入框的选中高亮。
+     *
+     * <p>光标颜色本身改不了（平台只提供 {@code android:textCursorDrawable}，
+     * 要在 XML 里指定一个 tint 好的 drawable，而主题色是运行时的），
+     * 所以只处理选中高亮这一半 —— 它面积大，是换色后最明显的残留。</p>
+     */
+    private void applyCaret(EditText et, int color) {
+        if (et == null) return;
+        // 40% 透明度：高亮是背景，全不透明会盖住底下选中的字
+        et.setHighlightColor((color & 0x00FFFFFF) | 0x66000000);
+    }
 
     private void bindViews() {
         topBar = findViewById(R.id.topBar);
@@ -894,6 +984,16 @@ public class MainActivity extends Activity implements DownloadService.Listener {
         TextView percent = root.findViewById(R.id.tvRowPercent);
         ProgressBar bar = root.findViewById(R.id.pbRow);
 
+        // 进度条用带圆角的形状，再让 tint 决定颜色 ——
+        // 布局里只设了 tint，平台默认的进度形状是直角的，
+        // 4dp 高的直角条在这里会显得毛糙。
+        bar.setProgressDrawable(getResources().getDrawable(
+                R.drawable.progress_download, getTheme()));
+        bar.setProgressTintList(android.content.res.ColorStateList.valueOf(
+                HyperTheme.primary(this)));
+        bar.setProgressBackgroundTintList(android.content.res.ColorStateList.valueOf(
+                HyperTheme.divider(this)));
+
         tvLabel.setText(label);
         tvMeta.setText(meta);
         // 音频行用音符图标，和视频行区分开 —— 不用读文字也能一眼分辨
@@ -925,16 +1025,108 @@ public class MainActivity extends Activity implements DownloadService.Listener {
     }
 
     /**
-     * 造一个 M3 filter chip。
+     * 造一个新拟态芯片（设置面板的选项）。
      *
      * <p>外观全部来自 {@code @style/Widget.Chip} 与 {@code view_chip.xml}。
-     * 主界面的画质已经改成下载行，这里现在只服务设置面板的外观选项。</p>
+     * 主界面的画质已经改成下载行，这里现在只服务设置面板的选项。</p>
      */
     private TextView makeChip(FlowLayout parent, String label) {
         TextView chip = (TextView) LayoutInflater.from(this)
                 .inflate(R.layout.view_chip, parent, false);
         chip.setText(label);
+        // 新拟态既没有涟漪也没有状态列表，点击反馈改由 HyperosClick 提供
+        // （缩放 + 浮雕形变 + 触觉）。它挂在 touch 上，
+        // 所以外面照常 setOnClickListener 就能拿到点击行为。
+        HyperosClick.bindVisualOnly(chip);
         return chip;
+    }
+
+    /**
+     * 把一组芯片刷成"只有一个选中"的样子。
+     *
+     * <p>选中 = 凸起 3dp + 主色文字；未选中 = 凹入 1.5dp + 次要色文字。
+     * 凹凸同时变化是有意的：只改颜色的话，在"卡片与页面同色"的平面里
+     * 选中项几乎看不出来 —— 新拟态表达状态靠形变，不靠色差。</p>
+     */
+    private void applyChipStates(FlowLayout row, int selectedIndex) {
+        boolean glass = HyperTheme.isGlass(this);
+        for (int i = 0; i < row.getChildCount(); i++) {
+            View v = row.getChildAt(i);
+            if (!(v instanceof TextView)) continue;
+            TextView chip = (TextView) v;
+
+            boolean on = (i == selectedIndex);
+            chip.setTextColor(on ? HyperTheme.primary(this) : HyperTheme.textSecondary(this));
+            chip.setTypeface(null, on ? android.graphics.Typeface.BOLD
+                                      : android.graphics.Typeface.NORMAL);
+
+            if (glass) {
+                NeumorphicSurface.convex(chip, 14, 3).glass(true);
+            } else if (on) {
+                NeumorphicSurface.convex(chip, 14, 3);
+            } else {
+                NeumorphicSurface.concave(chip, 14, 1.5f);
+            }
+        }
+    }
+
+    /** 芯片被选中时的回调。 */
+    public interface ChipPick {
+        void onPick(int index);
+    }
+
+    /**
+     * 在 {@code anchor} 之后插入一行新的芯片选项（含小标题）。
+     *
+     * <p>程序化创建而不是写进 XML：外观选项的组数会随设计系统演进变化
+     * （主题明暗 / 视觉引擎 / 主题色），每加一组都要同时改布局和 Java，
+     * 很容易漏。收成一处之后，加一组只需要一次调用。</p>
+     *
+     * <p>连续调用时把上一次返回的行当作 anchor，就会自然按顺序堆叠。</p>
+     *
+     * @return 新建的芯片行
+     */
+    private FlowLayout addChipRow(FlowLayout anchor, String title, String[] labels,
+                                  int selected, final ChipPick onPick) {
+        ViewGroup parent = (ViewGroup) anchor.getParent();
+        int at = parent.indexOfChild(anchor) + 1;
+
+        TextView tv = new TextView(this);
+        tv.setText(title);
+        tv.setTextSize(14);
+        tv.setTypeface(null, android.graphics.Typeface.BOLD);
+        tv.setTextColor(HyperTheme.textSecondary(this));
+        tv.setLetterSpacing(0.02f);
+        LinearLayout.LayoutParams tp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        tp.topMargin = dp(16);
+        tp.bottomMargin = dp(4);
+        tv.setLayoutParams(tp);
+
+        final FlowLayout row = new FlowLayout(this);
+        row.setLayoutParams(new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        for (int i = 0; i < labels.length; i++) {
+            final int index = i;
+            TextView c = makeChip(row, labels[i]);
+            c.setOnClickListener(v -> {
+                HyperosClick.haptic(v);
+                applyChipStates(row, index);
+                onPick.onPick(index);
+            });
+            row.addView(c);
+        }
+
+        parent.addView(tv, at);
+        parent.addView(row, at + 1);
+
+        applyChipStates(row, selected);
+        return row;
+    }
+
+    private int dp(int v) {
+        return Math.round(v * getResources().getDisplayMetrics().density);
     }
 
     /**
@@ -1108,6 +1300,9 @@ public class MainActivity extends Activity implements DownloadService.Listener {
             WindowManager.LayoutParams lp = w.getAttributes();
             lp.width = ViewGroup.LayoutParams.MATCH_PARENT;
             lp.height = ViewGroup.LayoutParams.WRAP_CONTENT;
+            // gravity 必须写进 attributes，不能只靠 Window.setGravity：
+            // 后者会被随后的 setAttributes 覆盖掉，面板就会浮在屏幕中间而不是贴底。
+            lp.gravity = Gravity.BOTTOM;
             lp.dimAmount = 0.45f;
             w.setAttributes(lp);
             w.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
@@ -1131,6 +1326,8 @@ public class MainActivity extends Activity implements DownloadService.Listener {
         final TextView tvState = content.findViewById(R.id.tvLoginState);
         tvState.setText(prefs.hasLogin()
                 ? R.string.settings_login_state_on : R.string.settings_login_state_off);
+        // 药丸在 XML 里是编译期兜底色，换主题色后会留在蓝色上，这里跟着主色走
+        applyPill(tvState, HyperTheme.primary(this));
 
         final Button btnClear = content.findViewById(R.id.btnClearCookie);
         btnClear.setOnClickListener(v -> {
@@ -1143,6 +1340,10 @@ public class MainActivity extends Activity implements DownloadService.Listener {
         // ---- 下载偏好 ----
         final Switch swAvc = content.findViewById(R.id.swPreferAvc);
         swAvc.setChecked(prefs.preferAvc());
+        // 开关的轨道与滑块由这里换成浮雕版本。没有替换成自定义 View，是因为
+        // CompoundButton 带着 checkedChange 与可访问性语义，重写一遍不划算 ——
+        // 只换 drawable 就能拿到完整的浮雕效果。
+        NeumorphicControls.dressSwitch(swAvc);
 
         // ---- YouTube ----
         final EditText etProxy = content.findViewById(R.id.etProxy);
@@ -1223,15 +1424,15 @@ public class MainActivity extends Activity implements DownloadService.Listener {
                 R.string.settings_theme_light,
                 R.string.settings_theme_dark};
         final int currentMode = prefs.themeMode();
+        int currentModeIndex = 0;
         for (int i = 0; i < modeValues.length; i++) {
+            if (modeValues[i] == currentMode) currentModeIndex = i;
             final int mode = modeValues[i];
             final int index = i;
             TextView c = makeChip(chipTheme, getString(modeLabels[i]));
-            c.setSelected(mode == currentMode);
             c.setOnClickListener(v -> {
-                for (int k = 0; k < chipTheme.getChildCount(); k++) {
-                    chipTheme.getChildAt(k).setSelected(k == index);
-                }
+                HyperosClick.haptic(v);
+                applyChipStates(chipTheme, index);
                 if (mode != prefs.themeMode()) {
                     prefs.setThemeMode(mode);
                     // 外观变化必须重建才能整体换色
@@ -1240,6 +1441,58 @@ public class MainActivity extends Activity implements DownloadService.Listener {
                 }
             });
             chipTheme.addView(c);
+        }
+        applyChipStates(chipTheme, currentModeIndex);
+
+        // 视觉引擎。规范是双引擎的：两者共用同一套尺寸与交互参数，
+        // 只有"表面怎么画"不同（浮雕 vs 玻璃）。
+        final int[] skinValues = {Prefs.SKIN_NEUMORPHISM, Prefs.SKIN_GLASS};
+        final String[] skinLabels = {
+                getString(R.string.settings_skin_neumorphism),
+                getString(R.string.settings_skin_glass)};
+        final int skinIndex = prefs.skin() == Prefs.SKIN_GLASS ? 1 : 0;
+        FlowLayout chipSkin = addChipRow(chipTheme, getString(R.string.settings_skin),
+                skinLabels, skinIndex, i -> {
+                    if (skinValues[i] != prefs.skin()) {
+                        prefs.setSkin(skinValues[i]);
+                        sheet.dismiss();
+                        recreate();
+                    }
+                });
+
+        // 主题色。规范正文只定义了默认蓝，其余按同一结构补全；
+        // 默认给的是樱花粉，保留 BiliGrab 原本的品牌色。
+        final int schemeCount = HyperTheme.schemeCount(this);
+        final String[] colorLabels = new String[schemeCount];
+        android.content.res.TypedArray names =
+                getResources().obtainTypedArray(R.array.hyper_scheme_names);
+        for (int i = 0; i < schemeCount; i++) {
+            colorLabels[i] = names.getString(i);
+        }
+        names.recycle();
+
+        FlowLayout chipColor = addChipRow(chipSkin, getString(R.string.settings_primary_color),
+                colorLabels, prefs.primary(), i -> {
+                    if (i != prefs.primary()) {
+                        prefs.setPrimary(i);
+                        sheet.dismiss();
+                        recreate();
+                    }
+                });
+
+        // 主题色那一行做成色卡：直接把芯片底色刷成对应的颜色，
+        // 比"写着颜色的名字但整行都是同一个色"直观得多。
+        for (int i = 0; i < chipColor.getChildCount(); i++) {
+            View v = chipColor.getChildAt(i);
+            if (!(v instanceof TextView)) continue;
+            int c = HyperTheme.schemePrimary(this, i);
+            ((TextView) v).setTextColor(HyperTheme.contrastOn(this, c));
+            android.graphics.drawable.Drawable bg = v.getBackground();
+            if (bg instanceof NeumorphicDrawable) {
+                NeumorphicDrawable nd = (NeumorphicDrawable) bg;
+                nd.colors(c, HyperTheme.neumLight(this), HyperTheme.neumDark(this));
+                nd.invalidateSelf();
+            }
         }
 
         // ---- 关于 ----
@@ -1422,7 +1675,11 @@ public class MainActivity extends Activity implements DownloadService.Listener {
                         .inflate(R.layout.item_part, parent, false);
             }
             Model.Part p = current.pages.get(position);
-            ((TextView) v.findViewById(R.id.tvIndex)).setText(String.valueOf(p.index));
+            TextView index = v.findViewById(R.id.tvIndex);
+            index.setText(String.valueOf(p.index));
+            // 序号徽标走主色。放在这里而不是 XML：主色是运行时可切换的，
+            // 而列表行是复用的，不能只在 inflate 时算一次。
+            applyPill(index, primaryColor);
             ((TextView) v.findViewById(R.id.tvPartTitle)).setText(p.title);
             ((TextView) v.findViewById(R.id.tvPartDuration))
                     .setText(MainActivity.this.getString(

@@ -1,39 +1,52 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  一条下载目标（一个画质，或「仅音频」）
-  ======================================
-  整行都可点，不只是行尾那个按钮。
+  一条下载目标（一个画质，或「仅音频」）—— Hyper-Neumorphic
+  ========================================================
+  整行都可点，不只是行尾那个图标。
 
   上一版「仅音频」开关的教训：把可点区域只留给一个小控件（当时开关本体
   只有 47x27dp），周围看着像是一起的空间其实是死的，实测点在附近没反应。
   所以这里点击目标是整行（满宽、minHeight 48dp），行尾图标只是视觉提示，
   clickable=false 让点击穿透到行本身。
 
+  新拟态下这一行就是一块凸起 28dp / 6dp 的厚表面（Widget.DownloadRow）——
+  「行」在别处是平的，唯独下载行是按钮，凸起正好说明它可点。
+  行内因此不再叠任何浮雕：标签、元信息、图标、百分比全是平的。
+
   下载中时行尾换成百分比，行下方出现细进度条 —— 进度就在用户点的地方，
-  不需要滚到页面底部去看。
+  不需要滚到页面底部去看。进度条留在行外（不压在浮雕上），
+  外观走 progress_download 那张 hyper 版 drawable（凹槽轨道 + 主色已完成段）。
 -->
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<com.biligrab.downloader.ui.NeuLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
+    android:layout_marginBottom="@dimen/card_gap"
     android:orientation="vertical">
 
-    <LinearLayout
+    <!-- orientation 显式写成 horizontal：Widget.DownloadRow 里那一份是 vertical，
+         行内要横排，由布局覆写。 -->
+    <com.biligrab.downloader.ui.NeuLayout
         android:id="@+id/rowMain"
         style="@style/Widget.DownloadRow"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:gravity="center_vertical"
-        android:orientation="horizontal">
+        android:minHeight="@dimen/touch_min"
+        android:orientation="horizontal"
+        android:paddingStart="@dimen/card_padding"
+        android:paddingTop="@dimen/space_md"
+        android:paddingEnd="@dimen/card_padding"
+        android:paddingBottom="@dimen/space_md">
 
-        <LinearLayout
+        <com.biligrab.downloader.ui.NeuLayout
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:orientation="vertical"
             android:paddingEnd="@dimen/space_md">
 
-            <TextView
+            <com.biligrab.downloader.ui.NeuText
                 android:id="@+id/tvRowLabel"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -41,7 +54,7 @@
                 android:textAppearance="@style/Text.TitleSmall"
                 tools:text="480P 标清" />
 
-            <TextView
+            <com.biligrab.downloader.ui.NeuText
                 android:id="@+id/tvRowMeta"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -49,10 +62,10 @@
                 android:duplicateParentState="true"
                 android:textAppearance="@style/Text.BodySmall"
                 tools:text="852×480 · H.264" />
-        </LinearLayout>
+        </com.biligrab.downloader.ui.NeuLayout>
 
         <!-- 视觉上的下载提示。不接收点击，让整行来处理 -->
-        <ImageView
+        <com.biligrab.downloader.ui.NeuImage
             android:id="@+id/ivRowIcon"
             android:layout_width="@dimen/icon_size"
             android:layout_height="@dimen/icon_size"
@@ -62,31 +75,32 @@
             android:focusable="false"
             android:scaleType="fitCenter"
             android:src="@drawable/ic_download"
-            android:tint="@color/state_row_icon" />
+            android:tint="@color/hyper_text_secondary" />
 
-        <TextView
+        <com.biligrab.downloader.ui.NeuText
             android:id="@+id/tvRowPercent"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:layout_marginStart="@dimen/space_md"
             android:fontFeatureSettings="tnum"
             android:textAppearance="@style/Text.LabelMedium"
-            android:textColor="@color/m3_primary"
+            android:textColor="@color/scheme_0_primary"
             android:visibility="gone"
             tools:text="42%"
             tools:visibility="visible" />
-    </LinearLayout>
+    </com.biligrab.downloader.ui.NeuLayout>
 
     <ProgressBar
         android:id="@+id/pbRow"
         style="?android:attr/progressBarStyleHorizontal"
         android:layout_width="match_parent"
         android:layout_height="@dimen/progress_height"
-        android:layout_marginEnd="@dimen/space_sm"
         android:layout_marginStart="@dimen/space_sm"
         android:layout_marginTop="@dimen/space_sm"
+        android:layout_marginEnd="@dimen/space_sm"
         android:contentDescription="@string/cd_progress"
         android:max="100"
         android:progressDrawable="@drawable/progress_download"
         android:visibility="gone"
         tools:visibility="gone" />
-</LinearLayout>
+</com.biligrab.downloader.ui.NeuLayout>

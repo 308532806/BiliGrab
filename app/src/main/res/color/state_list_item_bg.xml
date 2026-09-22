@@ -1,6 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- 列表项选中态的底色：选中用 secondary_container，其余透明 -->
-<selector xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:color="@color/m3_secondary_container" android:state_selected="true"/>
-    <item android:color="@android:color/transparent"/>
-</selector>

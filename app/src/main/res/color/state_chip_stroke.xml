@@ -1,7 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- 芯片描边：选中时收起（M3 selected chip 无描边） -->
-<selector xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:color="@color/m3_on_surface" android:alpha="0.12" android:state_enabled="false"/>
-    <item android:color="@android:color/transparent" android:state_selected="true"/>
-    <item android:color="@color/m3_outline"/>
-</selector>

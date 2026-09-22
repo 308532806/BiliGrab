@@ -1,16 +1,26 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  芯片
-  =====
-  抽成独立布局有两个原因：一是让样式真正走 @style/Widget.Chip，
+  芯片 —— Hyper-Neumorphic
+  ========================
+  抽成独立布局有两个原因：一是让外观真正走 @style/Widget.Chip，
   二是避免两处几乎相同的构造代码。
 
   当前只用在设置面板的外观选项上 —— 主界面的画质芯片已经换成
   「按画质列举的下载行」，那里一行一个下载目标，不再是选项开关。
+
+  尺寸说明：控件本体取 touch_min（48dp），新拟态的浮雕会在四边各内缩
+  1.5 × elev_chip（4.5dp）给阴影让位，所以看得见的药丸高约 39dp、
+  可点区域仍是完整的 48dp —— 视觉尺寸与可点尺寸是两件事。
+
+  点击反馈由 Widget.Chip 里的 neuPress 提供（缩放 + 浮雕形变 + 触觉），
+  全项目不使用涟漪。
 -->
-<TextView xmlns:android="http://schemas.android.com/apk/res/android"
+<com.biligrab.downloader.ui.NeuText xmlns:android="http://schemas.android.com/apk/res/android"
     style="@style/Widget.Chip"
     android:layout_width="wrap_content"
     android:layout_height="wrap_content"
     android:clickable="true"
-    android:focusable="true" />
+    android:focusable="true"
+    android:gravity="center"
+    android:minHeight="@dimen/touch_min"
+    android:textAppearance="@style/Text.LabelLarge" />

@@ -1,7 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- 空状态图标底座：极轻的色调容器，不做圆角方块图标瓦片 -->
-<shape xmlns:android="http://schemas.android.com/apk/res/android"
-    android:shape="oval">
-    <solid android:color="@color/m3_secondary_container" />
-    <size android:width="96dp" android:height="96dp" />
-</shape>

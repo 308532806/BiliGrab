@@ -1,32 +1,37 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Snackbar 视图
-  =============
-  用 inverse_surface 反色底 + on_inverse_surface 文字，
-  保证在浅色和深色主题下都与背景形成明确反差。
+  Snackbar 视图 —— Hyper-Neumorphic
+  =================================
+  新拟态里没有「反色底」这种解法：反色靠的是色阶差，而新拟态靠的是浮雕。
+  所以提示条改成**浮起来的一张卡片**（@style/Widget.Card，凸 28dp / 6dp），
+  它和页面同色，靠左上高光 + 右下投影与下面的内容拉开距离，
+  在任意底色上都读得出来 —— 不再需要反色面。
+
+  卡片里不再叠浮雕：图标与文字都是平的（卡片内叠浮雕会让厚度语义失效）。
   动作按钮是可选的（仅在确有必要时使用，不做「无意义的确认」）。
 -->
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<com.biligrab.downloader.ui.NeuLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/snackbarCard"
+    style="@style/Widget.Card"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:background="@drawable/bg_snackbar"
-    android:elevation="6dp"
     android:gravity="center_vertical"
     android:minHeight="@dimen/touch_min"
     android:orientation="horizontal"
     android:paddingStart="@dimen/space_lg"
-    android:paddingEnd="@dimen/space_sm">
+    android:paddingTop="@dimen/space_sm"
+    android:paddingEnd="@dimen/space_sm"
+    android:paddingBottom="@dimen/space_sm">
 
-    <ImageView
+    <com.biligrab.downloader.ui.NeuImage
         android:id="@+id/ivSnackbarIcon"
         android:layout_width="@dimen/icon_size_sm"
         android:layout_height="@dimen/icon_size_sm"
         android:contentDescription="@null"
         android:src="@drawable/ic_info"
-        android:tint="@color/m3_inverse_on_surface" />
+        android:tint="@color/hyper_text_secondary" />
 
-    <TextView
+    <com.biligrab.downloader.ui.NeuText
         android:id="@+id/tvSnackbarMessage"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
@@ -35,20 +40,19 @@
         android:paddingTop="@dimen/space_md"
         android:paddingBottom="@dimen/space_md"
         android:textAppearance="@style/Text.BodyMedium"
-        android:textColor="@color/m3_inverse_on_surface" />
+        android:textColor="@color/hyper_text_primary" />
 
-    <Button
+    <!-- Java 侧把它取成 android.widget.Button，所以必须是 Button 的子类 -->
+    <com.biligrab.downloader.ui.NeuButton
         android:id="@+id/btnSnackbarAction"
+        style="@style/Widget.Button.Filled"
         android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:background="?android:attr/selectableItemBackgroundBorderless"
+        android:layout_height="@dimen/button_height"
+        android:layout_marginStart="@dimen/space_sm"
         android:minHeight="@dimen/touch_min"
         android:minWidth="@dimen/touch_min"
         android:paddingStart="@dimen/space_md"
         android:paddingEnd="@dimen/space_md"
-        android:textAllCaps="false"
-        android:textAppearance="@style/Text.LabelLarge"
-        android:textColor="@color/m3_inverse_primary"
         android:visibility="gone" />
 
-</LinearLayout>
+</com.biligrab.downloader.ui.NeuLayout>

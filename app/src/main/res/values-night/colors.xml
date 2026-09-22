@@ -1,45 +1,61 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  由 tools/gen_palette.py 自动生成，请勿手改。
-  种子色 #FB7299，色空间 OKLCH，映射遵循 Material 3 色角色。
-  重新生成：python tools/gen_palette.py
+  Hyper-Neumorphic 色板 —— 深色
+
+  深色下新拟态最容易做废：如果把「高光」直接沿用白色、「投影」沿用浅灰，
+  浮雕会整个消失（深色背景上白色高光过曝、浅灰投影看不见）。
+  正确做法是把两色都往背景色里收：
+    neum_light = #26282C（比背景亮一点点）
+    neum_dark  = #0D0E11（比背景暗一点点）
+  对比度低是**故意的** —— 浮雕靠这点微差成立，拉大就变成硬阴影了。
 -->
 <resources>
 
+    <!-- ═══ 表面 ═══ -->
+    <color name="hyper_background">#1A1B1E</color>
+    <color name="hyper_card">#1E1E1E</color>
 
-    <!-- 深色主题 — Material 3 色角色 -->
+    <color name="hyper_gradient_top">#0D1117</color>
+    <color name="hyper_gradient_mid">#12161C</color>
+    <color name="hyper_gradient_bottom">#1A1E25</color>
 
-    <color name="m3_primary">#FFABBE</color>
-    <color name="m3_on_primary">#5E0028</color>
-    <color name="m3_primary_container">#85003C</color>
-    <color name="m3_on_primary_container">#FFD6DF</color>
-    <color name="m3_secondary">#E7B8C2</color>
-    <color name="m3_on_secondary">#47242D</color>
-    <color name="m3_secondary_container">#603A43</color>
-    <color name="m3_on_secondary_container">#FFD6DF</color>
-    <color name="m3_tertiary">#FBB674</color>
-    <color name="m3_on_tertiary">#482700</color>
-    <color name="m3_tertiary_container">#673B00</color>
-    <color name="m3_on_tertiary_container">#FFDBBA</color>
-    <color name="m3_error">#FFAFA5</color>
-    <color name="m3_on_error">#610005</color>
-    <color name="m3_error_container">#89000A</color>
-    <color name="m3_on_error_container">#FFD8D3</color>
-    <color name="m3_surface_dim">#161213</color>
-    <color name="m3_surface">#161213</color>
-    <color name="m3_surface_bright">#3C3839</color>
-    <color name="m3_surface_container_lowest">#110D0E</color>
-    <color name="m3_surface_container_low">#1E1A1B</color>
-    <color name="m3_surface_container">#221E1F</color>
-    <color name="m3_surface_container_high">#2D292A</color>
-    <color name="m3_surface_container_highest">#383334</color>
-    <color name="m3_on_surface">#E6E1E2</color>
-    <color name="m3_surface_variant">#514245</color>
-    <color name="m3_on_surface_variant">#D3C1C5</color>
-    <color name="m3_outline">#9C8C8F</color>
-    <color name="m3_outline_variant">#514245</color>
-    <color name="m3_inverse_surface">#E6E1E2</color>
-    <color name="m3_inverse_on_surface">#332F30</color>
-    <color name="m3_inverse_primary">#A62152</color>
-    <color name="m3_surface_tint">#FFABBE</color>
+    <!-- ═══ 文字 ═══ -->
+    <color name="hyper_text_primary">#F5F5F5</color>
+    <color name="hyper_text_secondary">#B3B3B3</color>
+    <color name="hyper_text_tertiary">#808080</color>
+
+    <!-- ═══ 语义色 ═══ -->
+    <color name="hyper_success">#30D158</color>
+    <color name="hyper_warning">#FFB74D</color>
+    <color name="hyper_error">#FF8A80</color>
+
+    <!-- ═══ 描边与分隔 ═══ -->
+    <color name="hyper_border">#2D2D2D</color>
+    <color name="hyper_divider">#262626</color>
+
+    <!-- ═══ 附属面 ═══ -->
+    <color name="hyper_icon_bg">#2A2A2A</color>
+    <color name="hyper_badge_bg">#0A2A4A</color>
+    <color name="hyper_badge_text">#0A84FF</color>
+
+    <!-- ═══ 浮雕阴影 ═══ -->
+    <color name="neum_light">#26282C</color>
+    <color name="neum_dark">#0D0E11</color>
+
+    <!-- ═══ 玻璃态 ═══ -->
+    <color name="glass_mesh_base">#0F1320</color>
+    <color name="glass_tint_convex">#1FFFFFFF</color>
+    <color name="glass_tint_concave">#24000000</color>
+    <color name="glass_border_hi">#8CFFFFFF</color>
+    <color name="glass_border_lo">#1FFFFFFF</color>
+    <color name="glass_inner_highlight">#73FFFFFF</color>
+    <color name="glass_outer_shadow">#47000000</color>
+
+    <!-- ═══ 遮罩 ═══ -->
+    <color name="hyper_scrim">#99000000</color>
+    <color name="hyper_edit_overlay">#CC0F1115</color>
+
+    <!-- ═══ 通知栏 ═══ -->
+    <color name="hyper_notification_icon">#FFFFFF</color>
+
 </resources>

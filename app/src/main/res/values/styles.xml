@@ -1,259 +1,280 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  排版与组件样式
-  ================
-  全部字号取自 Material 3 字阶（Display / Headline / Title / Body / Label），
-  不在这里手写任意字号 —— 这是 impeccable 的 craft-floor 明确要求的：
-  "obvious scale and weight steps"，以及 android.md 的 "never hand-pick sizes"。
+  样式词汇表 —— Hyper-Neumorphic
+  ==============================
+  来源：docs/design-refs/hyper-neumorphic.md 的 Type.kt / Spacing.kt /
+  「圆角层级」表。
 
-  单位一律 sp，跟随系统字体缩放。
-  浅色深色通过 @color/m3_* 自动切换（values-night/colors.xml）。
+  分两层：
 
-  注意：Android 样式名里的点号表示**继承**。所以 Text.TitleLarge 会被当作
-  Text 的子样式，Widget.Button.Filled 会一路找 Widget.Button 和 Widget。
-  这些基类必须真的存在，否则 aapt2 link 会报 "resource style/Text not found"。
+    1. Text.*   —— 纯排版，不涉及背景。字重刻意只用三档：
+                   Bold / SemiBold-Medium / Normal。
+                   新拟态的背景已经足够"吵"，字重再多一层会显得脏。
+
+    2. Widget.* —— 组件的完整外观。新拟态参数（neuStyle / neuRadius /
+                   neuElevation）写在这里，布局里只要 style="@style/Widget.Card"
+                   就能拿到正确的浮雕，不必在 Java 里逐个铺设。
+
+  两条硬规则：
+    · 所有组件样式都不带涟漪。parent 一律为空，避免继承到系统的波纹。
+    · 圆角与浮雕必须成组使用（28/6、26/6、16/2、14/1.5），
+      单改其中一个会破坏厚度的一致性。
 -->
 <resources>
 
-    <!-- ================================================================
-         命名基类
-         本身不带属性，只用于承载下方带点的样式名。
-         ================================================================ -->
+    <!-- ==================== 排版 ==================== -->
 
-    <style name="Text" parent="" />
-
-    <style name="Widget" parent="" />
-
-    <!-- 按钮公共属性。Filled / Tonal / Outlined 只覆盖底色的文字色 -->
-    <style name="Widget.Button" parent="Widget">
-        <item name="android:textAppearance">@style/Text.LabelLarge</item>
-        <item name="android:textAllCaps">false</item>
-        <item name="android:minHeight">@dimen/button_height</item>
-        <item name="android:minWidth">@dimen/button_height</item>
-        <item name="android:paddingStart">@dimen/space_xl</item>
-        <item name="android:paddingEnd">@dimen/space_xl</item>
-        <item name="android:gravity">center</item>
-        <item name="android:stateListAnimator">@null</item>
+    <style name="Text" parent="">
+        <item name="android:textColor">@color/hyper_text_primary</item>
     </style>
 
-    <!-- ================================================================
-         Material 3 字阶
-         ================================================================ -->
+    <!-- 36sp Bold —— 唯一用途是空态的大标题 -->
+    <style name="Text.Display">
+        <item name="android:textSize">36sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:letterSpacing">0</item>
+        <item name="android:lineSpacingMultiplier">1.15</item>
+    </style>
 
+    <!-- 32sp Bold —— 页面级大标题 -->
     <style name="Text.HeadlineSmall">
-        <item name="android:textSize">24sp</item>
-        <item name="android:lineHeight">32sp</item>
+        <item name="android:textSize">32sp</item>
+        <item name="android:textStyle">bold</item>
         <item name="android:letterSpacing">0</item>
-        <item name="android:textColor">@color/m3_on_surface</item>
-        <item name="android:fontFamily">sans-serif</item>
-        <item name="android:includeFontPadding">false</item>
+        <item name="android:lineSpacingMultiplier">1.15</item>
     </style>
 
-    <!-- Title：页面标题、卡片标题、列表主标题 -->
-    <style name="Text.TitleLarge">
+    <!--
+      22sp Bold —— 顶栏标题。
+
+      规范的字阶里没有这一档，是补的。原因：规范把 32sp headlineMedium 同时
+      给了"页面大标题"和"顶栏标题"，但一个屏幕上只会有一个视觉焦点。
+      顶栏和页面标题都用 32sp 时两者互相打架，而且中文 32sp 在 360dp 宽的
+      屏幕上放不下 9 个字（9 × 32sp = 288dp，可用只有 312dp），必然断行。
+      把顶栏降到导航层级之后，32sp 独占"页面大标题"这一档，层级才成立。
+    -->
+    <style name="Text.AppBar">
         <item name="android:textSize">22sp</item>
-        <item name="android:lineHeight">28sp</item>
+        <item name="android:textStyle">bold</item>
         <item name="android:letterSpacing">0</item>
-        <item name="android:textColor">@color/m3_on_surface</item>
-        <item name="android:fontFamily">sans-serif</item>
-        <item name="android:includeFontPadding">false</item>
     </style>
 
+    <!-- 18sp SemiBold —— 卡片标题、视频标题 -->
+    <style name="Text.TitleLarge">
+        <item name="android:textSize">18sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:letterSpacing">0</item>
+        <item name="android:lineSpacingMultiplier">1.25</item>
+    </style>
+
+    <!-- 16sp Medium —— 次级标题 -->
     <style name="Text.TitleMedium">
         <item name="android:textSize">16sp</item>
-        <item name="android:lineHeight">24sp</item>
-        <item name="android:letterSpacing">0.009</item>
-        <item name="android:textColor">@color/m3_on_surface</item>
-        <item name="android:fontFamily">sans-serif-medium</item>
-        <item name="android:includeFontPadding">false</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:letterSpacing">0</item>
     </style>
 
+    <!-- 14sp Medium —— 行标题、按画质列举的标签 -->
     <style name="Text.TitleSmall">
         <item name="android:textSize">14sp</item>
-        <item name="android:lineHeight">20sp</item>
-        <item name="android:letterSpacing">0.007</item>
-        <item name="android:textColor">@color/m3_on_surface</item>
-        <item name="android:fontFamily">sans-serif-medium</item>
-        <item name="android:includeFontPadding">false</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:letterSpacing">0.01</item>
     </style>
 
-    <!-- Body：正文。深色主题是分别设计的，不是浅色的机械反转 -->
+    <!-- 16sp / 行高 24 —— 正文 -->
     <style name="Text.BodyLarge">
         <item name="android:textSize">16sp</item>
-        <item name="android:lineHeight">24sp</item>
-        <item name="android:letterSpacing">0.031</item>
-        <item name="android:textColor">@color/m3_on_surface</item>
-        <item name="android:fontFamily">sans-serif</item>
-        <item name="android:includeFontPadding">false</item>
+        <item name="android:lineSpacingExtra">4dp</item>
     </style>
 
     <style name="Text.BodyMedium">
         <item name="android:textSize">14sp</item>
-        <item name="android:lineHeight">22sp</item>
-        <item name="android:letterSpacing">0.018</item>
-        <item name="android:textColor">@color/m3_on_surface_variant</item>
-        <item name="android:fontFamily">sans-serif</item>
-        <item name="android:includeFontPadding">false</item>
+        <item name="android:textColor">@color/hyper_text_secondary</item>
+        <item name="android:lineSpacingExtra">3dp</item>
     </style>
 
+    <!-- 12sp —— 帮助文字、次要说明 -->
     <style name="Text.BodySmall">
         <item name="android:textSize">12sp</item>
-        <item name="android:lineHeight">18sp</item>
-        <item name="android:letterSpacing">0.033</item>
-        <item name="android:textColor">@color/m3_on_surface_variant</item>
-        <item name="android:fontFamily">sans-serif</item>
-        <item name="android:includeFontPadding">false</item>
+        <item name="android:textColor">@color/hyper_text_secondary</item>
+        <item name="android:lineSpacingExtra">3dp</item>
     </style>
 
-    <!-- 机器文本：原始错误码、接口返回这类内容。等宽在这里是语义需要，
-         因为它们本身就是代码，不是为了"看起来技术感" -->
-    <style name="Text.Code" parent="Text.BodySmall">
-        <item name="android:fontFamily">monospace</item>
-        <item name="android:letterSpacing">0</item>
-    </style>
-
-    <!-- Label：按钮、芯片、字段标签 -->
     <style name="Text.LabelLarge">
         <item name="android:textSize">14sp</item>
-        <item name="android:lineHeight">20sp</item>
-        <item name="android:letterSpacing">0.007</item>
-        <item name="android:fontFamily">sans-serif-medium</item>
-        <item name="android:includeFontPadding">false</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:textColor">@color/hyper_text_primary</item>
     </style>
 
+    <!-- 12sp Medium —— 元信息、徽标 -->
     <style name="Text.LabelMedium">
         <item name="android:textSize">12sp</item>
-        <item name="android:lineHeight">16sp</item>
-        <item name="android:letterSpacing">0.042</item>
-        <item name="android:fontFamily">sans-serif-medium</item>
-        <item name="android:includeFontPadding">false</item>
+        <item name="android:textColor">@color/hyper_text_secondary</item>
     </style>
 
-    <!-- ================================================================
-         组件
-         ================================================================ -->
+    <!-- 等宽 —— 版本号、原始错误信息，需要逐字对齐的场景 -->
+    <style name="Text.Code">
+        <item name="android:textSize">12sp</item>
+        <item name="android:fontFamily">monospace</item>
+        <item name="android:textColor">@color/hyper_text_secondary</item>
+    </style>
 
-    <!-- 图标按钮：触控区固定 48dp，视觉图标 24dp -->
-    <style name="Widget.IconButton">
+    <!-- ==================== 组件 ==================== -->
+
+    <!-- 页面卡片：28dp / 6dp。整套界面的基本容器 -->
+    <style name="Widget.Card" parent="">
+        <item name="neuStyle">convex</item>
+        <item name="neuRadius">@dimen/radius_card</item>
+        <item name="neuElevation">@dimen/elev_card</item>
+    </style>
+
+    <!-- 凹陷卡片：用于"被挖进去"的容器，例如分段控件的底槽 -->
+    <style name="Widget.Card.Concave" parent="">
+        <item name="neuStyle">concave</item>
+        <item name="neuRadius">@dimen/radius_card</item>
+        <item name="neuElevation">@dimen/elev_field</item>
+    </style>
+
+    <!-- 图标按钮：18dp / 3dp，固定 48dp 触控区 -->
+    <style name="Widget.IconButton" parent="">
         <item name="android:layout_width">@dimen/touch_min</item>
         <item name="android:layout_height">@dimen/touch_min</item>
-        <item name="android:background">@drawable/bg_icon_button</item>
+        <item name="android:background">@null</item>
         <item name="android:padding">@dimen/space_md</item>
         <item name="android:scaleType">fitCenter</item>
+        <item name="neuStyle">convex</item>
+        <item name="neuRadius">@dimen/radius_icon_button</item>
+        <item name="neuElevation">@dimen/elev_icon_button</item>
+        <item name="neuPress">true</item>
+    </style>
+
+    <!-- 主按钮：26dp / 6dp，高 52dp -->
+    <style name="Widget.Button" parent="">
+        <item name="android:layout_height">@dimen/button_height</item>
+        <item name="android:gravity">center</item>
+        <item name="android:textSize">16sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:letterSpacing">0.01</item>
+        <item name="android:background">@null</item>
+        <item name="android:minWidth">0dp</item>
+        <item name="android:minHeight">0dp</item>
         <item name="android:stateListAnimator">@null</item>
+        <item name="android:textAllCaps">false</item>
+        <item name="neuStyle">convex</item>
+        <item name="neuRadius">@dimen/radius_button</item>
+        <item name="neuElevation">@dimen/elev_button</item>
+        <item name="neuPress">true</item>
     </style>
 
-    <!-- 填充按钮：主要动作，一屏只允许一个 -->
+    <!-- 主按钮的文字用主色（运行时由 MainActivity 再确认一次，覆盖默认值） -->
     <style name="Widget.Button.Filled">
-        <item name="android:background">@drawable/bg_button_filled</item>
-        <item name="android:textColor">@color/state_button_filled_text</item>
+        <item name="android:textColor">@color/scheme_0_primary</item>
     </style>
 
-    <!-- 色调按钮：次级动作 -->
-    <style name="Widget.Button.Tonal">
-        <item name="android:background">@drawable/bg_button_tonal</item>
-        <item name="android:textColor">@color/state_button_tonal_text</item>
-    </style>
-
-    <!-- 描边按钮：与填充按钮并列时的次要选择 -->
+    <!-- 次要按钮：靠浮雕的强弱区分，不靠描边 -->
     <style name="Widget.Button.Outlined">
-        <item name="android:background">@drawable/bg_button_outlined</item>
-        <item name="android:textColor">@color/state_button_outlined_text</item>
+        <item name="android:textColor">@color/hyper_text_primary</item>
     </style>
 
-    <!-- 卡片：M3 用色调表达层级，而不是投影 -->
-    <style name="Widget.Card">
-        <item name="android:background">@drawable/bg_card</item>
-        <item name="android:padding">@dimen/card_padding</item>
+    <style name="Widget.Button.Tonal">
+        <item name="android:textColor">@color/hyper_text_primary</item>
     </style>
 
-    <!-- 列表项：保证 48dp 最小高度 -->
-    <style name="Widget.ListItem">
-        <item name="android:background">@drawable/bg_list_item</item>
-        <item name="android:minHeight">@dimen/touch_min</item>
+    <!-- 输入框：凹槽 16dp / 2dp，高 56dp -->
+    <style name="Widget.TextField" parent="">
+        <item name="android:layout_height">@dimen/field_height</item>
+        <item name="android:background">@null</item>
+        <item name="android:gravity">center_vertical</item>
+        <item name="android:textSize">16sp</item>
+        <item name="android:textColor">@color/hyper_text_primary</item>
+        <item name="android:textColorHint">@color/hyper_text_tertiary</item>
         <item name="android:paddingStart">@dimen/space_lg</item>
         <item name="android:paddingEnd">@dimen/space_lg</item>
+        <item name="android:singleLine">true</item>
+        <item name="neuStyle">concave</item>
+        <item name="neuRadius">@dimen/radius_field</item>
+        <item name="neuElevation">@dimen/elev_field</item>
+    </style>
+
+    <!-- 字段标签：小、次要、全大写的替代是"加大字距" -->
+    <style name="Widget.FieldLabel" parent="">
+        <item name="android:textSize">12sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:letterSpacing">0.06</item>
+        <item name="android:textColor">@color/hyper_text_secondary</item>
+    </style>
+
+    <!-- 区块标题：32dp 上方留白是本设计系统的节奏基准 -->
+    <style name="Widget.SectionTitle" parent="">
+        <item name="android:textSize">14sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:letterSpacing">0.02</item>
+        <item name="android:textColor">@color/hyper_text_secondary</item>
+    </style>
+
+    <!-- 列表行：扁平，不带浮雕 —— 行是卡片"里面"的东西，
+         在卡片上再叠一层浮雕会让厚度语义失效 -->
+    <style name="Widget.ListItem" parent="">
+        <item name="android:background">@null</item>
+        <item name="android:gravity">center_vertical</item>
+        <item name="android:minHeight">@dimen/touch_min</item>
         <item name="android:paddingTop">@dimen/space_md</item>
         <item name="android:paddingBottom">@dimen/space_md</item>
     </style>
 
-    <!-- 芯片：可选中的画质 / 主题筛选项。
-         minHeight 用 touch_min 而不是 chip_height —— 视觉高度靠 bg_chip 的
-         inset 压到 36dp，可点区域必须保持 48dp -->
-    <style name="Widget.Chip">
-        <item name="android:background">@drawable/bg_chip</item>
-        <item name="android:textColor">@color/state_chip_text</item>
-        <item name="android:textAppearance">@style/Text.LabelLarge</item>
-        <item name="android:textAllCaps">false</item>
-        <item name="android:minHeight">@dimen/touch_min</item>
-        <item name="android:minWidth">@dimen/touch_min</item>
+    <!-- 芯片：14dp / 3dp，可见高 32dp，触控区补到 48dp -->
+    <style name="Widget.Chip" parent="">
+        <item name="android:gravity">center</item>
+        <item name="android:textSize">14sp</item>
+        <item name="android:background">@null</item>
         <item name="android:paddingStart">@dimen/space_lg</item>
         <item name="android:paddingEnd">@dimen/space_lg</item>
-        <item name="android:gravity">center</item>
-        <item name="android:singleLine">true</item>
-        <item name="android:stateListAnimator">@null</item>
+        <item name="android:minWidth">0dp</item>
+        <item name="android:minHeight">0dp</item>
+        <item name="neuStyle">convex</item>
+        <item name="neuRadius">@dimen/radius_chip</item>
+        <item name="neuElevation">@dimen/elev_chip</item>
+        <item name="neuPress">true</item>
     </style>
 
-    <!-- 封面上的大播放键：实心主色圆 + on_primary 图标。
-         不设 elevation —— 父容器开了 clipToOutline，子视图的投影会被裁掉，
-         设了也是白设；主色圆本身在照片封面上已经足够突出。 -->
-    <style name="Widget.PlayButton" parent="Widget">
+    <!-- 下载行：整行就是按钮，28dp / 6dp -->
+    <style name="Widget.DownloadRow" parent="">
+        <item name="android:background">@null</item>
+        <item name="android:orientation">vertical</item>
+        <item name="neuStyle">convex</item>
+        <item name="neuRadius">@dimen/radius_card</item>
+        <item name="neuElevation">@dimen/elev_card</item>
+    </style>
+
+    <!-- 封面上的大播放键：圆形，全圆角 -->
+    <style name="Widget.PlayButton" parent="">
         <item name="android:layout_width">@dimen/play_button_size</item>
         <item name="android:layout_height">@dimen/play_button_size</item>
-        <item name="android:background">@drawable/bg_play_button</item>
-        <item name="android:contentDescription">@string/cd_play</item>
+        <item name="android:background">@null</item>
         <item name="android:padding">@dimen/space_lg</item>
         <item name="android:scaleType">fitCenter</item>
-        <item name="android:src">@drawable/ic_play</item>
-        <item name="android:stateListAnimator">@null</item>
-        <item name="android:tint">@color/m3_on_primary</item>
+        <item name="neuStyle">convex</item>
+        <item name="neuRadius">@dimen/radius_pill</item>
+        <item name="neuElevation">@dimen/elev_button</item>
+        <item name="neuPress">true</item>
     </style>
 
-    <!-- 预览进度条。
-         控件本身 48dp 高（touch_min）保证能拖得动，视觉上的轨道只有 4dp：
-         靠上下各 22dp 的 padding 把轨道压到中间。 -->
-    <style name="Widget.SeekBar" parent="Widget">
+    <!--
+      图标底板：空态那种"一块圆盘托着一个图标"的场景。
+
+      注意不要用 @drawable 去做这块底板。新拟态的层级完全来自阴影，
+      而任何和背景同色的纯色形状画上去都是看不见的 —— 必须走浮雕才有"托起来"的效果。
+    -->
+    <style name="Widget.IconPlate" parent="">
+        <item name="neuStyle">convex</item>
+        <item name="neuRadius">@dimen/radius_pill</item>
+        <item name="neuElevation">@dimen/elev_card</item>
+    </style>
+
+    <!-- 进度条：新拟态版由 ui/NeumorphicSeekBar 实现，这里只给尺寸 -->
+    <style name="Widget.SeekBar" parent="">
+        <item name="android:layout_height">@dimen/touch_min</item>
         <item name="android:background">@null</item>
-        <item name="android:maxHeight">@dimen/progress_height</item>
-        <item name="android:minHeight">@dimen/progress_height</item>
-        <item name="android:paddingBottom">22dp</item>
-        <item name="android:paddingTop">22dp</item>
-        <item name="android:progressDrawable">@drawable/progress_download</item>
-        <item name="android:splitTrack">false</item>
-        <item name="android:thumb">@drawable/thumb_slider</item>
-    </style>
-
-    <!-- 下载行：整行可点，不是只有行尾的按钮可点 -->
-    <style name="Widget.DownloadRow" parent="@style/Widget.ListItem">
-        <item name="android:clickable">true</item>
-        <item name="android:focusable">true</item>
-        <item name="android:paddingStart">@dimen/space_sm</item>
-        <item name="android:paddingEnd">@dimen/space_sm</item>
-    </style>
-
-    <!-- 文本字段：M3 filled 风格 -->
-    <style name="Widget.TextField">
-        <item name="android:textAppearance">@style/Text.BodyLarge</item>
-        <item name="android:textColor">@color/m3_on_surface</item>
-        <item name="android:textColorHint">@color/m3_on_surface_variant</item>
-        <item name="android:background">@drawable/bg_textfield</item>
-        <item name="android:minHeight">@dimen/field_height</item>
-        <item name="android:paddingStart">@dimen/space_lg</item>
-        <item name="android:paddingEnd">@dimen/space_lg</item>
-        <item name="android:paddingTop">@dimen/space_lg</item>
-        <item name="android:paddingBottom">@dimen/space_lg</item>
-        <item name="android:singleLine">true</item>
-        <item name="android:gravity">center_vertical</item>
-    </style>
-
-    <!-- 字段标签：始终可见，绝不用 placeholder 当标签 -->
-    <style name="Widget.FieldLabel" parent="Text.LabelMedium">
-        <item name="android:textColor">@color/m3_on_surface_variant</item>
-    </style>
-
-    <!-- 分区标题 -->
-    <style name="Widget.SectionTitle" parent="Text.TitleMedium">
-        <item name="android:textColor">@color/m3_on_surface</item>
     </style>
 
 </resources>

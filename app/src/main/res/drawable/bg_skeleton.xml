@@ -1,7 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 骨架屏占位块：加载态用它替代整块内容，避免空白屏和跳动 -->
+<!--
+  骨架屏占位块。
+  用极低对比的中性色：骨架屏的目的是"这里将有内容"，
+  对比度一高就会喧宾夺主，看起来像是真的加载出了什么东西。
+-->
 <shape xmlns:android="http://schemas.android.com/apk/res/android"
     android:shape="rectangle">
-    <corners android:radius="@dimen/shape_xs" />
-    <solid android:color="@color/m3_surface_container_high" />
+    <solid android:color="@color/hyper_divider" />
+    <corners android:radius="@dimen/radius_field" />
 </shape>

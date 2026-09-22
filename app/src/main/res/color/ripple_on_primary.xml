@@ -1,5 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- 填充按钮上的涟漪：用 on_primary，保证在深色主色底上可见 -->
-<selector xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:color="@color/m3_on_primary" android:alpha="0.16"/>
-</selector>

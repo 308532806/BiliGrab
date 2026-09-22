@@ -13,6 +13,8 @@ public final class Prefs {
     private static final String KEY_PREFER_AVC = "prefer_avc";
     private static final String KEY_THEME = "theme_mode";
     private static final String KEY_PROXY = "youtube_proxy";
+    private static final String KEY_SKIN = "ui_skin";
+    private static final String KEY_PRIMARY = "ui_primary";
 
     public static final int DEFAULT_QN = 80;
 
@@ -20,6 +22,21 @@ public final class Prefs {
     public static final int THEME_SYSTEM = 0;
     public static final int THEME_LIGHT = 1;
     public static final int THEME_DARK = 2;
+
+    /**
+     * 视觉引擎。Hyper-Neumorphic 规范是双引擎的，两者共用同一套
+     * 尺寸、圆角和交互参数，只有「表面怎么画」不同。
+     */
+    public static final int SKIN_NEUMORPHISM = 0;
+    public static final int SKIN_GLASS = 1;
+
+    /** 主题色索引，对应 res/values/arrays.xml 里 hyper_primary 的下标。 */
+    public static final int PRIMARY_SAKURA = 0;
+    public static final int PRIMARY_BLUE = 1;
+    public static final int PRIMARY_DEEP_BLUE = 2;
+    public static final int PRIMARY_MINT = 3;
+    public static final int PRIMARY_LAVENDER = 4;
+    public static final int PRIMARY_COUNT = 5;
 
     private final SharedPreferences sp;
 
@@ -98,6 +115,25 @@ public final class Prefs {
     public static int themeModeStatic(Context ctx) {
         return ctx.getSharedPreferences(FILE, Context.MODE_PRIVATE)
                 .getInt(KEY_THEME, THEME_SYSTEM);
+    }
+
+    /** 视觉引擎：新拟态（默认）或玻璃态。 */
+    public int skin() {
+        return sp.getInt(KEY_SKIN, SKIN_NEUMORPHISM);
+    }
+
+    public void setSkin(int v) {
+        sp.edit().putInt(KEY_SKIN, v).apply();
+    }
+
+    /** 主题色索引，0..PRIMARY_COUNT-1。默认樱花粉，保留原品牌色。 */
+    public int primary() {
+        int i = sp.getInt(KEY_PRIMARY, PRIMARY_SAKURA);
+        return (i < 0 || i >= PRIMARY_COUNT) ? PRIMARY_SAKURA : i;
+    }
+
+    public void setPrimary(int v) {
+        sp.edit().putInt(KEY_PRIMARY, v).apply();
     }
 
     /**

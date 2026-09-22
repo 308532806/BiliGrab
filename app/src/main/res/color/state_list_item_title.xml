@@ -1,6 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- 列表项主标题色：选中时用 on_secondary_container，保证在选中底色上仍达标 -->
-<selector xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:color="@color/m3_on_secondary_container" android:state_selected="true"/>
-    <item android:color="@color/m3_on_surface"/>
-</selector>

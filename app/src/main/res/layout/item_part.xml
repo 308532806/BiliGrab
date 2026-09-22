@@ -1,14 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  分 P 列表项
-  ============
-  透明底 + 选中态底色，**不做成卡片** —— 它本来就位于一张卡片内部，
-  卡片套卡片是 impeccable 明确列出的反模式。
+  分 P 列表项 —— Hyper-Neumorphic
+  ===============================
+  这一行**不做成卡片**：它本来就位于一张卡片内部（listParts 是 Widget.Card），
+  卡片套卡片会同时破坏厚度语义和层级感。所以行本身是平的（Widget.ListItem）。
+  （ux: "卡片里再叠卡片" 是明确的反模式。）
 
-  选中状态同时用三种编码表达：底色、标题色、右侧对勾图标。
-  「不以颜色为唯一编码」（ux-guidelines #37）。
+  选中状态仍然用多重编码表达，不只靠颜色（ux-guidelines #37）：
+    · 序号 —— 徽标（bg_index_badge，与正文拉开一档）
+    · 右侧 —— 对勾图标（ivSelected）
+    · 行选中态 —— 由 Java 的 setSelected() 打在根容器上，子视图 duplicateParentState
+
+  注意：上一版用的那组列表项状态色已随旧色板一起删除，
+  现在文字色取 hyper 词汇里的固定值；选中态由对勾与徽标承担。
 -->
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<com.biligrab.downloader.ui.NeuLayout xmlns:android="http://schemas.android.com/apk/res/android"
     style="@style/Widget.ListItem"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
@@ -16,25 +22,25 @@
     android:orientation="horizontal">
 
     <!-- 子视图复制父级状态：setSelected() 不会自动向下传播，
-         copy 之后标题与副标题的选中态配色才会真正生效 -->
-    <TextView
+         copy 之后标题与副标题的选中态才会真正生效 -->
+    <!-- 序号徽标：只读标签，用 hyper 词汇里的徽标色，深浅模式各有一套值 -->
+    <com.biligrab.downloader.ui.NeuText
         android:id="@+id/tvIndex"
         android:layout_width="32dp"
         android:layout_height="32dp"
         android:background="@drawable/bg_index_badge"
-        android:duplicateParentState="true"
         android:gravity="center"
         android:textAppearance="@style/Text.LabelLarge"
-        android:textColor="@color/m3_on_tertiary_container" />
+        android:textColor="@color/hyper_badge_text" />
 
-    <LinearLayout
+    <com.biligrab.downloader.ui.NeuLayout
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_marginStart="@dimen/space_md"
         android:layout_weight="1"
         android:orientation="vertical">
 
-        <TextView
+        <com.biligrab.downloader.ui.NeuText
             android:id="@+id/tvPartTitle"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -42,27 +48,27 @@
             android:ellipsize="end"
             android:maxLines="2"
             android:textAppearance="@style/Text.TitleSmall"
-            android:textColor="@color/state_list_item_title" />
+            android:textColor="@color/hyper_text_primary" />
 
-        <TextView
+        <com.biligrab.downloader.ui.NeuText
             android:id="@+id/tvPartDuration"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="2dp"
             android:duplicateParentState="true"
             android:textAppearance="@style/Text.BodySmall"
-            android:textColor="@color/state_list_item_meta" />
-    </LinearLayout>
+            android:textColor="@color/hyper_text_secondary" />
+    </com.biligrab.downloader.ui.NeuLayout>
 
     <!-- 选中标记：让状态不只靠颜色传达 -->
-    <ImageView
+    <com.biligrab.downloader.ui.NeuImage
         android:id="@+id/ivSelected"
         android:layout_width="@dimen/icon_size"
         android:layout_height="@dimen/icon_size"
         android:layout_marginStart="@dimen/space_sm"
         android:contentDescription="@null"
         android:src="@drawable/ic_check"
-        android:tint="@color/m3_primary"
+        android:tint="@color/scheme_0_primary"
         android:visibility="invisible" />
 
-</LinearLayout>
+</com.biligrab.downloader.ui.NeuLayout>

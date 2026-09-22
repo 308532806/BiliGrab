@@ -77,7 +77,7 @@ BiliGrab 是从零重写的独立实现，**没有复用 BILIBILIAS 的任何代
 
 - 前台服务 + 通知栏实时进度
 - 完成后写入系统媒体库，相册 / 音乐播放器直接可见
-- Material 3 界面，浅色 / 深色 / 跟随系统三选一
+- Hyper-Neumorphic 界面：新拟态 / 玻璃态**双引擎**可切换，5 套主题色，浅色 / 深色 / 跟随系统三选一
 - 自适应启动图标（含 Android 13+ 主题化图标）
 
 ---
@@ -130,17 +130,36 @@ Android 的全局 HTTP 代理。
 
 ## 界面
 
-界面完全是手写的 Material 3 —— M3 的色角色、字阶、形状阶、动效、涟漪、48dp 触控目标、
-edge-to-edge、Snackbar、底部表单，全部基于平台原生 API 实现。
+**1.4.0 起界面层换成 Hyper-Neumorphic** —— 新拟态（Neumorphic）+ HyperOS 语言 + 玻璃态
+三合一的设计系统，纯 Java + XML 手写，仍然零 AndroidX、零 Material Components。
 
-色彩由 `tools/gen_palette.py` 从单一品牌色相**推导**（OKLCH 色彩空间），
-并自动跑完整 WCAG 对比度校验；浅色与深色是分别设计的，不是机械反转。
+- **双引擎可切换** —— 设置面板「外观 → 视觉引擎」里选「新拟态」或「玻璃态」。
+  两者共用同一套尺寸、圆角、动效与交互参数，**只有「表面怎么画」不同**：
+  新拟态用 `BlurMaskFilter` 画双色浮雕阴影（凸起 / 凹陷两套画法），
+  玻璃态用整屏 mesh + 半透明叠加 + 方向光（mesh 只画一份，否则光斑会在每个面上重复）。
+- **5 套主题色** —— 樱花粉（默认，保留原本的品牌种子色 `#FB7299`）/ 默认蓝 / 深海蓝 /
+  薄荷绿 / 薰衣草紫，深浅模式各一套值。**风格照规范走，主色作为可变量保留品牌。**
+- **无涟漪** —— 主题把 `colorControlHighlight` / `selectableItemBackground` 压成透明，
+  点击反馈改由 `ui/HyperosClick` 提供：scale 0.95，150ms 按下 / 200ms 松开，
+  `cubic-bezier(0.4, 0, 0.2, 1)`，配 `TextHandleMove` 触觉（开关用 `LONG_PRESS`）。
+- **圆角与浮雕成组** —— 两者是一组参数，单改其中一个会破坏整套界面的厚度一致性：
 
-完整的设计规则、推导过程和被明确拒绝的做法，见 **[DESIGN.md](DESIGN.md)**。
+  | 用途 | 圆角 / 浮雕 | 用途 | 圆角 / 浮雕 |
+  | --- | --- | --- | --- |
+  | 页面卡片 | 28dp / 6dp | 输入框 | 16dp / 2dp |
+  | 按钮 | 26dp / 6dp | 芯片 | 14dp / 3dp |
+  | 对话框、底部面板 | 24dp / 8dp | 开关轨道 | 14dp / 1.5dp |
+
+  浮雕高度不是 Material 的 elevation：它同时决定模糊半径与阴影偏移（= 0.5 × 该值）。
+
+完整的设计规则、渲染原理、令牌表（间距 / 圆角 / 浮雕 / 字号 / 颜色）与已知取舍，
+见 **[docs/DESIGN-SYSTEM.md](docs/DESIGN-SYSTEM.md)**。
+1.3.0 及以前的 Material 3 规则仍留在 **[DESIGN.md](DESIGN.md)**，
+其中色彩、排版、间距与形状、层级表达几节已被取代。
 
 几条具体的实现取向：
 
-- **整行就是按钮** —— 每个画质一行、整行 61dp 可点，不需要瞄准小控件
+- **整行就是按钮** —— 每个画质一行、整行（`minHeight` 48dp，实际高约 72dp）可点，不需要瞄准小控件
 - **零依赖手写播放器** —— `MediaPlayer` + `SurfaceView`，预览走 `fnval=1` 的渐进式 MP4
   （音视频已封装在一起，才有声音、才能拖）；下载仍走 DASH，画质更全
 - **全部文案在 `strings.xml`** —— 包括通知栏频道名和下载失败的每一条原因
@@ -148,7 +167,9 @@ edge-to-edge、Snackbar、底部表单，全部基于平台原生 API 实现。
   它抛出带 `code` 的异常，界面按 `code` 映射成文案。界面**不匹配错误消息里的中文子串**，
   否则改一个字的文案就会让映射静默失效
 - **输入框尾部按钮一钮两用** —— 空时是「粘贴」，有内容时变「清空」
-- **无死资源** —— `dimen` / `style` / `string` / `drawable` / `layout` 的引用数都有检查，见 DESIGN.md 末尾
+- **无死资源** —— `dimen` / `style` / `string` / `drawable` / `layout` 的引用数都有检查，见 DESIGN.md 末尾。
+  1.4.0 之后这项检查**尚未全绿**（有一批令牌暂时没有引用），清单见
+  [docs/DESIGN-SYSTEM.md](docs/DESIGN-SYSTEM.md) 的「已知不一致」一节
 
 ## 技术特点
 
@@ -202,8 +223,8 @@ B 站那部分代码一个第三方库都不用，`classes.dex` 只有约 98 KB�
 powershell -ExecutionPolicy Bypass -File scripts\setup-sdk.ps1
 
 # 2) 编译（另需 JDK 17）
-powershell -ExecutionPolicy Bypass -File scripts\build-apk.ps1 -VersionName 1.3.0
-# 产物：dist\BiliGrab-1.3.0.apk
+powershell -ExecutionPolicy Bypass -File scripts\build-apk.ps1 -VersionName 1.4.0
+# 产物：dist\BiliGrab-1.4.0.apk
 ```
 
 首次构建会自动调用 `scripts/fetch-vendor.ps1` 拉取 YouTube 引擎
@@ -215,7 +236,7 @@ powershell -ExecutionPolicy Bypass -File scripts\build-apk.ps1 -VersionName 1.3.
 推一个 tag 即可，Actions 会自动构建并发布 Release：
 
 ```bash
-git tag v1.3.0 && git push origin v1.3.0
+git tag v1.4.0 && git push origin v1.4.0
 ```
 
 > 想让 CI 产物和本地发布的 APK 签名一致（用户才能原地升级），
@@ -310,7 +331,17 @@ BiliGrab/
 │   │   ├── Model.java                 # 数据模型
 │   │   ├── Prefs.java                 # 偏好设置
 │   │   ├── FlowLayout.java            # 可换行的芯片容器
-│   │   └── Snackbar.java              # M3 Snackbar 宿主
+│   │   ├── Snackbar.java              # Snackbar 宿主（底部即时反馈）
+│   │   └── ui/                        # Hyper-Neumorphic 界面层（1.4.0 起）
+│   │       ├── NeumorphicDrawable.java    # 浮雕 / 玻璃面的绘制引擎（含位图缓存）
+│   │       ├── NeumorphicSurface.java     # 把浮雕应用到任意 View（补 bleed padding）
+│   │       ├── NeumorphicControls.java    # 系统 Switch / SeekBar 的「浮雕化」
+│   │       ├── NeumAttr.java              # 读 neu* 属性并转交 NeumorphicSurface
+│   │       ├── HyperTheme.java            # 颜色与引擎判断的唯一入口
+│   │       ├── HyperosClick.java          # 无涟漪点击（缩放 + 形变 + 触觉）
+│   │       ├── GlassMeshDrawable.java     # 玻璃引擎的整屏 mesh（只挂根容器）
+│   │       ├── StaggerEnter.java          # 分段入场动画参数
+│   │       └── Neu*.java                  # 7 个带浮雕能力的基础控件
 │   └── res/
 │       ├── xml/network_security_config.xml   # 仅放行回环地址的明文例外
 │       └── ...                        # 色板、字阶、布局、矢量图标（含 values-night）
@@ -323,10 +354,12 @@ BiliGrab/
 │   ├── fetch-vendor.ps1               # 拉取并裁剪 YouTube 引擎（21.66 MB）
 │   └── build-apk.ps1                  # 无 Gradle 构建脚本
 ├── tools/
-│   ├── gen_palette.py                 # 由品牌色相推导 M3 色板 + WCAG 校验
+│   ├── gen_palette.py                 # 旧的 M3 色板生成器（当前色板已改为手写令牌，不再使用）
 │   └── desktop-verify/                # 桌面端接口联调测试
 ├── keystore/                          # 签名密钥（gitignore，请自行备份）
-├── DESIGN.md                          # 设计系统与规则
+├── docs/
+│   └── DESIGN-SYSTEM.md               # Hyper-Neumorphic 设计系统（1.4.0 起）
+├── DESIGN.md                          # 1.3.0 及以前的设计规则（部分已被取代）
 └── .github/workflows/build.yml        # CI 自动打包
 ```
 

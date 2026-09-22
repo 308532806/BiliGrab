@@ -16,6 +16,12 @@
 # 重新分发一份副本没有必要。构建脚本检测不到它会自动退化成纯 B 站版本。
 /vendor/
 
+# 上游设计规范原文（Yang-Ya-Chao/android-design-system-skills）。
+# 只作本地参考，不提交：它的 front-matter 里 license 字段为空（未声明授权条件），
+# 所以本项目只写自己的实现说明，不复制、不再分发其原文。
+# 见 docs/DESIGN-SYSTEM.md 的「上游与授权边界」。
+/docs/design-refs/
+
 # 签名（密钥库默认落在 keystore/，切勿提交）
 /keystore/*
 !/keystore/README.md

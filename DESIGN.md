@@ -9,6 +9,40 @@
 
 ---
 
+## 2026 重构：界面体系已换成 Hyper-Neumorphic
+
+> 这一节是 1.4.0 加的**覆盖声明**。下面第 0～12 节保留原样作为历史记录，
+> 但凡与本节冲突的地方，**以 [docs/DESIGN-SYSTEM.md](docs/DESIGN-SYSTEM.md) 为准**。
+
+1.4.0 把界面层从手写的 Material 3 整体换成了 **Hyper-Neumorphic** ——
+新拟态（Neumorphic）+ HyperOS 语言 + 玻璃态三合一，纯 Java + XML 实现，
+仍然零 AndroidX、零 Material Components。设计依据是上游规范仓库
+[`Yang-Ya-Chao/android-design-system-skills`](https://github.com/Yang-Ya-Chao/android-design-system-skills)；
+那份原文的 front-matter 里 `license:` 字段是空的，所以本项目**不复制、不提交它的原文**，
+只按它描述的视觉约定重新实现，参考原文留在本机 `docs/design-refs/`（已 gitignore）。
+
+已经被取代的部分：
+
+| 本文档的节 | 现在是什么 |
+| --- | --- |
+| §1 色彩 | 不再是 `tools/gen_palette.py` 从品牌色相推导的 M3 色角色。色板是手写的 `hyper_*` / `neum_*` / `glass_*` 令牌；脚本产出的是 `m3_*` 命名，与现在的色板**不同源**，重新运行它会往色板里塞一批新的死资源 |
+| §2 排版 | 不再是 M3 字阶。字号仍全部走 `styles.xml` 的 `Text.*`，但换了一套数值，并**新增一档 `Text.AppBar`（22sp）** |
+| §3 间距与形状 | 屏边距 16dp → **24dp**；形状阶改成「圆角与浮雕成组」：28/6、26/6、24/8、16/2、14/3、14/1.5、18/3、7/2 |
+| §4 无投影的层级 | **方向完全相反**：层级现在恰恰由浮雕表达，"色调高度"那一套不再使用 |
+| §6 交互（涟漪部分） | 涟漪被移除。`colorControlHighlight` / `selectableItemBackground` 压成透明，点击反馈改由 `ui/HyperosClick` 提供（scale 0.95 + 浮雕形变 + 触觉）。下载行也不再是「61dp 的实心行」，而是凸起 28/6 的厚表面（`minHeight` 48dp + 上下各 12dp 内边距） |
+| §9 动效 | 增加一套统一的 `FastOutSlowInEasing = cubic-bezier(0.4, 0, 0.2, 1)`，按下 150ms / 松开 200ms |
+| §11 被明确拒绝的做法 | 「玻璃拟态／模糊当装饰」这一条要重新理解：玻璃态现在是**可切换的第二引擎**，不再是装饰。仍然不做"每个玻璃面各模糊一张背景"那种用法 —— mesh 整屏只画一份 |
+
+**仍然成立**的部分：§0 零 AndroidX 的硬约束、§5 图标、§7 预览播放器、§8 五种互斥状态、
+§10 无障碍、§12 文件布局（其中 `res/color/` 目录已空），以及末尾的自检清单 ——
+只是自检第 1 条 `python tools/gen_palette.py` 已失效（脚本不再对应现在的色板），
+自检本身仍然要做，做法见 [docs/DESIGN-SYSTEM.md](docs/DESIGN-SYSTEM.md) 的自检一节。
+
+界面层的完整说明 —— 双引擎、渲染原理、位图缓存、外扩取舍、令牌表、自定义 View 与属性、
+已知陷阱与已知不一致 —— 见 **[docs/DESIGN-SYSTEM.md](docs/DESIGN-SYSTEM.md)**。
+
+---
+
 ## 0. 硬约束：零 AndroidX
 
 界面层不引入 Material Components，也不引入 AndroidX。Material 3 **是手写实现的**：色角色、字阶、形状阶、动效、涟漪、48dp 触控目标、edge-to-edge、Snackbar、底部表单，全部基于平台原生 API。
