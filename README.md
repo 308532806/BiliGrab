@@ -2,10 +2,11 @@
 
 > 一个**零第三方依赖**的哔哩哔哩视频下载器 Android 客户端。
 > 只调用网页版自身使用的公开接口，用你自己的登录态取流，用系统 `MediaMuxer` 合成 MP4。
+> 内置预览播放器，选好画质再下载。
 
 [![Build APK](https://github.com/308532806/BiliGrab/actions/workflows/build.yml/badge.svg)](https://github.com/308532806/BiliGrab/actions/workflows/build.yml)
 ![Android](https://img.shields.io/badge/Android-8.0%2B%20(API%2026)-3DDC84)
-![APK Size](https://img.shields.io/badge/APK-~105%20KB-blue)
+![APK Size](https://img.shields.io/badge/APK-~117%20KB-blue)
 ![Dependencies](https://img.shields.io/badge/dependencies-none-success)
 
 ---
@@ -51,9 +52,11 @@ BiliGrab 是从零重写的独立实现，**没有复用 BILIBILIAS 的任何代
 
 - 粘贴链接 / BV 号 / av 号，或直接从 B 站 App「分享」唤起
 - 自动解析标题、UP 主、封面、分 P 列表
+- **内置预览播放器**：解析完直接在应用里播放，可拖动到任意位置，确认是要下载的那个再下
+- 每个可用画质一行，**整行就是下载按钮**，行内显示阶段、百分比与进度条
 - DASH 音视频分离下载，`MediaMuxer` 合成单文件 MP4
 - 支持 **4K / 1080P60 / HDR / 杜比音频**（取决于账号权限）
-- 可选仅下载音频
+- 仅音频导出为 `m4a`（跳过视频流）
 - 多 CDN 备用地址自动切换（主地址失败时重试 `backupUrl`）
 - 前台服务 + 通知栏实时进度
 - 完成后写入系统媒体库，相册直接可见
@@ -72,7 +75,9 @@ edge-to-edge、Snackbar、底部表单，全部基于平台原生 API 实现。
 
 几条具体的实现取向：
 
-- **视觉尺寸和可点尺寸分开** —— 画质芯片看起来高 36dp，可点区域是完整的 48dp
+- **整行就是按钮** —— 每个画质一行、整行 61dp 可点，不需要瞄准小控件
+- **零依赖手写播放器** —— `MediaPlayer` + `SurfaceView`，预览走 `fnval=1` 的渐进式 MP4
+  （音视频已封装在一起，才有声音、才能拖）；下载仍走 DASH，画质更全
 - **全部文案在 `strings.xml`** —— 包括通知栏频道名和下载失败的每一条原因
 - **核心层与界面层用错误码对话** —— `BiliApi` 不依赖任何 Android API（桌面端才能直接跑真实接口联调），
   它抛出带 `code` 的异常，界面按 `code` 映射成文案。界面**不匹配错误消息里的中文子串**，
@@ -89,10 +94,11 @@ edge-to-edge、Snackbar、底部表单，全部基于平台原生 API 实现。
 | JSON | 系统自带 `org.json` |
 | 网络 | 系统自带 `HttpURLConnection` |
 | 合成 | 系统自带 `MediaMuxer` + `MediaExtractor`（不打包 ffmpeg） |
-| 包体 | 约 105 KB |
+| 预览 | 系统自带 `MediaPlayer` + `SurfaceView`（不打包 ExoPlayer） |
+| 包体 | 约 117 KB |
 | 构建 | `aapt2` + `javac` + `d8` + `zipalign` + `apksigner`，**不依赖 Gradle** |
 
-因为不引入任何第三方库，整个 APK 只有一个 80 KB 的 `classes.dex`，
+因为不引入任何第三方库，整个 APK 只有一个约 98 KB 的 `classes.dex`，
 冷启动快，也没有供应链风险。
 
 ## 它是怎么工作的

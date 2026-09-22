@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <!--
   文案
   =====
@@ -79,12 +79,7 @@
     <!-- ==================== 解析结果 ==================== -->
 
     <string name="section_parts">选择分 P</string>
-    <string name="section_quality">下载画质</string>
-    <string name="label_audio_only">仅下载音频</string>
-    <string name="label_audio_only_desc">跳过视频流，导出为 m4a</string>
-
-    <string name="action_download">开始下载</string>
-    <string name="action_download_audio">下载音频</string>
+    <string name="section_download">下载</string>
 
     <string name="meta_format">%1$s · %2$d 个分 P · %3$s</string>
     <string name="part_duration">时长 %1$s</string>
@@ -93,6 +88,35 @@
     <!-- 仅当最高画质受登录限制时才出现，避免无端打扰 -->
     <string name="hint_login_for_quality">当前最高只有 %1$s。填入 SESSDATA 可以解锁 1080P 及以上画质</string>
     <string name="action_open_settings">去设置</string>
+
+    <!-- ==================== 预览播放 ==================== -->
+    <!--
+      预览走 fnval=1 的渐进式 MP4（音视频已合体），
+      不是下载用的 DASH 分离流 —— 分离流系统播放器播出来没声音、也拖不动。
+    -->
+
+    <string name="cd_play">播放预览</string>
+    <string name="cd_pause">暂停播放</string>
+    <string name="cd_preview_seek">预览播放进度</string>
+
+    <string name="preview_fetching">正在获取预览地址…</string>
+    <!-- 预览失败不影响下载，所以文案要把"还能怎么办"直接说出来 -->
+    <string name="preview_failed">预览加载失败，仍可直接下载</string>
+    <!-- 时间用等宽数字，秒数跳动时不会左右抖 -->
+    <string name="preview_time">%1$s / %2$s</string>
+
+    <!-- ==================== 下载行 ==================== -->
+
+    <string name="row_audio">仅音频</string>
+    <string name="row_audio_desc">跳过视频流，导出为 m4a</string>
+    <string name="row_meta_video">%1$d×%2$d · %3$s</string>
+    <string name="cd_download_quality">下载 %1$s</string>
+
+    <!-- 编码名称：和画质档位不同，这几项是稳定的，不随接口变 -->
+    <string name="codec_avc">H.264</string>
+    <string name="codec_hevc">H.265</string>
+    <string name="codec_av1">AV1</string>
+    <string name="codec_unknown">未知编码</string>
 
     <!-- ==================== 画质档位 ==================== -->
     <!--

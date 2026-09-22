@@ -194,6 +194,43 @@
         <item name="android:stateListAnimator">@null</item>
     </style>
 
+    <!-- 封面上的大播放键：实心主色圆 + on_primary 图标。
+         不设 elevation —— 父容器开了 clipToOutline，子视图的投影会被裁掉，
+         设了也是白设；主色圆本身在照片封面上已经足够突出。 -->
+    <style name="Widget.PlayButton" parent="Widget">
+        <item name="android:layout_width">@dimen/play_button_size</item>
+        <item name="android:layout_height">@dimen/play_button_size</item>
+        <item name="android:background">@drawable/bg_play_button</item>
+        <item name="android:contentDescription">@string/cd_play</item>
+        <item name="android:padding">@dimen/space_lg</item>
+        <item name="android:scaleType">fitCenter</item>
+        <item name="android:src">@drawable/ic_play</item>
+        <item name="android:stateListAnimator">@null</item>
+        <item name="android:tint">@color/m3_on_primary</item>
+    </style>
+
+    <!-- 预览进度条。
+         控件本身 48dp 高（touch_min）保证能拖得动，视觉上的轨道只有 4dp：
+         靠上下各 22dp 的 padding 把轨道压到中间。 -->
+    <style name="Widget.SeekBar" parent="Widget">
+        <item name="android:background">@null</item>
+        <item name="android:maxHeight">@dimen/progress_height</item>
+        <item name="android:minHeight">@dimen/progress_height</item>
+        <item name="android:paddingBottom">22dp</item>
+        <item name="android:paddingTop">22dp</item>
+        <item name="android:progressDrawable">@drawable/progress_download</item>
+        <item name="android:splitTrack">false</item>
+        <item name="android:thumb">@drawable/thumb_slider</item>
+    </style>
+
+    <!-- 下载行：整行可点，不是只有行尾的按钮可点 -->
+    <style name="Widget.DownloadRow" parent="@style/Widget.ListItem">
+        <item name="android:clickable">true</item>
+        <item name="android:focusable">true</item>
+        <item name="android:paddingStart">@dimen/space_sm</item>
+        <item name="android:paddingEnd">@dimen/space_sm</item>
+    </style>
+
     <!-- 文本字段：M3 filled 风格 -->
     <style name="Widget.TextField">
         <item name="android:textAppearance">@style/Text.BodyLarge</item>

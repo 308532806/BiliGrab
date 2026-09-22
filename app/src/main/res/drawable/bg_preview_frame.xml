@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  预览容器
+  =========
+  兼两个职责：封面加载前的占位背景，以及 VideoView 的圆角裁剪轮廓。
+
+  VideoView 内部是 SurfaceView，Surface 是独立的合成层，
+  **不会**跟随父容器的 clipToOutline 裁剪，所以圆角必须靠
+  ViewOutlineProvider.BACKGROUND 加在这个 FrameLayout 上（见 PreviewController）。
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <corners android:radius="@dimen/shape_md" />
+    <solid android:color="@color/m3_surface_container_highest" />
+</shape>

@@ -124,7 +124,7 @@ surface (98)  →  surface_container (94)  →  surface_container_high (92)
 ```
 
 卡片用 `surface_container_high`，没有 `elevation`。
-唯一使用投影的元素是 FAB（`elevation=3dp`）和 Snackbar——因为它们**浮在**内容之上，是真实的 z 轴关系。
+唯一使用投影的元素是 Snackbar——因为它**浮在**内容之上，是真实的 z 轴关系。
 
 > 零偏移的彩色光晕、硬阴影、渐变文字，都属于装饰性投影，本项目一律不用。
 
@@ -144,9 +144,12 @@ surface (98)  →  surface_container (94)  →  surface_container_high (92)
 
 ## 6. 交互
 
-### 一个界面只有一个主要动作
+### 主要动作跟着内容走，不固定在屏幕角落
 
-主操作是底部的**扩展 FAB**，也只有它。解析结果出现后 FAB 才可用，下载中隐藏，完成后恢复。
+曾经用底部扩展 FAB 承担下载。换成「每个画质一行、行本身就是按钮」之后，FAB 就被删掉了：
+画质既是选择器又是动作入口，再挂一个 FAB 只会让「我选的到底哪一行」变得含糊。
+
+解析结果出现后各行才可点，下载中整组禁用（只留下正在下载的那一行显示进度），完成后恢复。
 
 ### 瞬时反馈用 Snackbar，不用 Toast
 
@@ -157,9 +160,16 @@ Snackbar 出现在底部、不夺焦点、能带一个动作、新消息会顶�
 
 设置是一个**不需要打断用户、也不需要保护焦点**的任务。这类任务上弹模态框是反模式。底部表单同时提供关闭按钮和点击外部／返回键关闭。
 
-### 画质用芯片，不用下拉选择器
+### 画质用下载行，不用下拉选择器
 
-芯片组可换行、一眼看全所有选项、一次点击完成选择。手写的 `FlowLayout` 负责换行（平台没有可换行的容器）。
+每个可用画质各占一行，左标题（「480P 标清」）右副标题（「852×480 · H.264」），
+**整行都是点击目标**。这样一步就完成了「选哪个」和「开始下」两件事。
+
+以前是芯片选画质 + FAB 开始下载两步，而且芯片只有 36dp 高的可见药丸，
+用户得瞄准才能点中。行的高度是 61dp，整行可点，不再需要瞄准。
+
+设置面板的外观选项仍用芯片（那里是「多选一、不产生动作」的语义，芯片是对的），
+换行由手写的 `FlowLayout` 负责，平台没有可换行的容器。
 
 ### 选中状态不止靠颜色
 
@@ -202,11 +212,71 @@ Snackbar 出现在底部、不夺焦点、能带一个动作、新消息会顶�
 
 芯片看起来高 36dp，实际可点区域 48dp：`Widget.Chip` 的 `minHeight` 取 `touch_min`，`bg_chip.xml` 外面套一层 inset 把可见药丸上下各压 6dp。
 
+下载行则干脆没有这层错位：`Widget.DownloadRow` 的可见底色就是整个点击区域，61dp 高、整行可点。
+把可见范围和可点范围做成同一个矩形，比事后补内边距更省事，也不会漏。
+
 不要在布局里直接写 `android:textSize="11sp"` 或 `minHeight="36dp"` 这类数值 —— 尺寸和字号一律走 `dimens.xml` / `styles.xml` 的角色令牌。审计脚本会扫描字面量。
 
 ---
 
-## 7. 五种互斥状态
+## 7. 预览播放器
+
+预览是零依赖手写的：`MediaPlayer` + `SurfaceView`，没有 ExoPlayer、没有 androidx.media3。
+
+### 取流走 `fnval=1`，不走 DASH
+
+播放地址用 `fnval=1` 请求，拿到的是 **`durl` 形式的渐进式 MP4，音视频已经封装在同一个文件里**。
+
+DASH（`fnval=4048`）拿到的 `dash` 是**视频轨和音频轨分开**的：只播视频轨会没有声音，
+只播音频轨会没有画面，而且没法拖动——两条流各自有自己的时间轴，要对齐得自己写同步逻辑。
+预览要的是「能播能拖」，渐进式 MP4 一个 URL 就全满足了。
+
+下载仍然用 DASH（画质更全、体积更省），预览和下载走两条不同的请求路径。
+
+### 必须带 `Referer`，否则 403
+
+拿到的视频 URL 直接请求会返回 **HTTP 403**；带上 `Referer: https://www.bilibili.com` 才返回 206 和正常数据。
+
+所以不能用 `VideoView.setVideoURI(Uri)` —— 它没法附加请求头。
+用 `MediaPlayer.setDataSource(Context, Uri, Map)` 把 `Referer` / `User-Agent` 传进去，这是 API 14 就有、
+到 API 34 也没废弃的写法（`setVideoURI(Uri, Map)` 反而在 34 上废弃了）。
+
+### `SurfaceView` 必须一直可见
+
+`SurfaceView` 的 `Surface` **只在视图可见时才存在**。曾经把播放视图初始设成 `visibility="gone"`，
+打算准备好后再显示 —— 结果是死锁：没有 Surface 就没有 `surfaceCreated`，
+没有 `surfaceCreated` 就不会 `setDisplay()`，也就永远不会准备好。
+
+正确做法是让 Surface 常驻可见，**用叠在它上面的封面来表达「还没在播」**。
+布局里 `videoView` 在 `ivCover` 下面，顺序不能反。
+
+### 圆角要靠 outline provider
+
+`SurfaceView` 是独立的合成层，**不跟随父容器的 `clipToOutline`**。
+只在父 `FrameLayout` 上设 `clipToOutline=true` 是没用的，视频会顶出方角。
+
+必须给父容器设 `ViewOutlineProvider.BACKGROUND` 并配一个圆角背景：
+```java
+box.setOutlineProvider(ViewOutlineProvider.BACKGROUND);
+box.setClipToOutline(true);
+```
+`bg_preview_frame.xml` 既是占位底色，也是这里的圆角来源。
+
+### 大播放键 64dp
+
+封面上的播放键是 64dp（`play_button_size`），比常规的 48dp 触控下限更大 ——
+它是这一屏最想让人点的东西，做成实心主色圆 + 白色三角，不叠任何半透明黑罩（那会让它显脏）。
+
+它**不能加 `elevation`**：父容器的 `clipToOutline` 会把投影一起裁掉，加了也看不见，只会拖慢渲染。
+
+### 失败不影响下载
+
+预览取流失败时只在预览区下方显示一行说明，**不阻断下载**：
+两条链路是独立的，预览挂了用户照样能把文件下下来。
+
+---
+
+## 8. 五种互斥状态
 
 界面任何时刻只处于五种状态之一，**不存在空白屏**：
 
@@ -215,14 +285,15 @@ Snackbar 出现在底部、不夺焦点、能带一个动作、新消息会顶�
 | 空 | 图标 + 引导文案 + 两条能力说明 |
 | 加载 | 骨架屏占位（而不是转圈空等） |
 | 错误 | 问题 + 恢复建议 + 原始信息 + 重试按钮 |
-| 结果 | 封面 / 标题 / 分 P / 画质 / 仅音频 / FAB |
-| 下载中 | 阶段文字 + 百分比 + 确定性进度条 |
+| 结果 | 预览区 / 标题 / 分 P / 下载行 |
+| 下载中 | 当前行内：阶段文字 + 百分比 + 确定性进度条 |
 
-封面使用固定高度，图片加载不会造成布局跳动。
+预览区在结果态里始终占位。未取到视频时显示封面 + 大播放键；取到后封面撤掉、控制条展开。
+高度按视频宽高比调整，但上限是屏幕高度的 60%，避免竖屏视频把下面的内容全挤出去。
 
 ---
 
-## 8. 动效
+## 9. 动效
 
 | 场景 | 时长 | 曲线 |
 |---|---|---|
@@ -234,7 +305,7 @@ Snackbar 出现在底部、不夺焦点、能带一个动作、新消息会顶�
 
 ---
 
-## 9. 无障碍
+## 10. 无障碍
 
 - 每一个图标按钮都有 `contentDescription`
 - 输入框标签通过 `android:labelFor` 与控件关联
@@ -245,7 +316,7 @@ Snackbar 出现在底部、不夺焦点、能带一个动作、新消息会顶�
 
 ---
 
-## 10. 被明确拒绝的做法
+## 11. 被明确拒绝的做法
 
 以下都是 AI 生成界面的典型痕迹，本项目一条都没有：
 
@@ -264,7 +335,7 @@ Snackbar 出现在底部、不夺焦点、能带一个动作、新消息会顶�
 
 ---
 
-## 11. 文件布局
+## 12. 文件布局
 
 ```
 app/src/main/res/
@@ -278,12 +349,13 @@ app/src/main/res/
 ├── values-night/
 │   ├── colors.xml          深色色板
 │   └── themes.xml          深色主题
-├── color/                  状态色（按钮／芯片／列表项／涟漪／开关）
+├── color/                  状态色（按钮／芯片／列表项图标／涟漪／开关）
 ├── drawable/               形状与涟漪，以及全套矢量图标
 ├── anim/                   表单与 Snackbar 的进出动画
 ├── layout/
-│   ├── activity_main.xml   主界面（五种状态）
+│   ├── activity_main.xml   主界面（五种状态，含预览区）
 │   ├── item_part.xml       分 P 列表项
+│   ├── item_download.xml   下载行（整行可点，含行内进度）
 │   ├── sheet_settings.xml  设置底部表单
 │   ├── view_chip.xml       芯片（样式走 @style/Widget.Chip）
 │   └── view_snackbar.xml   Snackbar
@@ -292,7 +364,8 @@ app/src/main/res/
 
 Java 侧的界面支撑组件：
 
-- `FlowLayout.java` —— 可换行的芯片容器
+- `PreviewController.java` —— 内置预览播放器（零依赖，见下节）
+- `FlowLayout.java` —— 可换行的芯片容器（设置面板用）
 - `Snackbar.java` —— M3 Snackbar 宿主
 - `MainActivity.java` —— 状态机与全部交互
 - `DownloadService.java` —— 前台服务，文案全部取自 `strings.xml`

@@ -2,8 +2,11 @@
 <!--
   芯片
   =====
-  画质和主题选择都用它。做成布局而不是在 Java 里逐个 set 属性，
-  一是让样式真正走 @style/Widget.Chip，二是避免两处几乎相同的构造代码。
+  抽成独立布局有两个原因：一是让样式真正走 @style/Widget.Chip，
+  二是避免两处几乎相同的构造代码。
+
+  当前只用在设置面板的外观选项上 —— 主界面的画质芯片已经换成
+  「按画质列举的下载行」，那里一行一个下载目标，不再是选项开关。
 -->
 <TextView xmlns:android="http://schemas.android.com/apk/res/android"
     style="@style/Widget.Chip"

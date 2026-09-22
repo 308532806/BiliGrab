@@ -3,6 +3,7 @@ package com.biligrab.downloader;
 import android.content.ContentResolver;
 import android.content.ContentValues;
 import android.content.Context;
+import android.database.Cursor;
 import android.media.MediaScannerConnection;
 import android.net.Uri;
 import android.os.Build;
@@ -29,13 +30,16 @@ public final class MediaStoreSaver {
      */
     public static String save(Context ctx, File src, String displayName, boolean audioOnly)
             throws IOException {
-        String safeName = displayName + ".mp4";
+        // 扩展名必须和 MIME 一致。之前不管什么类型都拼 ".mp4"，而音频那条
+        // 走的 MIME 是 audio/mp4 —— MediaStore 发现对不上，自己把 ".m4a"
+        // 补到了后面，用户拿到的文件名就成了「标题.mp4.m4a」。
+        String safeName = displayName + (audioOnly ? ".m4a" : ".mp4");
         String mime = audioOnly ? "audio/mp4" : "video/mp4";
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             return saveViaMediaStore(ctx, src, safeName, mime, audioOnly);
         }
-        return saveViaPublicDir(ctx, src, safeName);
+        return saveViaPublicDir(ctx, src, safeName, audioOnly);
     }
 
     private static String saveViaMediaStore(Context ctx, File src, String name, String mime,
@@ -78,14 +82,40 @@ public final class MediaStoreSaver {
             }
             throw e;
         }
-        return relPath + "/" + name;
+        // 回读库里真正的 DISPLAY_NAME，而不是我们请求的那个名字。
+        // MediaStore 落盘时可能改过它（补扩展名、重名时加序号），
+        // 直接报请求名会让提示和用户实际看到的文件对不上。
+        return relPath + "/" + actualName(cr, item, name);
+    }
+
+    /** 读媒体库里实际落盘的文件名；读不到就退回请求时的名字。 */
+    private static String actualName(ContentResolver cr, Uri item, String fallback) {
+        Cursor c = null;
+        try {
+            c = cr.query(item, new String[]{MediaStore.MediaColumns.DISPLAY_NAME},
+                    null, null, null);
+            if (c != null && c.moveToFirst()) {
+                String n = c.getString(0);
+                if (n != null && !n.isEmpty()) {
+                    return n;
+                }
+            }
+        } catch (RuntimeException ignored) {
+            // 单纯为了显示得准一点，查不到不值得让整次下载失败
+        } finally {
+            if (c != null) {
+                c.close();
+            }
+        }
+        return fallback;
     }
 
     @SuppressWarnings("deprecation")
-    private static String saveViaPublicDir(Context ctx, File src, String name) throws IOException {
-        File dir = new File(
-                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES),
-                REL_DIR);
+    private static String saveViaPublicDir(Context ctx, File src, String name, boolean audioOnly)
+            throws IOException {
+        // 音频进 Music、视频进 Movies —— 和 MediaStore 分支保持一致
+        String type = audioOnly ? Environment.DIRECTORY_MUSIC : Environment.DIRECTORY_MOVIES;
+        File dir = new File(Environment.getExternalStoragePublicDirectory(type), REL_DIR);
         if (!dir.exists() && !dir.mkdirs()) {
             throw new IOException("无法创建目录：" + dir.getAbsolutePath());
         }

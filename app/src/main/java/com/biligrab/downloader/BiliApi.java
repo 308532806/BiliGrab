@@ -108,7 +108,7 @@ public final class BiliApi {
         v.aid = d.optLong("aid");
         v.title = d.optString("title");
         v.desc = d.optString("desc");
-        v.cover = d.optString("pic");
+        v.cover = httpsify(d.optString("pic"));
         v.duration = d.optInt("duration");
         JSONObject owner = d.optJSONObject("owner");
         v.owner = owner == null ? "" : owner.optString("name");
@@ -222,14 +222,16 @@ public final class BiliApi {
 
     private static Model.Stream readStream(JSONObject o, boolean video) {
         Model.Stream s = new Model.Stream();
-        s.url = firstNonEmpty(o.optString("baseUrl"), o.optString("base_url"));
+        // 统一升级成 https：明文地址会被 manifest 的 usesCleartextTraffic=false
+        // 拦掉，而这类失败在代码里是静默的
+        s.url = httpsify(firstNonEmpty(o.optString("baseUrl"), o.optString("base_url")));
         JSONArray bu = o.optJSONArray("backupUrl");
         if (bu == null) {
             bu = o.optJSONArray("backup_url");
         }
         if (bu != null) {
             for (int i = 0; i < bu.length(); i++) {
-                String u = bu.optString(i);
+                String u = httpsify(bu.optString(i));
                 if (!u.isEmpty()) {
                     s.backups.add(u);
                 }
@@ -246,6 +248,88 @@ public final class BiliApi {
             s.height = 0;
         }
         return s;
+    }
+
+    /**
+     * 把接口返回的地址升级为 https。
+     *
+     * <p>B 站好几个接口（封面 {@code pic}、部分 durl）至今返回的是明文 {@code http://}，
+     * 而应用的 manifest 里 {@code usesCleartextTraffic="false"} 会直接拦掉这类请求 ——
+     * 表现就是封面永远加载不出来，还不报错。同一个路径 https 是可用的，所以统一改写。</p>
+     *
+     * <p>顺带处理协议相对地址（{@code //host/path}）。</p>
+     */
+    static String httpsify(String url) {
+        if (url == null || url.isEmpty()) {
+            return "";
+        }
+        if (url.startsWith("//")) {
+            return "https:" + url;
+        }
+        if (url.startsWith("http://")) {
+            return "https://" + url.substring("http://".length());
+        }
+        return url;
+    }
+
+    /**
+     * 取预览播放源。
+     *
+     * <p>用 {@code fnval=1} 走老的 durl 模式，拿到的是音视频**已合体**的渐进式 MP4，
+     * 系统 {@code MediaPlayer} 才能边下边播并自由拖动。DASH 的分离流做不到这点。</p>
+     *
+     * <p>画质取最低档（默认 360P）：预览要的是尽快出画面，不是画质。</p>
+     */
+    public static Model.PreviewSource previewSource(String bvid, long cid, int qn, String cookie)
+            throws IOException {
+        Map<String, Object> params = new LinkedHashMap<>();
+        params.put("bvid", bvid);
+        params.put("cid", cid);
+        params.put("qn", qn);
+        params.put("fnver", 0);
+        params.put("fnval", 1);
+        params.put("fourk", 1);
+        params.put("platform", "pc");
+        params.put("high_quality", 1);
+
+        String query = WbiSigner.get().sign(params, cookie);
+        JSONObject root = Json.parse(Http.get(PLAYURL_URL + "?" + query, cookie));
+
+        if (root.optInt("code") == -403) {
+            // 密钥过期会导致 -403，刷新后重试一次
+            WbiSigner.get().invalidate();
+            query = WbiSigner.get().sign(params, cookie);
+            root = Json.parse(Http.get(PLAYURL_URL + "?" + query, cookie));
+        }
+        checkCode(root, "获取预览地址");
+
+        JSONObject d = Json.obj(root, "data");
+        JSONArray durl = d.optJSONArray("durl");
+        if (durl == null || durl.length() == 0) {
+            throw new ApiException(CODE_NO_DASH, "获取预览地址",
+                    "接口没有返回可播放的完整文件。该稿件可能是付费或大会员专享内容");
+        }
+
+        Model.PreviewSource src = new Model.PreviewSource();
+        src.quality = d.optInt("quality", qn);
+        src.format = d.optString("format", "mp4");
+        src.durationMs = d.optLong("timelength", 0L);
+
+        // durl 可能被切成多段（老 FLV 常见）。系统播放器播不了多段，
+        // 所以只取第一段，并在长度上做提示。
+        JSONObject first = Json.obj(durl, 0);
+        src.url = httpsify(first.optString("url"));
+        src.size = first.optLong("size", 0L);
+        for (int i = 1; i < durl.length() && i <= 4; i++) {
+            String backup = httpsify(Json.obj(durl, i).optString("url"));
+            if (!backup.isEmpty()) {
+                src.backups.add(backup);
+            }
+        }
+        if (src.url.isEmpty()) {
+            throw new ApiException(CODE_NO_DASH, "获取预览地址", "预览地址为空");
+        }
+        return src;
     }
 
     private static void parseQualities(JSONObject d, Model.PlayInfo info) {

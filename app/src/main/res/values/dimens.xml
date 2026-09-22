@@ -55,6 +55,8 @@
          视觉尺寸和可点尺寸是两件事，见 bg_chip.xml -->
     <dimen name="chip_inset">6dp</dimen>
     <dimen name="progress_height">4dp</dimen>
+    <!-- 封面上的大播放键：比 touch_min 大一档，因为它是封面上的唯一动作 -->
+    <dimen name="play_button_size">64dp</dimen>
 
     <!-- ==================== 其他 ==================== -->
 

@@ -107,6 +107,36 @@ public final class Model {
         }
     }
 
+    /**
+     * 预览播放源。
+     *
+     * <p>预览不能用 DASH：那是**分离**的视频轨和音频轨，系统 {@code MediaPlayer}
+     * 播出来没声音，而且不能自由拖动。所以预览走 {@code fnval=1} 的 durl 模式，
+     * 拿到的是一整个「音视频已合体」的渐进式 MP4，可以边下边播、随便拖。</p>
+     *
+     * <p>URL 必须带 {@code Referer} 才能取到数据（不带会返回 403），
+     * 所以播放时不能用裸的 {@code setVideoURI(Uri)}。</p>
+     */
+    public static final class PreviewSource {
+        public String url = "";
+        public final List<String> backups = new ArrayList<>();
+        /** 字节数，用于显示「正在缓冲」时的进度。 */
+        public long size;
+        /** 毫秒。来自接口，比 MediaPlayer 准备完再问要早。 */
+        public long durationMs;
+        public int quality;
+        public String format = "";
+
+        public List<String> candidates() {
+            List<String> all = new ArrayList<>();
+            if (!url.isEmpty()) {
+                all.add(url);
+            }
+            all.addAll(backups);
+            return all;
+        }
+    }
+
     /** 一个下载任务。 */
     public static final class Task {
         public String bvid = "";

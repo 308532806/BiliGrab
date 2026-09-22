@@ -2,14 +2,16 @@
 <!--
   主界面
   =======
-  结构遵循 Material 3：小顶栏 + 可滚动内容 + 唯一的主要动作（扩展 FAB）。
+  结构遵循 Material 3：小顶栏 + 可滚动内容。
 
-  五种状态互斥显示，全部在同一棵视图树里，靠可见性切换：
+  四种状态互斥显示，全部在同一棵视图树里，靠可见性切换：
     空        emptyBox    —— 引导用户完成第一步
     加载      loadingBox  —— 骨架屏，不用空白页
     错误      errorBox    —— 说明问题 + 给出恢复动作
-    结果      resultBox   —— 封面 / 标题 / 分 P / 画质 / 仅音频
-    下载中    progressBox —— 阶段文字 + 百分比 + 确定性进度条
+    结果      resultBox   —— 预览播放器 / 标题 / 分 P / 按画质列举的下载行
+
+  顶层是 FrameLayout 而不是 LinearLayout：它是 Snackbar 的悬浮锚点，
+  需要叠在内容之上，而不是把内容挤开。
 -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
@@ -356,15 +358,133 @@
                     android:visibility="gone"
                     tools:visibility="visible">
 
-                    <ImageView
-                        android:id="@+id/ivCover"
+                    <!-- == 预览 == -->
+                    <!--
+                      封面和大播放键叠在视频之上。
+                      视频就绪后封面隐藏，控制条从无到有出现 —— 一次只呈现一种状态，
+                      不做"封面淡出 + 视频淡入"的交叉淡化（那是装饰，不是信息）。
+
+                      高度初始为 cover_height，播放器就绪后由 PreviewController
+                      按视频实际比例调整（并设上限，避免竖屏视频撑满整屏）。
+                    -->
+
+                    <FrameLayout
+                        android:id="@+id/previewBox"
                         android:layout_width="match_parent"
                         android:layout_height="@dimen/cover_height"
                         android:layout_marginTop="@dimen/content_gap"
-                        android:background="@drawable/bg_cover_placeholder"
-                        android:clipToOutline="true"
-                        android:contentDescription="@null"
-                        android:scaleType="centerCrop" />
+                        android:background="@drawable/bg_preview_frame"
+                        android:clipToOutline="true">
+
+                        <!--
+                          这里必须是 SurfaceView 而不是 VideoView：
+                          播放由 PreviewController 持有 MediaPlayer 来做，
+                          为的是能通过 setDataSource(Context, Uri, Map) 传 Referer
+                          —— 不带 Referer，B 站 CDN 直接返回 403。
+
+                          而且 SurfaceView 必须常驻可见：Surface 只在视图可见时
+                          才存在，而 setDisplay() 需要一个有效的 Surface。
+                          "还没在播"由叠在上面的封面来表达，不靠隐藏 Surface。
+                        -->
+                        <SurfaceView
+                            android:id="@+id/videoView"
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:layout_gravity="center" />
+
+                        <ImageView
+                            android:id="@+id/ivCover"
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:contentDescription="@null"
+                            android:scaleType="centerCrop" />
+
+                        <!-- 大播放键：封面上唯一的主要动作 -->
+                        <ImageButton
+                            android:id="@+id/btnPlay"
+                            style="@style/Widget.PlayButton"
+                            android:layout_gravity="center" />
+
+                        <ProgressBar
+                            android:id="@+id/previewLoading"
+                            style="?android:attr/progressBarStyle"
+                            android:layout_width="@dimen/icon_size"
+                            android:layout_height="@dimen/icon_size"
+                            android:layout_gravity="center"
+                            android:indeterminateTint="@color/m3_primary"
+                            android:visibility="gone" />
+                    </FrameLayout>
+
+                    <!-- 播放控制条：视频准备好之后才出现。
+                         进度条可拖动 —— 预览要能跳到任意位置看。 -->
+                    <LinearLayout
+                        android:id="@+id/previewBar"
+                        style="@style/Widget.Card"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/space_sm"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal"
+                        android:paddingEnd="@dimen/card_padding"
+                        android:paddingStart="@dimen/space_xs"
+                        android:visibility="gone"
+                        tools:visibility="visible">
+
+                        <ImageButton
+                            android:id="@+id/btnPlayPause"
+                            style="@style/Widget.IconButton"
+                            android:contentDescription="@string/cd_pause"
+                            android:src="@drawable/ic_pause"
+                            android:tint="@color/m3_primary" />
+
+                        <SeekBar
+                            android:id="@+id/seekPreview"
+                            style="@style/Widget.SeekBar"
+                            android:layout_width="0dp"
+                            android:layout_height="@dimen/touch_min"
+                            android:layout_marginEnd="@dimen/space_md"
+                            android:layout_marginStart="@dimen/space_sm"
+                            android:layout_weight="1"
+                            android:contentDescription="@string/cd_preview_seek"
+                            android:max="1000" />
+
+                        <TextView
+                            android:id="@+id/tvPreviewTime"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:fontFeatureSettings="tnum"
+                            android:textAppearance="@style/Text.LabelMedium"
+                            android:textColor="@color/m3_on_surface_variant"
+                            tools:text="01:24 / 13:05" />
+                    </LinearLayout>
+
+                    <!-- 预览失败时替代控制条出现 -->
+                    <LinearLayout
+                        android:id="@+id/previewError"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/space_sm"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal"
+                        android:visibility="gone"
+                        tools:visibility="visible">
+
+                        <ImageView
+                            android:layout_width="@dimen/icon_size_sm"
+                            android:layout_height="@dimen/icon_size_sm"
+                            android:contentDescription="@null"
+                            android:src="@drawable/ic_error"
+                            android:tint="@color/m3_error" />
+
+                        <TextView
+                            android:id="@+id/tvPreviewError"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="@dimen/space_md"
+                            android:layout_weight="1"
+                            android:textAppearance="@style/Text.BodySmall"
+                            tools:text="预览加载失败，仍可直接下载" />
+                    </LinearLayout>
 
                     <TextView
                         android:id="@+id/tvTitle"
@@ -441,159 +561,43 @@
                         android:padding="@dimen/space_sm"
                         android:scrollbarStyle="outsideOverlay" />
 
-                    <!-- 画质选择 -->
+                    <!-- 下载：每个可用画质一行，行尾一个下载按钮 -->
 
                     <TextView
-                        android:id="@+id/tvQualityLabel"
+                        android:id="@+id/tvDownloadLabel"
                         style="@style/Widget.SectionTitle"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="@dimen/section_gap"
-                        android:text="@string/section_quality" />
+                        android:text="@string/section_download" />
 
-                    <com.biligrab.downloader.FlowLayout
-                        android:id="@+id/chipQuality"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="@dimen/title_gap" />
-
-                    <!-- 仅音频 -->
-
+                    <!--
+                      行由代码生成：可用档位的数量和名称都来自接口，
+                      写死在布局里会跟着接口变而变错。
+                      最后一行固定是「仅音频」。
+                    -->
                     <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="@dimen/content_gap"
-                        android:gravity="center_vertical"
-                        android:minHeight="@dimen/touch_min"
-                        android:orientation="horizontal">
-
-                        <LinearLayout
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:orientation="vertical"
-                            android:paddingEnd="@dimen/space_lg">
-
-                            <TextView
-                                android:id="@+id/tvAudioOnlyLabel"
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:labelFor="@id/swAudioOnly"
-                                android:text="@string/label_audio_only"
-                                android:textAppearance="@style/Text.TitleSmall" />
-
-                            <TextView
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:layout_marginTop="2dp"
-                                android:text="@string/label_audio_only_desc"
-                                android:textAppearance="@style/Text.BodySmall" />
-                        </LinearLayout>
-
-                        <Switch
-                            android:id="@+id/swAudioOnly"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:thumbTint="@color/switch_thumb"
-                            android:trackTint="@color/switch_track" />
-                    </LinearLayout>
-
-                    <!-- == 下载进度 == -->
-
-                    <LinearLayout
-                        android:id="@+id/progressBox"
+                        android:id="@+id/listDownloads"
                         style="@style/Widget.Card"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="@dimen/section_gap"
+                        android:layout_marginTop="@dimen/title_gap"
                         android:orientation="vertical"
-                        android:visibility="gone"
-                        tools:visibility="visible">
+                        android:padding="@dimen/space_sm" />
 
-                        <LinearLayout
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:gravity="center_vertical"
-                            android:orientation="horizontal">
-
-                            <TextView
-                                android:id="@+id/tvStage"
-                                android:layout_width="0dp"
-                                android:layout_height="wrap_content"
-                                android:layout_weight="1"
-                                android:textAppearance="@style/Text.TitleSmall" />
-
-                            <!-- 百分比用等宽数字，变化时不会左右抖动 -->
-                            <TextView
-                                android:id="@+id/tvPercent"
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:fontFamily="sans-serif-medium"
-                                android:textAppearance="@style/Text.TitleSmall"
-                                android:textColor="@color/m3_primary" />
-                        </LinearLayout>
-
-                        <ProgressBar
-                            android:id="@+id/progress"
-                            style="?android:attr/progressBarStyleHorizontal"
-                            android:layout_width="match_parent"
-                            android:layout_height="@dimen/progress_height"
-                            android:layout_marginTop="@dimen/space_md"
-                            android:contentDescription="@string/cd_progress"
-                            android:max="100"
-                            android:progressDrawable="@drawable/progress_download" />
-
-                        <TextView
-                            android:id="@+id/tvSavedTo"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="@dimen/space_md"
-                            android:drawableStart="@drawable/ic_folder"
-                            android:drawablePadding="@dimen/space_sm"
-                            android:drawableTint="@color/m3_on_surface_variant"
-                            android:textAppearance="@style/Text.BodySmall"
-                            android:visibility="gone" />
-                    </LinearLayout>
+                    <!-- 下载完成后指出文件在哪，否则用户只能去文件管理器里翻 -->
+                    <TextView
+                        android:id="@+id/tvSavedTo"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/space_md"
+                        android:drawableStart="@drawable/ic_folder"
+                        android:drawablePadding="@dimen/space_sm"
+                        android:drawableTint="@color/m3_on_surface_variant"
+                        android:textAppearance="@style/Text.BodySmall"
+                        android:visibility="gone" />
                 </LinearLayout>
             </LinearLayout>
         </ScrollView>
     </LinearLayout>
-
-    <!-- ==================== 扩展 FAB：唯一主要动作 ==================== -->
-    <!-- 底部与右侧的 inset 由代码补齐 -->
-
-    <LinearLayout
-        android:id="@+id/fab"
-        android:layout_width="wrap_content"
-        android:layout_height="56dp"
-        android:layout_gravity="bottom|end"
-        android:layout_margin="@dimen/screen_margin"
-        android:background="@drawable/bg_fab"
-        android:clickable="true"
-        android:contentDescription="@string/action_download"
-        android:elevation="3dp"
-        android:focusable="true"
-        android:gravity="center"
-        android:orientation="horizontal"
-        android:paddingStart="@dimen/space_xl"
-        android:paddingEnd="@dimen/space_xl">
-
-        <ImageView
-            android:id="@+id/ivFabIcon"
-            android:layout_width="@dimen/icon_size"
-            android:layout_height="@dimen/icon_size"
-            android:contentDescription="@null"
-            android:src="@drawable/ic_download"
-            android:tint="@color/state_fab_content" />
-
-        <TextView
-            android:id="@+id/tvFabLabel"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="@dimen/space_md"
-            android:text="@string/action_download"
-            android:textAppearance="@style/Text.LabelLarge"
-            android:textColor="@color/state_fab_content" />
-    </LinearLayout>
-
 </FrameLayout>

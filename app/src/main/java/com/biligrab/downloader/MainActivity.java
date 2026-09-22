@@ -13,6 +13,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.util.Log;
 import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -20,11 +21,13 @@ import android.view.ViewGroup;
 import android.view.Window;
 import android.view.WindowManager;
 import android.view.inputmethod.EditorInfo;
+import android.view.inputmethod.InputMethodManager;
 import android.widget.BaseAdapter;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageButton;
 import android.widget.ImageView;
+import android.widget.LinearLayout;
 import android.widget.ListView;
 import android.widget.ProgressBar;
 import android.widget.ScrollView;
@@ -57,6 +60,8 @@ import java.util.concurrent.Executors;
  * </ul>
  */
 public class MainActivity extends Activity implements DownloadService.Listener {
+
+    private static final String TAG = "BiliGrab";
 
     private static final int REQ_PERMS = 1001;
 
@@ -92,7 +97,7 @@ public class MainActivity extends Activity implements DownloadService.Listener {
     private Button btnRetry;
 
     // ---- 结果 ----
-    private ImageView ivCover;
+    private PreviewController preview;
     private TextView tvTitle;
     private TextView tvMeta;
     private View qualityHintBox;
@@ -100,29 +105,65 @@ public class MainActivity extends Activity implements DownloadService.Listener {
     private Button btnQualityHintAction;
     private TextView tvPartsLabel;
     private ListView listParts;
-    private TextView tvQualityLabel;
-    private FlowLayout chipQuality;
-    private Switch swAudioOnly;
-
-    // ---- 进度 ----
-    private View progressBox;
-    private TextView tvStage;
-    private TextView tvPercent;
+    private LinearLayout listDownloads;
     private TextView tvSavedTo;
-    private ProgressBar progress;
-
-    // ---- FAB ----
-    private View fab;
-    private ImageView ivFabIcon;
-    private TextView tvFabLabel;
 
     // ---- 状态 ----
     private Model.Video current;
-    private final List<Integer> qnList = new ArrayList<>();
+    private Model.PlayInfo currentProbe;
     private int selectedQn = Prefs.DEFAULT_QN;
     private int selectedPart;
     private boolean downloading;
     private PartAdapter adapter;
+
+    /** 每个画质一行（末尾还有一行「仅音频」）。 */
+    private final List<DownloadRow> rows = new ArrayList<>();
+    /** 正在下载的那一行，没有任务时为 null。 */
+    private DownloadRow activeRow;
+
+    /**
+     * 预览播放源请求的画质。
+     *
+     * <p>预览要的是尽快出画面，不是画质，所以固定取最低档。</p>
+     */
+    private static final int PREVIEW_QN = 16;
+
+    /** 一行下载目标持有的视图。 */
+    private static final class DownloadRow {
+        final int qn;
+        final boolean audioOnly;
+        final View main;
+        final TextView label;
+        final TextView meta;
+        final ImageView icon;
+        final TextView percent;
+        final ProgressBar bar;
+        /** 空闲时该显示的副标题，下载结束后要还原回来。 */
+        final String metaIdle;
+
+        DownloadRow(int qn, boolean audioOnly, View main, TextView label, TextView meta,
+                    ImageView icon, TextView percent, ProgressBar bar, String metaIdle) {
+            this.qn = qn;
+            this.audioOnly = audioOnly;
+            this.main = main;
+            this.label = label;
+            this.meta = meta;
+            this.icon = icon;
+            this.percent = percent;
+            this.bar = bar;
+            this.metaIdle = metaIdle;
+        }
+
+        void setRunning(boolean running) {
+            icon.setVisibility(running ? View.GONE : View.VISIBLE);
+            percent.setVisibility(running ? View.VISIBLE : View.GONE);
+            bar.setVisibility(running ? View.VISIBLE : View.GONE);
+            if (!running) {
+                meta.setText(metaIdle);
+                bar.setProgress(0);
+            }
+        }
+    }
 
     // ==================================================================
     // 生命周期
@@ -139,9 +180,11 @@ public class MainActivity extends Activity implements DownloadService.Listener {
 
         bindViews();
         applyWindowInsets();
+        // PreviewController 自己 findViewById 绑定预览区，
+        // 必须在 setContentView 之后构造
+        preview = new PreviewController(this);
         wireActions();
         setupPartsList();
-        setupQualityChips();
 
         // 旋转等重建后，自动重新解析一次，用户不必再点一下
         if (savedInstanceState != null) {
@@ -204,11 +247,18 @@ public class MainActivity extends Activity implements DownloadService.Listener {
     @Override
     protected void onPause() {
         DownloadService.removeListener(this);
+        // 退到后台就别继续出声了；再回来时用户自己点播放继续
+        if (preview != null) {
+            preview.pause();
+        }
         super.onPause();
     }
 
     @Override
     protected void onDestroy() {
+        if (preview != null) {
+            preview.release();
+        }
         bg.shutdownNow();
         super.onDestroy();
     }
@@ -243,7 +293,6 @@ public class MainActivity extends Activity implements DownloadService.Listener {
         errorDetail = findViewById(R.id.errorDetail);
         btnRetry = findViewById(R.id.btnRetry);
 
-        ivCover = findViewById(R.id.ivCover);
         tvTitle = findViewById(R.id.tvTitle);
         tvMeta = findViewById(R.id.tvMeta);
         qualityHintBox = findViewById(R.id.qualityHintBox);
@@ -251,19 +300,8 @@ public class MainActivity extends Activity implements DownloadService.Listener {
         btnQualityHintAction = findViewById(R.id.btnQualityHintAction);
         tvPartsLabel = findViewById(R.id.tvPartsLabel);
         listParts = findViewById(R.id.listParts);
-        tvQualityLabel = findViewById(R.id.tvQualityLabel);
-        chipQuality = findViewById(R.id.chipQuality);
-        swAudioOnly = findViewById(R.id.swAudioOnly);
-
-        progressBox = findViewById(R.id.progressBox);
-        tvStage = findViewById(R.id.tvStage);
-        tvPercent = findViewById(R.id.tvPercent);
+        listDownloads = findViewById(R.id.listDownloads);
         tvSavedTo = findViewById(R.id.tvSavedTo);
-        progress = findViewById(R.id.progress);
-
-        fab = findViewById(R.id.fab);
-        ivFabIcon = findViewById(R.id.ivFabIcon);
-        tvFabLabel = findViewById(R.id.tvFabLabel);
     }
 
     /**
@@ -274,8 +312,8 @@ public class MainActivity extends Activity implements DownloadService.Listener {
     private void applyWindowInsets() {
         final int baseBarHeight =
                 getResources().getDimensionPixelSize(R.dimen.top_app_bar_height);
-        final int baseMargin =
-                getResources().getDimensionPixelSize(R.dimen.screen_margin);
+        final int baseBottom =
+                getResources().getDimensionPixelSize(R.dimen.content_gap);
 
         findViewById(R.id.root).setOnApplyWindowInsetsListener((v, insets) -> {
             int top = insets.getSystemWindowInsetTop();
@@ -287,13 +325,8 @@ public class MainActivity extends Activity implements DownloadService.Listener {
             barLp.height = baseBarHeight + top;
             topBar.setLayoutParams(barLp);
 
-            ViewGroup.MarginLayoutParams fabLp =
-                    (ViewGroup.MarginLayoutParams) fab.getLayoutParams();
-            fabLp.bottomMargin = baseMargin + bottom;
-            fab.setLayoutParams(fabLp);
-
-            // 横屏刘海/手势区：只改左右内边距，保留已有的底部留白
-            scroll.setPadding(left, scroll.getPaddingTop(), right, scroll.getPaddingBottom());
+            // 没有悬浮按钮了，内容要自己避开手势区，否则最后一行贴在导航条上
+            scroll.setPadding(left, scroll.getPaddingTop(), right, baseBottom + bottom);
             return insets;
         });
     }
@@ -328,6 +361,13 @@ public class MainActivity extends Activity implements DownloadService.Listener {
             }
         });
 
+        // 输入框失去焦点时也要收键盘，否则点别处键盘还挂着
+        inputUrl.setOnFocusChangeListener((v, hasFocus) -> {
+            if (!hasFocus) {
+                hideKeyboard();
+            }
+        });
+
         // 键盘上的「搜索」键等同于点解析
         inputUrl.setOnEditorActionListener((v, actionId, event) -> {
             if (actionId == EditorInfo.IME_ACTION_SEARCH
@@ -339,31 +379,88 @@ public class MainActivity extends Activity implements DownloadService.Listener {
             return false;
         });
 
-        fab.setOnClickListener(v -> doDownload());
+        preview.setListener(new PreviewController.Listener() {
+            @Override
+            public void onNeedSource() {
+                fetchPreviewSource();
+            }
 
-        swAudioOnly.setOnCheckedChangeListener((buttonView, isChecked) -> {
-            updateFabLabel();
-            // 仅音频时画质选项没有意义，收起而不是留一个禁用控件；
-            // 本来就没有可用画质时，也不能因为取消勾选就把它显示出来
-            int vis = (isChecked || qnList.isEmpty()) ? View.GONE : View.VISIBLE;
-            tvQualityLabel.setVisibility(vis);
-            chipQuality.setVisibility(vis);
+            @Override
+            public void onError(String message) {
+                // 预览失败不影响下载，所以只记日志，不弹提示打扰用户
+                Log.w(TAG, "预览播放失败: " + message);
+            }
         });
+    }
+
+    /**
+     * 懒加载预览地址。
+     *
+     * <p>解析稿件时不请求：用户可能只想下载，为了看一眼封面白跑一次接口不值得。
+     * 等他真的按下播放键再取。</p>
+     *
+     * <p>预览走 {@code fnval=1} 的渐进式 MP4 —— 下载用的 DASH 是分离的音视频轨，
+     * 系统播放器播出来没声音，也拖不动。</p>
+     */
+    private void fetchPreviewSource() {
+        final Model.Video v = current;
+        if (v == null || v.pages.isEmpty()) {
+            preview.sourceFailed();
+            return;
+        }
+        final Model.Part part = v.pages.get(clampPartIndex());
+        bg.execute(() -> {
+            try {
+                Model.PreviewSource src = BiliApi.previewSource(
+                        v.bvid, part.cid, PREVIEW_QN, prefs.cookie());
+                ui.post(() -> preview.sourceReady(src.url, src.durationMs));
+            } catch (Exception e) {
+                Log.w(TAG, "预览地址获取失败", e);
+                ui.post(preview::sourceFailed);
+            }
+        });
+    }
+
+    private int clampPartIndex() {
+        if (current == null || current.pages.isEmpty()) {
+            return 0;
+        }
+        if (selectedPart < 0 || selectedPart >= current.pages.size()) {
+            selectedPart = 0;
+        }
+        return selectedPart;
+    }
+
+    /** 收起软键盘。结果区在输入框下方，键盘留着会把结果顶出屏幕。 */
+    private void hideKeyboard() {
+        View focused = getCurrentFocus();
+        if (focused != null) {
+            focused.clearFocus();
+        }
+        InputMethodManager imm =
+                (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+        if (imm != null) {
+            imm.hideSoftInputFromWindow(inputUrl.getWindowToken(), 0);
+        }
+        // 有的 ROM 上 hideSoftInputFromWindow 会失效（聚焦视图刚变过），
+        // 换一个 token 再试一次
+        if (imm != null && focused != null && focused != inputUrl) {
+            imm.hideSoftInputFromWindow(focused.getWindowToken(), 0);
+        }
     }
 
     private void setupPartsList() {
         adapter = new PartAdapter();
         listParts.setAdapter(adapter);
         listParts.setOnItemClickListener((parent, view, position, id) -> {
+            int previous = selectedPart;
             selectedPart = position;
             adapter.notifyDataSetChanged();
+            // 分 P 换了，之前那个分 P 的预览和它就不对应了
+            if (previous != position) {
+                preview.reset();
+            }
         });
-    }
-
-    private void setupQualityChips() {
-        // 无内容时彻底不占位
-        chipQuality.setVisibility(View.GONE);
-        tvQualityLabel.setVisibility(View.GONE);
     }
 
     // ==================================================================
@@ -380,13 +477,15 @@ public class MainActivity extends Activity implements DownloadService.Listener {
     private void renderEmpty() {
         hideAllStates();
         emptyBox.setVisibility(View.VISIBLE);
-        fab.setVisibility(View.GONE);
     }
 
     private void renderLoading() {
         hideAllStates();
+        // 开始解析就停掉上一个视频的预览：它马上就和新结果对不上了
+        if (preview != null) {
+            preview.reset();
+        }
         loadingBox.setVisibility(View.VISIBLE);
-        fab.setVisibility(View.GONE);
         btnParse.setEnabled(false);
         btnParse.setText(R.string.action_parsing);
     }
@@ -399,7 +498,6 @@ public class MainActivity extends Activity implements DownloadService.Listener {
     private void renderError(String title, String fix, String detail) {
         hideAllStates();
         errorBox.setVisibility(View.VISIBLE);
-        fab.setVisibility(View.GONE);
 
         errorTitle.setText(title);
         errorFix.setText(fix);
@@ -414,7 +512,6 @@ public class MainActivity extends Activity implements DownloadService.Listener {
     private void renderResult() {
         hideAllStates();
         resultBox.setVisibility(View.VISIBLE);
-        fab.setVisibility(downloading ? View.GONE : View.VISIBLE);
         btnParse.setEnabled(true);
         btnParse.setText(R.string.action_parse);
     }
@@ -481,6 +578,10 @@ public class MainActivity extends Activity implements DownloadService.Listener {
     // ==================================================================
 
     private void doParse() {
+        // 先收键盘。结果区就在输入框正下方，键盘不收起来会把封面和下载行
+        // 整个顶到屏幕外 —— 真机上看起来就像"点了解析没反应"。
+        hideKeyboard();
+
         String raw = inputUrl.getText().toString().trim();
         if (raw.isEmpty()) {
             renderError(getString(R.string.err_empty_input),
@@ -506,8 +607,10 @@ public class MainActivity extends Activity implements DownloadService.Listener {
 
     private void onParsed(Model.Video v, Model.PlayInfo probe) {
         current = v;
+        currentProbe = probe;
         selectedPart = 0;
         downloading = false;
+        activeRow = null;
 
         renderResult();
 
@@ -515,15 +618,16 @@ public class MainActivity extends Activity implements DownloadService.Listener {
         tvMeta.setText(getString(R.string.meta_format,
                 v.owner, v.pages.size(), fmtDuration(v.duration)));
 
+        // 新稿件：预览退回封面态，否则会留着上一个视频的画面
+        preview.reset();
         loadCover(v.cover);
         adapter.notifyDataSetChanged();
 
-        // 先复位开关，再据此决定画质区是否显示，避免两处逻辑互相覆盖
-        swAudioOnly.setChecked(false);
-        buildQualityChips(probe);
+        buildDownloadRows(probe);
+        tvSavedTo.setVisibility(View.GONE);
 
-        progressBox.setVisibility(View.GONE);
-        updateFabLabel();
+        // 回到顶部。否则上一次留下的滚动位置会让用户以为没解析出来
+        scroll.post(() -> scroll.scrollTo(0, 0));
     }
 
     private void onParseFailed(Exception e) {
@@ -595,47 +699,53 @@ public class MainActivity extends Activity implements DownloadService.Listener {
     // 画质芯片
     // ==================================================================
 
-    private void buildQualityChips(Model.PlayInfo probe) {
-        chipQuality.removeAllViews();
-        qnList.clear();
+    /**
+     * 按可用画质生成下载行，末尾固定补一行「仅音频」。
+     *
+     * <p>上一版这里是画质芯片 + 一个「仅音频」开关 + 一个 FAB 的组合：
+     * 选画质、切开关、再按 FAB，三步才能开始下载。现在一步 ——
+     * 想下哪个档就点哪一行。</p>
+     */
+    private void buildDownloadRows(Model.PlayInfo probe) {
+        listDownloads.removeAllViews();
+        rows.clear();
+        selectedQn = Prefs.DEFAULT_QN;
 
+        // 画质去重、从高到低
+        LinkedHashSet<Integer> seen = new LinkedHashSet<>();
         if (probe != null && probe.videos != null) {
-            // 去重并按画质从高到低排序
-            LinkedHashSet<Integer> seen = new LinkedHashSet<>();
             for (Model.Stream s : probe.videos) {
                 seen.add(s.quality);
             }
-            qnList.addAll(seen);
-            Collections.sort(qnList, Collections.reverseOrder());
         }
+        List<Integer> qns = new ArrayList<>(seen);
+        Collections.sort(qns, Collections.reverseOrder());
 
-        if (qnList.isEmpty()) {
-            tvQualityLabel.setVisibility(View.GONE);
-            chipQuality.setVisibility(View.GONE);
+        if (qns.isEmpty()) {
             Snackbar.show(findViewById(R.id.root),
                     getString(R.string.quality_not_available), null, null, R.drawable.ic_error);
+            qualityHintBox.setVisibility(View.GONE);
             return;
         }
 
-        int best = qnList.get(0);
+        int best = qns.get(0);
         int target = prefs.preferQn();
-        if (!qnList.contains(target)) {
-            target = best;
-        }
-        selectedQn = target;
+        selectedQn = qns.contains(target) ? target : best;
 
-        for (Integer qn : qnList) {
-            final int quality = qn;
-            TextView chip = makeChip(chipQuality, qnLabel(probe, qn));
-            chip.setSelected(qn == selectedQn);
-            chip.setOnClickListener(v -> selectQualityChip((TextView) v, quality));
-            chipQuality.addView(chip);
+        LayoutInflater inflater = LayoutInflater.from(this);
+        for (Integer qn : qns) {
+            Model.Stream s = probe.videoByQuality(qn, prefs.preferAvc());
+            String meta = s == null || s.width <= 0
+                    ? ""
+                    : getString(R.string.row_meta_video, s.width, s.height, codecName(s.codecId));
+            rows.add(addDownloadRow(inflater, qn, false, qnLabel(probe, qn), meta,
+                    R.drawable.ic_download));
         }
+        rows.add(addDownloadRow(inflater, selectedQn, true,
+                getString(R.string.row_audio), getString(R.string.row_audio_desc),
+                R.drawable.ic_music));
 
-        tvQualityLabel.setVisibility(
-                swAudioOnly.isChecked() ? View.GONE : View.VISIBLE);
-        chipQuality.setVisibility(
-                swAudioOnly.isChecked() ? View.GONE : View.VISIBLE);
+        setRowsEnabled(true);
 
         // 只有「受登录限制」时才提示，避免无端打扰
         if (!prefs.hasLogin() && best < QN_1080P && best > 0) {
@@ -646,19 +756,50 @@ public class MainActivity extends Activity implements DownloadService.Listener {
         }
     }
 
-    private void selectQualityChip(TextView chip, int qn) {
-        selectedQn = qn;
-        for (int i = 0; i < chipQuality.getChildCount(); i++) {
-            chipQuality.getChildAt(i).setSelected(false);
+    private DownloadRow addDownloadRow(LayoutInflater inflater, int qn, boolean audioOnly,
+                                       String label, String meta, int iconRes) {
+        View root = inflater.inflate(R.layout.item_download, listDownloads, false);
+        View main = root.findViewById(R.id.rowMain);
+        TextView tvLabel = root.findViewById(R.id.tvRowLabel);
+        TextView tvMeta = root.findViewById(R.id.tvRowMeta);
+        ImageView icon = root.findViewById(R.id.ivRowIcon);
+        TextView percent = root.findViewById(R.id.tvRowPercent);
+        ProgressBar bar = root.findViewById(R.id.pbRow);
+
+        tvLabel.setText(label);
+        tvMeta.setText(meta);
+        // 音频行用音符图标，和视频行区分开 —— 不用读文字也能一眼分辨
+        icon.setImageResource(iconRes);
+
+        DownloadRow row = new DownloadRow(qn, audioOnly, main, tvLabel, tvMeta,
+                icon, percent, bar, meta);
+        main.setContentDescription(getString(R.string.cd_download_quality, label));
+        main.setOnClickListener(v -> startDownload(row));
+
+        listDownloads.addView(root);
+        return row;
+    }
+
+    private void setRowsEnabled(boolean enabled) {
+        for (DownloadRow r : rows) {
+            r.main.setEnabled(enabled);
         }
-        chip.setSelected(true);
+    }
+
+    private String codecName(int codecId) {
+        switch (codecId) {
+            case 7:  return getString(R.string.codec_avc);
+            case 12: return getString(R.string.codec_hevc);
+            case 13: return getString(R.string.codec_av1);
+            default: return getString(R.string.codec_unknown);
+        }
     }
 
     /**
      * 造一个 M3 filter chip。
      *
-     * <p>外观全部来自 {@code @style/Widget.Chip} 与 {@code view_chip.xml}，
-     * 这里只负责绑定文案和行为 —— 之前画质芯片和主题芯片各自堆了一遍属性。</p>
+     * <p>外观全部来自 {@code @style/Widget.Chip} 与 {@code view_chip.xml}。
+     * 主界面的画质已经改成下载行，这里现在只服务设置面板的外观选项。</p>
      */
     private TextView makeChip(FlowLayout parent, String label) {
         TextView chip = (TextView) LayoutInflater.from(this)
@@ -697,52 +838,52 @@ public class MainActivity extends Activity implements DownloadService.Listener {
         }
     }
 
-    private void updateFabLabel() {
-        boolean audio = swAudioOnly.isChecked();
-        tvFabLabel.setText(audio ? R.string.action_download_audio : R.string.action_download);
-        fab.setContentDescription(getString(
-                audio ? R.string.action_download_audio : R.string.action_download));
-        ivFabIcon.setImageResource(audio ? R.drawable.ic_music : R.drawable.ic_download);
-        fab.setEnabled(current != null && !downloading);
-    }
-
     // ==================================================================
     // 下载
     // ==================================================================
 
-    private void doDownload() {
+    /**
+     * 从某一行开始下载。
+     *
+     * <p>进度直接长在这一行上（行尾换百分比、行下方出细进度条）。
+     * 上一版把进度放在页面底部的卡片里，真机实测那个位置在视口之外 ——
+     * 用户点完「开始下载」画面毫无变化，以为没反应。</p>
+     */
+    private void startDownload(DownloadRow row) {
+        if (downloading) {
+            return;
+        }
         if (current == null || current.pages.isEmpty()) {
             Snackbar.show(findViewById(R.id.root), getString(R.string.snack_need_parse));
             return;
         }
-        if (qnList.isEmpty() && !swAudioOnly.isChecked()) {
-            Snackbar.show(findViewById(R.id.root),
-                    getString(R.string.snack_need_parse), null, null, R.drawable.ic_error);
-            return;
-        }
 
-        if (selectedPart < 0 || selectedPart >= current.pages.size()) {
-            selectedPart = 0;
-        }
-        Model.Part part = current.pages.get(selectedPart);
+        Model.Part part = current.pages.get(clampPartIndex());
 
         Model.Task task = new Model.Task();
         task.bvid = current.bvid;
         task.cid = part.cid;
         task.title = current.title;
         task.partTitle = part.title;
-        task.qn = selectedQn;
-        task.audioOnly = swAudioOnly.isChecked();
+        task.qn = row.qn;
+        task.audioOnly = row.audioOnly;
 
-        prefs.setPreferQn(selectedQn);
+        // 记住视频档位的选择；「仅音频」不代表画质偏好
+        if (!row.audioOnly) {
+            selectedQn = row.qn;
+            prefs.setPreferQn(row.qn);
+        }
 
         downloading = true;
-        fab.setVisibility(View.GONE);
-        progressBox.setVisibility(View.VISIBLE);
+        activeRow = row;
+        row.meta.setText(R.string.stage_preparing);
+        row.percent.setText(getString(R.string.progress_percent, 0));
+        row.bar.setProgress(0);
+        row.setRunning(true);
+
+        // 一次只跑一个任务；其余行先禁掉，避免并发下载互相抢带宽
+        setRowsEnabled(false);
         tvSavedTo.setVisibility(View.GONE);
-        tvStage.setText(R.string.stage_preparing);
-        tvPercent.setText(getString(R.string.progress_percent, 0));
-        progress.setProgress(0);
 
         DownloadService.enqueue(this, task);
     }
@@ -753,11 +894,12 @@ public class MainActivity extends Activity implements DownloadService.Listener {
     public void onProgress(String stage, int percent) {
         ui.post(() -> {
             downloading = true;
-            fab.setVisibility(View.GONE);
-            progressBox.setVisibility(View.VISIBLE);
-            tvStage.setText(stage);
-            tvPercent.setText(getString(R.string.progress_percent, percent));
-            progress.setProgress(Math.max(0, Math.min(100, percent)));
+            if (activeRow == null) {
+                return;
+            }
+            activeRow.meta.setText(stage);
+            activeRow.percent.setText(getString(R.string.progress_percent, percent));
+            activeRow.bar.setProgress(Math.max(0, Math.min(100, percent)));
         });
     }
 
@@ -765,17 +907,17 @@ public class MainActivity extends Activity implements DownloadService.Listener {
     public void onFinished(boolean ok, String message, String location) {
         ui.post(() -> {
             downloading = false;
-            progress.setProgress(ok ? 100 : progress.getProgress());
-            tvStage.setText(ok ? R.string.stage_done : R.string.stage_failed);
-            tvPercent.setText(ok ? getString(R.string.progress_percent, 100) : "");
+            if (activeRow != null) {
+                // setRunning(false) 会把副标题还原成画质信息
+                activeRow.setRunning(false);
+                activeRow = null;
+            }
+            setRowsEnabled(true);
 
             if (ok && location != null && !location.isEmpty()) {
                 tvSavedTo.setText(getString(R.string.saved_to, location));
                 tvSavedTo.setVisibility(View.VISIBLE);
             }
-
-            updateFabLabel();
-            fab.setVisibility(View.VISIBLE);
 
             Snackbar.show(findViewById(R.id.root), message,
                     null, null, ok ? R.drawable.ic_check : R.drawable.ic_error);
@@ -912,11 +1054,13 @@ public class MainActivity extends Activity implements DownloadService.Listener {
     }
 
     private void loadCover(String url) {
-        ivCover.setImageDrawable(null);
+        preview.setCover(null);
         if (url == null || url.isEmpty()) {
             return;
         }
-        final String fixed = url.startsWith("//") ? "https:" + url : url;
+        // 接口返回的封面是明文 http，manifest 里 usesCleartextTraffic=false 会拦掉它。
+        // BiliApi 已经统一升级成 https，这里再兜一次底。
+        final String fixed = BiliApi.httpsify(url);
         bg.execute(() -> {
             Bitmap bmp = null;
             HttpURLConnection c = null;
@@ -928,8 +1072,11 @@ public class MainActivity extends Activity implements DownloadService.Listener {
                 } finally {
                     Http.closeQuietly(in);
                 }
-            } catch (Exception ignored) {
-                // 封面加载失败不影响主流程
+            } catch (Exception e) {
+                // 封面失败不影响主流程，但必须留下痕迹。
+                // 之前这里是 catch (Exception ignored)，于是封面被系统明文策略
+                // 拦掉这件事完全不可见 —— 界面上只是恒久一个灰框。
+                Log.w(TAG, "封面加载失败: " + fixed, e);
             } finally {
                 if (c != null) {
                     c.disconnect();
@@ -937,7 +1084,7 @@ public class MainActivity extends Activity implements DownloadService.Listener {
             }
             final Bitmap result = bmp;
             if (result != null) {
-                ui.post(() -> ivCover.setImageBitmap(result));
+                ui.post(() -> preview.setCover(result));
             }
         });
     }

@@ -1,6 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- FAB 文字与图标色 -->
-<selector xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:color="@color/m3_on_surface" android:alpha="0.38" android:state_enabled="false"/>
-    <item android:color="@color/m3_on_primary_container"/>
-</selector>
