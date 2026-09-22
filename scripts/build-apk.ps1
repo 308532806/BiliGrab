@@ -14,6 +14,12 @@ param(
     [int]$VersionCode = 1,
     [string]$AppPackage = "com.biligrab.app",
     [string]$OutDir = "",
+    # 签名密钥库。默认放在仓库的 keystore/ 目录（已 gitignore）。
+    # 关键：必须位于构建过程不会清空的位置，否则每次构建都会换一把新钥匙，
+    # 已安装的用户将无法原地升级。
+    [string]$KeystorePath = "",
+    [string]$KeystorePass = "",
+    [string]$KeystoreAlias = "biligrab",
     [switch]$KeepIntermediate
 )
 
@@ -180,27 +186,79 @@ if ($LASTEXITCODE -ne 0) { throw "zipalign 失败" }
 # ---------------------------- 7. 签名 ----------------------------
 
 Write-Host "`n[7/7] 签名 (apksigner)" -ForegroundColor Yellow
-$KsPath = Join-Path $WorkRoot "biligrab.jks"
-$KsPass = "biligrab123"
-$KsAlias = "biligrab"
 
-if (-not (Test-Path $KsPath)) {
-    Write-Host "    生成调试密钥库"
+# 密钥库必须放在「不会被构建过程清空」的稳定位置。
+# 早期实现把它放在 $WorkRoot 里，而每次构建都会重建 $WorkRoot，
+# 导致每批产物换一把钥匙 —— 用户无法覆盖安装。
+if ([string]::IsNullOrEmpty($KeystorePath)) {
+    if ($env:BILIGRAB_KEYSTORE) {
+        $KeystorePath = $env:BILIGRAB_KEYSTORE
+    } else {
+        $KeystorePath = Join-Path $RepoRoot "keystore\biligrab.jks"
+    }
+}
+if ([string]::IsNullOrEmpty($KeystorePass)) {
+    if ($env:BILIGRAB_KEYSTORE_PASS) {
+        $KeystorePass = $env:BILIGRAB_KEYSTORE_PASS
+    } else {
+        $KeystorePass = "biligrab123"
+    }
+}
+$KeystorePath = [System.IO.Path]::GetFullPath($KeystorePath)
+$ksDir = Split-Path -Parent $KeystorePath
+if ($ksDir) { New-Item -ItemType Directory -Force -Path $ksDir | Out-Null }
+
+# CI 场景：从 Secret 还原 base64 密钥库
+if ((-not (Test-Path $KeystorePath)) -and $env:BILIGRAB_KEYSTORE_BASE64) {
+    [System.IO.File]::WriteAllBytes($KeystorePath,
+        [Convert]::FromBase64String($env:BILIGRAB_KEYSTORE_BASE64.Trim()))
+    Write-Host "    已从 BILIGRAB_KEYSTORE_BASE64 还原密钥库"
+}
+
+$generated = $false
+if (-not (Test-Path $KeystorePath)) {
+    Write-Host "    首次构建，生成密钥库"
     & $Keytool -genkeypair -v `
-        -keystore $KsPath `
-        -alias $KsAlias `
+        -keystore $KeystorePath `
+        -alias $KeystoreAlias `
         -keyalg RSA -keysize 2048 -validity 10950 `
-        -storepass $KsPass -keypass $KsPass `
+        -storepass $KeystorePass -keypass $KeystorePass `
         -dname "CN=BiliGrab, OU=OpenSource, O=BiliGrab, L=Beijing, ST=Beijing, C=CN" 2>&1 | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "keytool 生成密钥失败" }
+    $generated = $true
+}
+
+Write-Host "    密钥库: $KeystorePath"
+$certText = (& $Keytool -list -v -keystore $KeystorePath -storepass $KeystorePass `
+        -alias $KeystoreAlias 2>&1) -join "`n"
+$sha = [regex]::Match($certText, 'SHA256:\s*([0-9A-Fa-f:]{60,})')
+if ($sha.Success) {
+    Write-Host "    证书 SHA-256: $($sha.Groups[1].Value.Trim())"
+}
+
+if ($generated) {
+    Write-Host ""
+    Write-Host "  ############################################################" -ForegroundColor Red
+    Write-Host "  # 已生成新的签名密钥库，请立刻备份！" -ForegroundColor Red
+    Write-Host "  # 一旦丢失，已安装该版本的用户将无法升级（签名不匹配）。" -ForegroundColor Red
+    Write-Host "  ############################################################" -ForegroundColor Red
+    if (-not $env:GITHUB_ACTIONS) {
+        $b64 = [Convert]::ToBase64String([System.IO.File]::ReadAllBytes($KeystorePath))
+        Write-Host ""
+        Write-Host "  如需让 GitHub Actions 产出同样签名的 APK，"
+        Write-Host "  请把下面这行保存为仓库 Secret（名称 KEYSTORE_BASE64）："
+        Write-Host ""
+        Write-Host $b64
+    }
+    Write-Host ""
 }
 
 if (-not (Test-Path $OutDir)) { New-Item -ItemType Directory -Force -Path $OutDir | Out-Null }
 $FinalApk = Join-Path $OutDir "BiliGrab-$VersionName.apk"
 
 & $JavaExe -jar $Apksigner sign `
-    --ks $KsPath --ks-key-alias $KsAlias `
-    --ks-pass "pass:$KsPass" --key-pass "pass:$KsPass" `
+    --ks $KeystorePath --ks-key-alias $KeystoreAlias `
+    --ks-pass "pass:$KeystorePass" --key-pass "pass:$KeystorePass" `
     --v1-signing-enabled true --v2-signing-enabled true --v3-signing-enabled true `
     --out $FinalApk $AlignedApk
 if ($LASTEXITCODE -ne 0) { throw "apksigner 签名失败" }

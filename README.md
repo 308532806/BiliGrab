@@ -102,12 +102,16 @@ BiliGrab 是从零重写的独立实现，**没有复用 BILIBILIAS 的任何代
 ### 方式一：官方脚本（不需要 Gradle）
 
 ```powershell
-# 依赖：JDK 17 + Android SDK build-tools 34.0.0 / platform 34
+# 1) 准备工具链（幂等，可重复执行；会从 dl.google.com 直接下载官方 zip）
+powershell -ExecutionPolicy Bypass -File scripts\setup-sdk.ps1
+
+# 2) 编译（另需 JDK 17）
 powershell -ExecutionPolicy Bypass -File scripts\build-apk.ps1 -VersionName 1.0.0
 # 产物：dist\BiliGrab-1.0.0.apk
 ```
 
 可用环境变量 `JAVA_HOME`、`ANDROID_HOME` 指定工具链位置。
+`setup-sdk.ps1` 不走 `sdkmanager`，而是直接解压官方 zip，少一层出错的可能。
 
 ### 方式二：Android Studio / Gradle
 
@@ -122,6 +126,39 @@ powershell -ExecutionPolicy Bypass -File scripts\build-apk.ps1 -VersionName 1.0.
 ```bash
 git tag v1.0.0 && git push origin v1.0.0
 ```
+
+> 想让 CI 产物和本地发布的 APK 签名一致（用户才能原地升级），
+> 需要先配置 `KEYSTORE_BASE64` Secret —— 见下一节。
+
+## 签名密钥
+
+**这一节很重要**，直接决定用户能不能覆盖安装升级。
+
+签名密钥默认保存在 `keystore/biligrab.jks`（已在 `.gitignore` 中）。
+首次构建会自动生成，并打印一段 base64。**请立刻备份这个文件。**
+
+- 密钥丢失后，已安装旧版本的设备**无法安装新版本** —— Android 会以「签名不匹配」拒绝
+- 换一把密钥意味着所有用户必须卸载重装
+
+### 让 CI 产出同样签名的 APK
+
+本地和 CI 各用一把钥匙的话，两边产物无法互相覆盖安装。
+把本地密钥库转成 base64 存进仓库 Secret 即可统一：
+
+```powershell
+$b64 = [Convert]::ToBase64String([IO.File]::ReadAllBytes("keystore\biligrab.jks"))
+Set-Clipboard $b64   # 已复制到剪贴板
+```
+
+然后到 `仓库 → Settings → Secrets and variables → Actions` 新建两个 Secret：
+
+| Secret 名称 | 值 |
+| --- | --- |
+| `KEYSTORE_BASE64` | 上一步复制的内容 |
+| `KEYSTORE_PASS` | 密钥库口令（默认 `biligrab123`，建议改掉） |
+
+未配置时 CI 会临时生成一把新钥匙，产物仅供测试安装；
+tag 触发 Release 时会给出 `::warning::` 提示。
 
 ## 使用
 
@@ -143,16 +180,23 @@ BiliGrab/
 │   ├── AndroidManifest.xml
 │   ├── java/com/biligrab/app/
 │   │   ├── MainActivity.java          # 界面、解析、交互
-│   │   ├── DownloadService.java       # 前台服务、断点流程、通知
+│   │   ├── DownloadService.java       # 前台服务、下载流程、通知
 │   │   ├── BiliApi.java               # 接口封装与参数校验
 │   │   ├── WbiSigner.java             # WBI 风控签名
 │   │   ├── MuxUtil.java               # MediaMuxer 音视频合成
 │   │   ├── MediaStoreSaver.java       # 写入系统媒体库
 │   │   ├── Http.java                  # HttpURLConnection 封装
+│   │   ├── Json.java                  # org.json 包装
 │   │   ├── Model.java                 # 数据模型
 │   │   └── Prefs.java                 # 偏好设置
 │   └── res/                           # 布局、颜色、图标
-├── scripts/build-apk.ps1              # 无 Gradle 构建脚本
+├── scripts/
+│   ├── setup-sdk.ps1                  # 下载 Android SDK 组件
+│   └── build-apk.ps1                  # 无 Gradle 构建脚本
+├── tools/
+│   ├── desktop-verify/TestApi.java    # 桌面端接口联调测试
+│   └── make_icons.py                  # 图标生成
+├── keystore/                          # 签名密钥（gitignore，请自行备份）
 └── .github/workflows/build.yml        # CI 自动打包
 ```
 
