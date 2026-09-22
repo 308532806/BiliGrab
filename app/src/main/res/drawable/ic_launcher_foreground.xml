@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- 播放三角 -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M32,38 L32,68 L56,53 Z" />
+
+    <!-- 下载箭头 -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M63,34 h7 v16 h-7 z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M53,49 L80,49 L66.5,64 Z" />
+
+    <!-- 底座 -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M32,72 h48 v6 h-48 z" />
+</vector>

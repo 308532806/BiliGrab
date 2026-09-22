@@ -1,0 +1,434 @@
+package com.biligrab.app;
+
+import android.app.Notification;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
+import android.app.Service;
+import android.content.Context;
+import android.content.Intent;
+import android.os.Build;
+import android.os.IBinder;
+import android.util.Log;
+
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
+/**
+ * 前台下载服务：解析 → 下载 DASH 音视频流 → MediaMuxer 合成 → 写入媒体库。
+ *
+ * <p>任务串行执行，保证不会同时占用过多带宽与磁盘 IO。</p>
+ */
+public class DownloadService extends Service {
+
+    private static final String TAG = "BiliGrab";
+
+    public static final String ACTION_ENQUEUE = "com.biligrab.app.action.ENQUEUE";
+    public static final String EXTRA_BVID = "bvid";
+    public static final String EXTRA_CID = "cid";
+    public static final String EXTRA_TITLE = "title";
+    public static final String EXTRA_PART = "part";
+    public static final String EXTRA_QN = "qn";
+    public static final String EXTRA_AUDIO_ONLY = "audioOnly";
+
+    private static final String CHANNEL_ID = "biligrab_download";
+    private static final int NOTIF_ID = 0x2101;
+
+    private ExecutorService executor;
+    private NotificationManager notifMgr;
+
+    // ------------------------------------------------------------------
+    // 进度观察者（UI 与服务在同一进程，直接用静态列表回调即可）
+    // ------------------------------------------------------------------
+
+    /** 下载进度监听。 */
+    public interface Listener {
+        void onProgress(String stage, int percent);
+
+        void onFinished(boolean ok, String message, String location);
+    }
+
+    private static final CopyOnWriteArrayList<Listener> LISTENERS = new CopyOnWriteArrayList<>();
+
+    public static void addListener(Listener l) {
+        if (l != null && !LISTENERS.contains(l)) {
+            LISTENERS.add(l);
+        }
+    }
+
+    public static void removeListener(Listener l) {
+        LISTENERS.remove(l);
+    }
+
+    private static void emitProgress(String stage, int percent) {
+        for (Listener l : LISTENERS) {
+            try {
+                l.onProgress(stage, percent);
+            } catch (RuntimeException e) {
+                Log.w(TAG, "listener error", e);
+            }
+        }
+    }
+
+    private static void emitFinished(boolean ok, String message, String location) {
+        for (Listener l : LISTENERS) {
+            try {
+                l.onFinished(ok, message, location);
+            } catch (RuntimeException e) {
+                Log.w(TAG, "listener error", e);
+            }
+        }
+    }
+
+    /** 供 UI 调用：把任务交给服务。 */
+    public static void enqueue(Context ctx, Model.Task task) {
+        Intent i = new Intent(ctx, DownloadService.class);
+        i.setAction(ACTION_ENQUEUE);
+        i.putExtra(EXTRA_BVID, task.bvid);
+        i.putExtra(EXTRA_CID, task.cid);
+        i.putExtra(EXTRA_TITLE, task.title);
+        i.putExtra(EXTRA_PART, task.partTitle);
+        i.putExtra(EXTRA_QN, task.qn);
+        i.putExtra(EXTRA_AUDIO_ONLY, task.audioOnly);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            ctx.startForegroundService(i);
+        } else {
+            ctx.startService(i);
+        }
+    }
+
+    // ------------------------------------------------------------------
+
+    @Override
+    public void onCreate() {
+        super.onCreate();
+        executor = Executors.newSingleThreadExecutor();
+        notifMgr = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+        createChannel();
+    }
+
+    @Override
+    public int onStartCommand(Intent intent, int flags, int startId) {
+        if (intent == null || !ACTION_ENQUEUE.equals(intent.getAction())) {
+            stopSelf(startId);
+            return START_NOT_STICKY;
+        }
+
+        final Model.Task task = new Model.Task();
+        task.bvid = str(intent, EXTRA_BVID);
+        task.cid = intent.getLongExtra(EXTRA_CID, 0L);
+        task.title = str(intent, EXTRA_TITLE);
+        task.partTitle = str(intent, EXTRA_PART);
+        task.qn = intent.getIntExtra(EXTRA_QN, Prefs.DEFAULT_QN);
+        task.audioOnly = intent.getBooleanExtra(EXTRA_AUDIO_ONLY, false);
+
+        // 必须在 5 秒内调用 startForeground
+        Notification preparing = buildNotification("准备中…", "正在解析 " + task.title, 0, true);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            startForeground(NOTIF_ID, preparing,
+                    android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC);
+        } else {
+            startForeground(NOTIF_ID, preparing);
+        }
+
+        executor.execute(new Runnable() {
+            @Override
+            public void run() {
+                boolean ok = false;
+                String message;
+                String location = "";
+                try {
+                    location = runTask(task);
+                    ok = true;
+                    message = "已保存到 " + location;
+                } catch (Exception e) {
+                    Log.w(TAG, "download failed", e);
+                    message = describe(e);
+                }
+                emitProgress(ok ? "完成" : "失败", 100);
+                emitFinished(ok, message, location);
+                notifyDone(ok, task.title, message);
+                stopForeground(true);
+                stopSelf();
+            }
+        });
+        return START_NOT_STICKY;
+    }
+
+    @Override
+    public void onDestroy() {
+        if (executor != null) {
+            executor.shutdownNow();
+        }
+        super.onDestroy();
+    }
+
+    @Override
+    public IBinder onBind(Intent intent) {
+        return null;
+    }
+
+    // ------------------------------------------------------------------
+    // 主流程
+    // ------------------------------------------------------------------
+
+    private String runTask(Model.Task task) throws Exception {
+        Prefs prefs = new Prefs(this);
+        String cookie = prefs.cookie();
+
+        File work = new File(getExternalFilesDir(null), "work");
+        if (!work.exists() && !work.mkdirs()) {
+            throw new IOException("无法创建临时目录");
+        }
+        clearDir(work);
+
+        emitProgress("解析播放地址", 2);
+        updateNotification("解析播放地址", task.title, 2);
+
+        Model.PlayInfo info = BiliApi.playurl(task.bvid, task.cid, task.qn, cookie);
+
+        File vFile = null;
+        File aFile = null;
+
+        if (!task.audioOnly) {
+            Model.Stream v = info.videoByQuality(task.qn, prefs.preferAvc());
+            if (v == null) {
+                throw new IOException("该稿件没有可用的视频流");
+            }
+            vFile = new File(work, "video.m4s");
+            String label = "视频流 " + v.width + "x" + v.height
+                    + " · " + Model.codecName(v.codecId);
+            emitProgress("下载" + label, 5);
+            downloadStream(v, vFile, cookie, 5, 50, "下载" + label, task.title);
+        }
+
+        Model.Stream a = info.bestAudio();
+        if (a != null) {
+            aFile = new File(work, "audio.m4s");
+            int lo = task.audioOnly ? 5 : 50;
+            emitProgress("下载音频流", lo);
+            downloadStream(a, aFile, cookie, lo, 85, "下载音频流", task.title);
+        } else if (task.audioOnly) {
+            throw new IOException("该稿件没有可用的音频流");
+        }
+
+        File outFile = new File(work, "output.mp4");
+        emitProgress("合成 MP4", 88);
+        updateNotification("合成 MP4", task.title, 88);
+        MuxUtil.mux(vFile, aFile, outFile);
+
+        if (!task.audioOnly && !MuxUtil.hasVideoTrack(outFile)) {
+            throw new IOException("合成结果缺少视频轨，请改用 H.264 画质后重试");
+        }
+
+        emitProgress("写入媒体库", 95);
+        updateNotification("写入媒体库", task.title, 95);
+        String location = MediaStoreSaver.save(this, outFile, task.displayName(), task.audioOnly);
+
+        clearDir(work);
+        return location;
+    }
+
+    private void downloadStream(Model.Stream s, File dst, String cookie,
+                                int lo, int hi, String stage, String title) throws IOException {
+        List<String> urls = s.candidates();
+        if (urls.isEmpty()) {
+            throw new IOException("接口未给出下载地址");
+        }
+        IOException last = null;
+        for (int i = 0; i < urls.size(); i++) {
+            try {
+                if (i > 0) {
+                    Log.i(TAG, "fallback to backup url #" + i);
+                }
+                downloadUrl(urls.get(i), dst, cookie, lo, hi, stage, title);
+                return;
+            } catch (IOException e) {
+                last = e;
+                Log.w(TAG, "url failed: " + urls.get(i), e);
+                // 单个地址失败即换备用 CDN 重试
+                if (dst.exists() && !dst.delete()) {
+                    Log.w(TAG, "cannot delete partial file");
+                }
+            }
+        }
+        throw last != null ? last : new IOException("所有下载地址均不可用");
+    }
+
+    private void downloadUrl(String url, File dst, String cookie,
+                             int lo, int hi, String stage, String title) throws IOException {
+        HttpURLConnection c = Http.open(url, cookie, true);
+        c.setRequestProperty("Range", "bytes=0-");
+        try {
+            int code = c.getResponseCode();
+            if (code >= 400) {
+                throw new IOException("CDN 返回 HTTP " + code);
+            }
+            long total = c.getContentLengthLong();
+            if (total <= 0) {
+                String range = c.getHeaderField("Content-Range");
+                if (range != null) {
+                    int slash = range.lastIndexOf('/');
+                    if (slash > 0) {
+                        try {
+                            total = Long.parseLong(range.substring(slash + 1).trim());
+                        } catch (NumberFormatException ignored) {
+                            total = 0L;
+                        }
+                    }
+                }
+            }
+
+            final long expected = total;
+            final int range_ = Math.max(1, hi - lo);
+            final int base = lo;
+
+            InputStream in = c.getInputStream();
+            OutputStream out = new FileOutputStream(dst);
+            try {
+                Http.copy(in, out, new Http.Progress() {
+                    private long lastPush = 0L;
+
+                    @Override
+                    public void onBytes(long done, long exp) {
+                        long known = expected > 0 ? expected : exp;
+                        int pct = known > 0
+                                ? (int) (base + (range_ * done) / known)
+                                : base;
+                        if (pct > hi) {
+                            pct = hi;
+                        }
+                        // 最多每 400ms 刷一次，避免高频刷新 UI 与通知
+                        long now = System.currentTimeMillis();
+                        if (now - lastPush > 400L || pct >= hi) {
+                            lastPush = now;
+                            emitProgress(stage, pct);
+                            updateNotification(stage, title, pct);
+                        }
+                    }
+                }, expected);
+            } finally {
+                Http.closeQuietly(in);
+                Http.closeQuietly(out);
+            }
+        } finally {
+            c.disconnect();
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // 工具
+    // ------------------------------------------------------------------
+
+    private static String describe(Exception e) {
+        String m = e.getMessage();
+        if (m == null || m.isEmpty()) {
+            m = e.getClass().getSimpleName();
+        }
+        if (e instanceof java.net.SocketTimeoutException) {
+            return "网络超时，请检查网络后重试";
+        }
+        if (e instanceof java.net.UnknownHostException) {
+            return "无法解析域名，请检查网络连接";
+        }
+        return m;
+    }
+
+    private static String str(Intent i, String key) {
+        String v = i.getStringExtra(key);
+        return v == null ? "" : v;
+    }
+
+    private static void clearDir(File dir) {
+        File[] files = dir.listFiles();
+        if (files == null) {
+            return;
+        }
+        for (File f : files) {
+            if (!f.delete()) {
+                Log.w(TAG, "cannot delete " + f);
+            }
+        }
+    }
+
+    private void createChannel() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O || notifMgr == null) {
+            return;
+        }
+        NotificationChannel ch = new NotificationChannel(CHANNEL_ID, "下载任务",
+                NotificationManager.IMPORTANCE_LOW);
+        ch.setDescription("B 站视频下载进度");
+        ch.setShowBadge(false);
+        notifMgr.createNotificationChannel(ch);
+    }
+
+    private Notification buildNotification(String stage, String title, int percent, boolean ongoing) {
+        Notification.Builder b = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
+                ? new Notification.Builder(this, CHANNEL_ID)
+                : new Notification.Builder(this);
+
+        Intent open = new Intent(this, MainActivity.class);
+        open.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        PendingIntent pi = PendingIntent.getActivity(this, 0, open,
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
+                        ? PendingIntent.FLAG_IMMUTABLE : 0);
+
+        b.setContentTitle(stage)
+                .setContentText(title)
+                .setSmallIcon(android.R.drawable.stat_sys_download)
+                .setContentIntent(pi)
+                .setOnlyAlertOnce(true)
+                .setOngoing(ongoing);
+
+        if (percent > 0) {
+            b.setProgress(100, percent, false);
+        } else {
+            b.setProgress(0, 0, true);
+        }
+        return b.build();
+    }
+
+    private void updateNotification(String stage, String title, int percent) {
+        if (notifMgr == null) {
+            return;
+        }
+        try {
+            notifMgr.notify(NOTIF_ID, buildNotification(stage, title, percent, true));
+        } catch (RuntimeException e) {
+            Log.w(TAG, "notify failed", e);
+        }
+    }
+
+    private void notifyDone(boolean ok, String title, String message) {
+        if (notifMgr == null) {
+            return;
+        }
+        try {
+            Notification.Builder b = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
+                    ? new Notification.Builder(this, CHANNEL_ID)
+                    : new Notification.Builder(this);
+            Intent open = new Intent(this, MainActivity.class);
+            open.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
+            PendingIntent pi = PendingIntent.getActivity(this, 0, open,
+                    Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
+                            ? PendingIntent.FLAG_IMMUTABLE : 0);
+            b.setContentTitle(ok ? "下载完成" : "下载失败")
+                    .setContentText(title + " · " + message)
+                    .setSmallIcon(ok ? android.R.drawable.stat_sys_download_done
+                            : android.R.drawable.stat_notify_error)
+                    .setContentIntent(pi)
+                    .setAutoCancel(true);
+            notifMgr.notify(NOTIF_ID, b.build());
+        } catch (RuntimeException e) {
+            Log.w(TAG, "notifyDone failed", e);
+        }
+    }
+}

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="bg">#0F1115</color>
+    <color name="surface">#171A21</color>
+    <color name="surface2">#222733</color>
+    <color name="stroke">#2E3340</color>
+    <color name="text">#E9EBF2</color>
+    <color name="text_dim">#9AA1B1</color>
+    <color name="accent">#FB7299</color>
+    <color name="accent_dim">#C9527A</color>
+    <color name="ok">#41D17E</color>
+    <color name="err">#FF5A5F</color>
+    <color name="ic_launcher_background">#FB7299</color>
+</resources>

@@ -1,0 +1,30 @@
+# 构建产物
+/build/
+/dist/
+*.apk
+*.aab
+*.ap_
+*.dex
+*.class
+
+# 签名
+*.jks
+*.keystore
+keystore.properties
+
+# Gradle
+.gradle/
+gradle-app.setting
+local.properties
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+
+# 系统
+.DS_Store
+Thumbs.db
+*.log

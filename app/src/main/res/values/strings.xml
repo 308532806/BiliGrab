@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">BiliGrab</string>
+    <string name="settings">设置</string>
+    <string name="hint_input">粘贴 B 站链接 / BV 号 / av 号</string>
+    <string name="parse">解析</string>
+    <string name="download">开始下载</string>
+    <string name="download_audio">下载音频</string>
+    <string name="audio_only">仅下载音频（跳过视频轨，节省流量）</string>
+    <string name="quality">画质</string>
+    <string name="not_logged_in">未登录 · 最高仅 480P，点击「设置」填写 SESSDATA</string>
+    <string name="logged_in">已登录 · 画质不受限</string>
+    <string name="ready">就绪</string>
+    <string name="need_parse_first">请先解析视频</string>
+    <string name="parsing">解析中…</string>
+    <string name="setting_title">登录设置</string>
+    <string name="setting_hint_sessdata">SESSDATA</string>
+    <string name="setting_help">获取方法：电脑浏览器打开 bilibili.com 并登录 → F12 → Application → Cookies → 复制 SESSDATA 的值。\n\n不填写也能用，但画质上限为 480P。</string>
+    <string name="save">保存</string>
+    <string name="cancel">取消</string>
+    <string name="prefer_avc">优先 H.264（兼容性最好，推荐开启）</string>
+    <string name="closing">关闭</string>
+    <string name="no_parts">该稿件没有可下载的分 P</string>
+    <string name="loading_cover">加载封面…</string>
+    <string name="downloading">下载中</string>
+    <string name="done">完成</string>
+    <string name="failed">失败</string>
+    <string name="save_location">保存位置</string>
+    <string name="tip">提示：本工具仅供个人学习与备份使用，请遵守哔哩哔哩用户协议，勿传播下载内容。</string>
+</resources>
