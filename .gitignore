@@ -6,6 +6,10 @@
 *.ap_
 *.dex
 *.class
+*.idsig
+
+# 本地下载的 Android SDK（scripts/setup-sdk.ps1 默认落点）
+/.android-sdk/
 
 # 签名
 *.jks
