@@ -21,11 +21,14 @@
     android:paddingBottom="@dimen/space_md">
 
     <!-- 序号：等宽数字，避免 P1 / P10 对不齐 -->
+    <!-- 子视图复制父级状态：setSelected() 不会自动向下传播，
+         copy 之后标题与副标题的选中态配色才会真正生效 -->
     <TextView
         android:id="@+id/tvIndex"
         android:layout_width="32dp"
         android:layout_height="32dp"
         android:background="@drawable/bg_index_badge"
+        android:duplicateParentState="true"
         android:fontFamily="sans-serif-medium"
         android:gravity="center"
         android:textColor="@color/m3_on_tertiary_container"
@@ -42,6 +45,7 @@
             android:id="@+id/tvPartTitle"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:duplicateParentState="true"
             android:ellipsize="end"
             android:maxLines="2"
             android:textAppearance="@style/Text.TitleSmall"
@@ -52,6 +56,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="2dp"
+            android:duplicateParentState="true"
             android:textAppearance="@style/Text.BodySmall"
             android:textColor="@color/state_list_item_meta" />
     </LinearLayout>

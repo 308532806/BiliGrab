@@ -320,8 +320,9 @@ public class MainActivity extends Activity implements DownloadService.Listener {
 
         swAudioOnly.setOnCheckedChangeListener((buttonView, isChecked) -> {
             updateFabLabel();
-            // 仅音频时画质选项没有意义，收起而不是留一个禁用控件
-            int vis = isChecked ? View.GONE : View.VISIBLE;
+            // 仅音频时画质选项没有意义，收起而不是留一个禁用控件；
+            // 本来就没有可用画质时，也不能因为取消勾选就把它显示出来
+            int vis = (isChecked || qnList.isEmpty()) ? View.GONE : View.VISIBLE;
             tvQualityLabel.setVisibility(vis);
             chipQuality.setVisibility(vis);
         });
@@ -481,10 +482,11 @@ public class MainActivity extends Activity implements DownloadService.Listener {
         loadCover(v.cover);
         adapter.notifyDataSetChanged();
 
+        // 先复位开关，再据此决定画质区是否显示，避免两处逻辑互相覆盖
+        swAudioOnly.setChecked(false);
         buildQualityChips(probe);
 
         progressBox.setVisibility(View.GONE);
-        swAudioOnly.setChecked(false);
         updateFabLabel();
     }
 
