@@ -34,3 +34,6 @@ keystore.properties
 .DS_Store
 Thumbs.db
 *.log
+
+# 提交信息草稿（用 git commit -F 时临时生成）
+commitmsg.txt
