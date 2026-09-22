@@ -69,42 +69,20 @@ public final class NeumorphicSurface {
         return d;
     }
 
-    /**
-     * 换肤/换主题色之后重新取色。界面不再重建时用这个，
-     * 比重建整棵视图树便宜得多。
+    /*
+     * 这里曾经有过 refreshTheme / refreshTree / focusRing 三个方法：
+     * 前者用来在换肤时沿视图树就地重新取色，避免重建界面。
+     *
+     * 已经删除，因为全项目没有任何调用点 —— 换肤与换主色都是先
+     * sheet.dismiss() 再 Activity.recreate()，整棵视图树直接重建。
+     *
+     * 之所以不去补那条"就地刷新"的路：这个界面的视图数量很少，重建的代价
+     * 远低于维护两条刷新路径的代价。就地刷新一旦漏掉某个视图（列表里复用的行、
+     * 已经 dismiss 的面板、缓存过的 drawable），表现出来就是"换了皮肤但有一块
+     * 没跟着变"这种极难复现的脏界面。宁可整体重建。
+     *
+     * 如果将来视图数量涨到重建会卡顿，再把它加回来 —— 那时记得给
+     * NeumorphicDrawable 按凹凸分别取叠加色（凸面白雾、凹面压暗），
+     * 一律用凸面的色会让所有凹陷在换肤后悄悄变成凸面的观感。
      */
-    public static void refreshTheme(View v) {
-        if (!(v.getBackground() instanceof NeumorphicDrawable)) return;
-        NeumorphicDrawable d = (NeumorphicDrawable) v.getBackground();
-        Context ctx = v.getContext();
-        d.glass(HyperTheme.isGlass(ctx));
-        d.colors(HyperTheme.neumBase(ctx), HyperTheme.neumLight(ctx), HyperTheme.neumDark(ctx));
-        d.glassColors(HyperTheme.glassTintConvex(ctx), HyperTheme.glassBorderHi(ctx),
-                HyperTheme.glassBorderLo(ctx));
-        d.invalidateSelf();
-    }
-
-    /**
-     * 在父容器里遍历并刷新所有浮雕面。
-     * 用于换肤后一次性更新，不需要重建 Activity。
-     */
-    public static void refreshTree(View root) {
-        refreshTheme(root);
-        if (!(root instanceof android.view.ViewGroup)) return;
-        android.view.ViewGroup g = (android.view.ViewGroup) root;
-        for (int i = 0; i < g.getChildCount(); i++) {
-            refreshTree(g.getChildAt(i));
-        }
-    }
-
-    /** 主色描边，用于输入框聚焦态。 */
-    public static android.graphics.drawable.GradientDrawable focusRing(Context ctx, float radiusDp) {
-        float density = ctx.getResources().getDisplayMetrics().density;
-        android.graphics.drawable.GradientDrawable g = new android.graphics.drawable.GradientDrawable();
-        g.setShape(android.graphics.drawable.GradientDrawable.RECTANGLE);
-        g.setCornerRadius(radiusDp * density);
-        g.setStroke(Math.max(1, Math.round(density)), HyperTheme.primary(ctx));
-        g.setColor(Color.TRANSPARENT);
-        return g;
-    }
 }

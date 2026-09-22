@@ -76,16 +76,12 @@ public final class HyperosClick {
         });
     }
 
-    /** 绑定点击并附带一次触觉反馈。 */
-    public static void bindWithHaptic(final View v, final Runnable action) {
-        bind(v, new Runnable() {
-            @Override
-            public void run() {
-                haptic(v);
-                if (action != null) action.run();
-            }
-        });
-    }
+    /*
+     * 这里曾经有过 bindWithHaptic(v, action) —— 绑定点击并自动带一次触觉反馈。
+     * 已删除，因为没有调用点：现有的点击点都是先 HyperosClick.haptic(v)
+     * 再做事，或者直接调 bindVisualOnly。留着一个"看起来更方便"的重载，
+     * 只会让后来的代码一半用这个、一半自己调 haptic，触觉反馈的时机变得不一致。
+     */
 
     /** 规范统一用 TextHandleMove：比 KEYBOARD_TAP 轻，适合高频点击。 */
     public static void haptic(View v) {

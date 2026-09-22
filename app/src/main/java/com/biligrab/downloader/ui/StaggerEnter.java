@@ -65,19 +65,19 @@ public final class StaggerEnter {
                 .start();
     }
 
-    /**
-     * 结果区出现时的入场编排。
+    /*
+     * 这里曾经有过一个 playResult(preview, title, meta, parts, downloads)，
+     * 把结果区的五块按固定顺序编排动画。已删除。
      *
-     * <p>顺序是刻意的：先预览框（用户最关心"是不是我要的那个视频"），
-     * 再标题，再分 P，最后下载行。信息按重要性落位，而不是按视图树顺序。</p>
+     * 原因：它要求调用方传五个具体控件，而结果区的每一块的可见性是随解析结果变的
+     * （单 P 没有分 P 列表、纯音频没有画质提示、解析失败时连预览都没有）。
+     * 传进来一个已经 GONE 的控件，就是给一个看不见的东西做动画 —— 白做，
+     * 还白占一个延迟档位，让后面真正该出现的那块晚 100ms 才动。
+     *
+     * 现在的做法见 MainActivity.renderResult()：收集 resultBox 当前**可见**的
+     * 直接子 View，交给上面的 play(View...) 按顺序编排。既不依赖 id 列表，
+     * 也不会给隐藏的块空转。
      */
-    public static void playResult(View preview, View title, View meta, View parts, View downloads) {
-        playOne(preview, DELAYS[0]);
-        playOne(title, DELAYS[1]);
-        playOne(meta, DELAYS[1]);
-        playOne(parts, DELAYS[2]);
-        playOne(downloads, DELAYS[3]);
-    }
 
     private static long delayFor(int index) {
         if (index < 0) return 0;

@@ -104,10 +104,17 @@
     <!-- 封面上的大播放键 -->
     <dimen name="play_button_size">64dp</dimen>
 
-    <!-- 开关：轨道 52×28，滑块 20，行程 4dp↔24dp -->
+    <!--
+      开关：轨道 52×28，滑块 22。行程 4dp↔24dp。
+
+      滑块取 22 而不是 20：Switch 把滑块从轨道左缘推到右缘，直径越小越容易
+      在两端"戳出"轨道 14dp 的圆头之外。这条是实机看出来的，不是估的。
+      这几个值目前只在 NeumorphicControls.dressSwitch() 里以字面量出现，
+      没有走 R.dimen —— 改这里不会影响它，改代码才算数。
+    -->
     <dimen name="switch_width">52dp</dimen>
     <dimen name="switch_height">28dp</dimen>
-    <dimen name="switch_thumb">20dp</dimen>
+    <dimen name="switch_thumb">22dp</dimen>
     <dimen name="switch_thumb_margin">4dp</dimen>
 
     <!-- 滑块：轨道 14dp 高，滑块 32dp -->

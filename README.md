@@ -354,7 +354,7 @@ BiliGrab/
 │   ├── fetch-vendor.ps1               # 拉取并裁剪 YouTube 引擎（21.66 MB）
 │   └── build-apk.ps1                  # 无 Gradle 构建脚本
 ├── tools/
-│   ├── gen_palette.py                 # 旧的 M3 色板生成器（当前色板已改为手写令牌，不再使用）
+│   ├── gen_palette.py                 # 色板对比度校验器（只读，不生成色值；色板本身手写维护）
 │   └── desktop-verify/                # 桌面端接口联调测试
 ├── keystore/                          # 签名密钥（gitignore，请自行备份）
 ├── docs/

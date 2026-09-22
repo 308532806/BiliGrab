@@ -206,20 +206,17 @@ public final class NeumorphicControls {
         return ld;
     }
 
-    // ------------------------------------------------------------------
-    // 换肤
-    // ------------------------------------------------------------------
-
-    /** 换肤后重新取色。开关与滑块不在 {@link NeumorphicSurface#refreshTree} 的覆盖范围内。 */
-    public static void refresh(Switch sw) {
-        if (sw == null) return;
-        boolean on = sw.isChecked();
-        dressSwitch(sw);
-        sw.setChecked(on);
-    }
-
-    public static void refresh(SeekBar sb) {
-        if (sb == null) return;
-        dressSeekBar(sb);
-    }
+    /*
+     * 这里曾经有过 refresh(Switch) 与 refresh(SeekBar) 两个换肤方法
+     * （重新 dress 一遍以重新取色）。已删除：全项目没有调用点。
+     *
+     * 开关与滑块的轨道/滑块 drawable 确实不在 NeumorphicSurface 的覆盖范围内
+     * —— 它们不是 View 的背景，而是 CompoundButton/AbsSeekBar 自己的 drawable。
+     * 但换肤走的是 sheet.dismiss() + Activity.recreate()，整棵树重建，
+     * dressSwitch / dressSeekBar 会被重新执行一遍，本来就覆盖到了。
+     *
+     * 如果将来改成不重建界面来换肤，这两个方法要加回来，而且**顺序很关键**：
+     * setTrackDrawable 会重置 Switch 的选中态渲染，必须先记住 isChecked()
+     * 再 dress、最后恢复，否则开着的高级选项会在换肤后自己关掉。
+     */
 }

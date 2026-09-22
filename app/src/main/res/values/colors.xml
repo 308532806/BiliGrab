@@ -30,10 +30,21 @@
     <color name="hyper_gradient_mid">#F5F6FB</color>
     <color name="hyper_gradient_bottom">#FFFFFF</color>
 
-    <!-- ═══ 文字 ═══ -->
+    <!--
+      ═══ 文字 ═══
+
+      这三个值按 WCAG 对比度定，不是凭手感挑的。校验见 tools/gen_palette.py。
+
+      次要/三级文字都是相对 hyper_background（页面底色）而不是 hyper_card 定的 ——
+      新拟态引擎里 neumBase() 返回的就是页面底色，卡片与页面同色，
+      所以页面底色才是这两级文字实际所在的背景。按卡片色去算会算出一个偏乐观的读数。
+    -->
     <color name="hyper_text_primary">#111111</color>
-    <color name="hyper_text_secondary">#6F7280</color>
-    <color name="hyper_text_tertiary">#B5B5C0</color>
+    <!-- 4.75:1（原先 #6F7280 只有 4.34:1，差 0.16 没到正文门槛） -->
+    <color name="hyper_text_secondary">#696C78</color>
+    <!-- 3.16:1（原先 #B5B5C0 只有 1.85:1，连提示级的 3:1 都不到；
+         深色主题的同项是 4.36:1，浅深原来是不对称的） -->
+    <color name="hyper_text_tertiary">#888899</color>
 
     <!-- ═══ 语义色 ═══ -->
     <color name="hyper_success">#32BB78</color>

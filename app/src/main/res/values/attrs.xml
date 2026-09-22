@@ -41,11 +41,16 @@
              真的点击行为仍需在 Java 里设置。 -->
         <attr name="neuPress" format="boolean" />
 
-        <!-- 主色描边，用于输入框聚焦态、选中态 -->
-        <attr name="neuStroke" format="boolean" />
+        <!--
+          这里曾经还声明过 neuStroke（主色描边）与 neuGlassFlat（玻璃面描边开关），
+          已删除：在 attrs 里声明不等于生效，而 NeumAttr 从头到尾没有读过这两个 ——
+          在布局或 style 里写了它们不会有任何效果。
 
-        <!-- 玻璃态下的描边开关。玻璃面默认带顶部高光，卡片类不需要 -->
-        <attr name="neuGlassFlat" format="boolean" />
+          "静默无效的属性"比"没有这个属性"更糟：写的人会以为自己设置了聚焦描边，
+          然后花时间去查为什么没出现。要么在 NeumAttr 里实现，要么就别声明。
+          目前两处需要描边的地方（输入框聚焦、导航高亮）都是按须在 Java 里
+          直接设 drawable 的，所以走删除这一条。
+        -->
     </declare-styleable>
 
 </resources>

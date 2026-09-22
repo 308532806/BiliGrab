@@ -133,17 +133,52 @@ public final class HyperTheme {
     }
 
     /**
-     * 在一个背景色上取可读的前景色。
+     * 在一个背景色上取可读的前景色（近黑或白）。
      *
-     * <p>用感知亮度而不是简单的 RGB 均值：人眼对绿最敏感、对蓝最不敏感，
-     * 等权平均会把中蓝判成"亮色"从而配上黑字，实际几乎看不清。
-     * 系数取自 sRGB 的相对亮度加权。</p>
+     * <p>做法是<b>把两个候选都算一遍，取对比度高的那个</b>，而不是拿感知亮度
+     * 去过一个阈值。理由：候选色只有两个而且都已知，估算纯属自找麻烦，
+     * 而估算和真实的 WCAG 对比度并不是一回事。</p>
+     *
+     * <p>这不是理论问题 —— 旧实现用感知亮度
+     * {@code 0.299R + 0.587G + 0.114B > 160} 判方向，品牌色樱花粉
+     * {@code #FB7299} 算出来是 159.4，差 0.6 就落到了白字一侧：
+     * 白字只有 2.64:1（远低于正文 4.5:1），而同色黑字有 7.17:1，
+     * 差了 2.7 倍。浅色的薄荷绿、薰衣草紫和深色的两个蓝是同一个模式，
+     * 十套主题色里有五套配错了字色。</p>
+     *
+     * <p>WCAG 相对亮度必须做 sRGB 反伽马（分段函数），与上面那个感知亮度
+     * 加权完全是两套公式，不要互相替代。</p>
      */
     public static int contrastOn(Context c, int bg) {
-        double l = 0.299 * Color.red(bg) + 0.587 * Color.green(bg) + 0.114 * Color.blue(bg);
-        // 阈值 160 而不是 128：这几套主题色的亮度分布在 150 附近聚得最密，
-        // 把分界推高一点，浅色主题色才不会被判成深色。
-        return l > 160 ? 0xFF111111 : 0xFFFFFFFF;
+        final int INK = 0xFF111111;
+        final int PAPER = 0xFFFFFFFF;
+        return contrastRatio(bg, INK) >= contrastRatio(bg, PAPER) ? INK : PAPER;
+    }
+
+    /**
+     * WCAG 2.x 对比度，范围 1..21。
+     *
+     * <p>注意这里的亮度是<b>相对亮度</b>：先对每个通道做 sRGB 反伽马
+     * （≤0.03928 时线性化，否则 {@code ((v+0.055)/1.055)^2.4}），
+     * 再按 0.2126/0.7152/0.0722 加权。</p>
+     */
+    public static double contrastRatio(int a, int b) {
+        double la = relativeLuminance(a);
+        double lb = relativeLuminance(b);
+        double hi = Math.max(la, lb);
+        double lo = Math.min(la, lb);
+        return (hi + 0.05) / (lo + 0.05);
+    }
+
+    private static double relativeLuminance(int color) {
+        return 0.2126 * channel(Color.red(color))
+                + 0.7152 * channel(Color.green(color))
+                + 0.0722 * channel(Color.blue(color));
+    }
+
+    private static double channel(int v) {
+        double s = v / 255.0;
+        return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
     }
 
     // ------------------------------------------------------------------

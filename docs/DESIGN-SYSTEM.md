@@ -19,8 +19,8 @@
 
 ### 为什么不复制原文
 
-那三份规范文件的 front-matter 里**只有 `name:` 与 `description:` 两个字段，`license:` 字段是空的**
-（等同于未声明授权条件）。所以本项目的做法是：
+那三份规范文件的 front-matter 里**只有 `name:` 与 `description:` 两个字段，没有 `license:` 字段**
+（等同于未声明授权条件；这一点是逐份文件核对过的）。所以本项目的做法是：
 
 - **不复制、不提交上游原文**，也不把它的代码当成代码来源；
 - 只按规范描述的视觉约定，用**纯 Java + XML 在本项目里重新实现**（上游是 Jetpack Compose，
@@ -304,7 +304,8 @@ mesh 的构成：底色 + N 个径向渐变光斑（位置与半径都用相对�
 
 ### 7.4 颜色（`values/colors.xml` 与 `values-night/colors.xml`）
 
-浅深两套是**分别设计**的，不是机械反转。
+浅深两套是**分别设计**的，不是机械反转。色板**手写维护**，对比度由 `tools/gen_palette.py`
+校验（该脚本只校验，不生成色值、不写文件）。
 
 | 令牌 | 浅色 | 深色 | 含义 |
 | --- | --- | --- | --- |
@@ -530,7 +531,7 @@ public NeuLayout(Context context, AttributeSet attrs) {
 | `neuStroke` / `neuGlassFlat` | `attrs.xml` 里声明了用途 | `NeumAttr` 只读前 5 个属性，这两个**从未被读取** |
 | 换肤时凹面的玻璃叠加色 | 应与 `apply()` 一致，按凹凸分别取色 | `NeumorphicSurface.refreshTheme()` **一律传 `glassTintConvex`**，凹面刷新后会退回凸面的叠加色 |
 | `StaggerEnter` | 分段入场动画（1000ms，0/150/250/350/450ms） | 类存在、参数正确，但 `MainActivity` 只 import 了它，**没有任何调用点**，动画目前不会发生 |
-| 色板生成 | `DESIGN.md` 说 `values/colors.xml` 由 `tools/gen_palette.py` 生成、"勿手改" | 脚本产出的是 `m3_*` 命名的 M3 色角色，而现在的 `colors.xml` 是手写的 `hyper_*` / `neum_*` / `glass_*` 令牌 —— 两者不同源，**重新跑脚本会往色板里塞一批新的死资源** |
+| 色板生成 | ~~`DESIGN.md` 说 `values/colors.xml` 由 `tools/gen_palette.py` 生成、"勿手改"~~ | **已解决**：`tools/gen_palette.py` 已改造为**纯校验器** —— 只读 `colors.xml` / `arrays.xml`，算 WCAG 对比度，不生成色值、不写任何文件（生成 `m3_*` 的逻辑已删除）。`DESIGN.md` 里"由脚本生成 / 勿手改 / 改种子值"的说法已同步更正。脚本当前报 7 项硬门槛失败，属真实色值问题，见 `DESIGN.md` §1 |
 | 死令牌 | `DESIGN.md` 的自检要求"每个 dimen / color 的引用数 ≥ 1"（只允许 `space_2xl` 为 0） | 当前有 16 个 dimen 与 7 个 color 没有任何引用，见下表 |
 
 当前引用数为 0 的令牌：

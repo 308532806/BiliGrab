@@ -685,6 +685,27 @@ public class MainActivity extends Activity implements DownloadService.Listener {
         resultBox.setVisibility(View.VISIBLE);
         btnParse.setEnabled(true);
         btnParse.setText(R.string.action_parse);
+
+        // 结果区的错峰入场动画。
+        //
+        // 必须 post 到下一帧，不能直接调：resultBox 这一帧刚从 GONE 变成 VISIBLE，
+        // 它的子树还没测量，此时读到的尺寸和位置都是旧的，动画会从错误的地方出发。
+        //
+        // 这里动画的是 resultBox 的直接子 View，而不是写死一组 id：
+        // 结果区的每一块（预览、标题、元信息、分 P、下载档位）的可见性是随
+        // 解析结果变的，用 id 列表就会给一个已经 GONE 的控件做动画 —— 白做，还占延迟。
+        resultBox.post(() -> {
+            if (!(resultBox instanceof ViewGroup)) return;
+            ViewGroup g = (ViewGroup) resultBox;
+            java.util.ArrayList<View> shown = new java.util.ArrayList<>();
+            for (int i = 0; i < g.getChildCount(); i++) {
+                View c = g.getChildAt(i);
+                if (c.getVisibility() == View.VISIBLE) {
+                    shown.add(c);
+                }
+            }
+            StaggerEnter.play(shown.toArray(new View[0]));
+        });
     }
 
     // ==================================================================

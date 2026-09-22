@@ -19,15 +19,20 @@ public final class NeumAttr {
 
     private NeumAttr() {}
 
-    /** 名义上叫 app:，但为了不引入 res-auto 的额外声明，用项目自己的命名空间。 */
+    /**
+     * 名义上叫 app:，但为了不引入 res-auto 的额外声明，用项目自己的命名空间。
+     *
+     * <p>这张表和 {@code values/attrs.xml} 的 declare-styleable 必须严格对应，
+     * 下面的下标也是照它写死的。曾经这里还挂着 neuStroke 与 neuGlassFlat 两项，
+     * 但读取逻辑从未实现 —— 属性声明了却不读，写的人会以为生效了。
+     * 已经两边一起删掉。加属性时记得两处同时改。</p>
+     */
     private static final int[] ATTRS = {
             R.attr.neuStyle,
             R.attr.neuRadius,
             R.attr.neuElevation,
             R.attr.neuFill,
             R.attr.neuPress,
-            R.attr.neuStroke,
-            R.attr.neuGlassFlat,
     };
 
     private static final int I_STYLE = 0;
@@ -35,8 +40,6 @@ public final class NeumAttr {
     private static final int I_ELEV = 2;
     private static final int I_FILL = 3;
     private static final int I_PRESS = 4;
-    private static final int I_STROKE = 5;
-    private static final int I_FLAT = 6;
 
     /** 默认值：不指定 neuStyle 时不画浮雕，保持普通 View 行为。 */
     public static final int STYLE_NONE = 2;

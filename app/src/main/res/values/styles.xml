@@ -271,7 +271,11 @@
         <item name="neuElevation">@dimen/elev_card</item>
     </style>
 
-    <!-- 进度条：新拟态版由 ui/NeumorphicSeekBar 实现，这里只给尺寸 -->
+    <!--
+      进度条：这里只给尺寸，外观由 Java 侧的 NeumorphicControls.dressSeekBar()
+      在运行期换上 drawable。没有 ui/NeumorphicSeekBar 这个类 ——
+      原注释指向了一个不存在的类型，已更正。
+    -->
     <style name="Widget.SeekBar" parent="">
         <item name="android:layout_height">@dimen/touch_min</item>
         <item name="android:background">@null</item>

@@ -18,14 +18,14 @@
 新拟态（Neumorphic）+ HyperOS 语言 + 玻璃态三合一，纯 Java + XML 实现，
 仍然零 AndroidX、零 Material Components。设计依据是上游规范仓库
 [`Yang-Ya-Chao/android-design-system-skills`](https://github.com/Yang-Ya-Chao/android-design-system-skills)；
-那份原文的 front-matter 里 `license:` 字段是空的，所以本项目**不复制、不提交它的原文**，
+那份原文的 front-matter 里**没有 `license:` 字段**（等同于未声明授权条件），所以本项目**不复制、不提交它的原文**，
 只按它描述的视觉约定重新实现，参考原文留在本机 `docs/design-refs/`（已 gitignore）。
 
 已经被取代的部分：
 
 | 本文档的节 | 现在是什么 |
 | --- | --- |
-| §1 色彩 | 不再是 `tools/gen_palette.py` 从品牌色相推导的 M3 色角色。色板是手写的 `hyper_*` / `neum_*` / `glass_*` 令牌；脚本产出的是 `m3_*` 命名，与现在的色板**不同源**，重新运行它会往色板里塞一批新的死资源 |
+| §1 色彩 | 不再是 `tools/gen_palette.py` 从品牌色相推导的 M3 色角色。色板是手写的 `hyper_*` / `neum_*` / `glass_*` 令牌；脚本产出的是 `m3_*` 命名，与现在的色板**不同源**，重新运行它会往色板里塞一批新的死资源（**已修**：脚本已改造为只读校验器，不再写入任何文件） |
 | §2 排版 | 不再是 M3 字阶。字号仍全部走 `styles.xml` 的 `Text.*`，但换了一套数值，并**新增一档 `Text.AppBar`（22sp）** |
 | §3 间距与形状 | 屏边距 16dp → **24dp**；形状阶改成「圆角与浮雕成组」：28/6、26/6、24/8、16/2、14/3、14/1.5、18/3、7/2 |
 | §4 无投影的层级 | **方向完全相反**：层级现在恰恰由浮雕表达，"色调高度"那一套不再使用 |
@@ -35,7 +35,7 @@
 
 **仍然成立**的部分：§0 零 AndroidX 的硬约束、§5 图标、§7 预览播放器、§8 五种互斥状态、
 §10 无障碍、§12 文件布局（其中 `res/color/` 目录已空），以及末尾的自检清单 ——
-只是自检第 1 条 `python tools/gen_palette.py` 已失效（脚本不再对应现在的色板），
+自检第 1 条 `python tools/gen_palette.py` 一度失效，现已重新成立：
 自检本身仍然要做，做法见 [docs/DESIGN-SYSTEM.md](docs/DESIGN-SYSTEM.md) 的自检一节。
 
 界面层的完整说明 —— 双引擎、渲染原理、位图缓存、外扩取舍、令牌表、自定义 View 与属性、
@@ -83,46 +83,57 @@
 
 ## 1. 色彩
 
-### 生成方式
+### 生成方式：手挑，不是推导
 
-色板由 `tools/gen_palette.py` 从单一品牌色相**推导**得出，而不是手挑。
+色板是一批**手挑的令牌**（`hyper_*` / `neum_*` / `glass_*`），
+不是由 `tools/gen_palette.py` 从品牌色相推导出来的。
 
-```
-种子 #FB7299  →  OKLCH(L=0.726, C=0.171, H=4.5)
-              →  按 M3 的色调映射生成全部色角色
-              →  输出 values/colors.xml 与 values-night/colors.xml
-```
+理由：新拟态的底色不是「一个色相 + 一套 tone 映射」能推导出来的东西。它由三层叠成，
+每一层都不可推导 ——
 
-推导链路：色调（CIELAB L\*）→ 相对亮度 Y → OKLab 明度 `L = Y^(1/3)` → 色域映射后的 oklch→srgb。
+1. **中性面**：卡片与页面**同色**（这套体系靠浮雕表达层级，不靠色阶差），
+   所以底色必须是一组与背景同色的中性灰，而不是 M3 那种被种子色染过的 tone 阶梯；
+2. **光斑浓度**：玻璃引擎的 mesh 由若干彩色光斑构成，每颗光斑的位置、半径、不透明度
+   都是在**真机上看着调的** —— 最终观感取决于光斑彼此的交叠关系，笔算不出来；
+3. **玻璃叠加色**：凸面 / 凹面的叠加透明度同样是实机调出来的（规范给的 18% 在真机上偏薄，
+   见 `values/colors.xml` 里的注释），凹面甚至要反着压 —— 这些值取决于它落在什么容器里。
 
-**角色映射**（M3 规范值）：
+品牌色相仍然只在**一处**起作用：用户可选的 5 套主题色（`scheme_N_primary`，
+见 `values/arrays.xml`）。改品牌色的做法见本文末尾「修改色板」。
 
-| 角色 | 浅色 | 深色 |
-|---|---|---|
-| primary | tone 40 | tone 80 |
-| on_primary | tone 100 | tone 20 |
-| primary_container | tone 90 | tone 30 |
-| surface | neutral 98 | neutral 6 |
-| surface_container | neutral 94 | neutral 12 |
-| surface_container_high | neutral 92 | neutral 17 |
-| on_surface | neutral 10 | neutral 90 |
-| on_surface_variant | neutral_variant 30 | neutral_variant 80 |
-| outline | neutral_variant 50 | neutral_variant 60 |
+> 历史：本节原来记录的是一套从种子色 `#FB7299` 推导 M3 色角色的生成器
+> （`oklch → CIELAB tone → 角色映射 → 输出 colors.xml`）。那套 `m3_*` 色板已经被上面的
+> 手写令牌整个取代，生成逻辑也已从 `tools/gen_palette.py` 里**删除** ——
+> 脚本现在只校验，见文首「2026 重构」。
 
 ### 对比度是算出来的，不是看出来的
 
-生成器内置完整的 WCAG 校验，**两套主题各 0 项失败**才算通过：
+`tools/gen_palette.py` **只管校验，不管生成**：读现有的两套 `colors.xml` 与 `arrays.xml`，
+按 WCAG 相对亮度（先把 sRGB 通道反伽马，再加权 `0.2126/0.7152/0.0722`）逐项算对比度，
+输出「前景 / 背景 / 对比度 / 门槛 / 通过与否」，硬门槛不达标就以非零退出码结束：
 
 ```
-正文 / 背景         ≥ 4.5:1
-大字号 / 背景       ≥ 3.0:1
-控件、图标、焦点环  ≥ 3.0:1
-outline / surface   ≥ 3.0:1   ← 边界可见性
+正文（< 18sp）        ≥ 4.5:1
+大字（≥ 18sp）        ≥ 3.0:1
+非文本（图标、描边）  ≥ 3.0:1
 ```
 
-> 这条校验抓到过一个真实缺陷：`oklab_to_rgb()` 返回的是**线性** RGB，却被直接喂给 `rgb_to_hex`。结果是整块色板严重偏暗（浅色主题的 `surface` 变成 `#020202`）。
-> 值得记下的是：**对比度检查当时是全部通过的**——纯黑配纯白当然达标。是人工核对十六进制值才发现的。
-> 所以颜色必须同时过「机器校验」和「肉眼核对」两关。
+门槛按**字号**分档，脚本会把「字号 ↔ 门槛」的对应关系打在输出里。
+设计上刻意为之的弱对比（三级文字、状态药丸这类提示级项）单独计数、不拦退出码，
+但数值照常打印 —— 那是设计自己的选择，不是脚本放水。
+
+> **当前基线不是 0 项**：脚本报 7 项硬门槛失败 —— 浅色主题的
+> `hyper_text_secondary` 落在 `hyper_background` 上只有 4.34:1（新拟态下 `neumBase`
+> 就是背景色，所以这是实机数值，不是边角情况）；以及 10 套「主题色实底」里有 6 套
+> 被 `HyperTheme.contrastOn()` 挑错了文字色（品牌粉 `#FB7299` 挑白字 2.64:1，
+> 挑 `#111111` 则是 7.17:1）。这些是真实的色值 / 判据问题，等一次设计决定，
+> **脚本没有为它们调门槛**。
+
+> 更早的生成器时代，校验抓到过一个真实缺陷：`oklab_to_rgb()` 返回的是**线性** RGB，
+> 却被直接喂给 `rgb_to_hex`。结果是整块色板严重偏暗（浅色主题的 `surface` 变成 `#020202`）。
+> 值得记下的是：**对比度检查当时是全部通过的** —— 纯黑配纯白当然达标，是人工核对
+> 十六进制值才发现的。所以颜色必须同时过「机器校验」和「肉眼核对」两关。
+> （那两个函数随生成器一起删掉了，教训留下。）
 
 ### 深色不是浅色反转
 
@@ -402,7 +413,7 @@ box.setClipToOutline(true);
 ```
 app/src/main/res/
 ├── values/
-│   ├── colors.xml          由 tools/gen_palette.py 生成，勿手改
+│   ├── colors.xml          手写维护；tools/gen_palette.py 只做对比度校验，不生成色值
 │   ├── dimens.xml          4dp 网格与语义间距
 │   ├── styles.xml          M3 字阶与组件样式
 │   ├── themes.xml          浅色主题（含系统栏标志）
@@ -437,12 +448,22 @@ Java 侧的界面支撑组件：
 
 ## 修改色板
 
+色板是**手写**的，直接改资源文件，不要改脚本 —— `tools/gen_palette.py` 只校验，不生成。
+
+改品牌色：编辑 `app/src/main/res/values/arrays.xml` 与 `values-night/arrays.xml` 里的
+`scheme_N_primary` / `scheme_N_primary_variant`（也就是 `hyper_primary` /
+`hyper_primary_variant` 两个数组的成员），然后重新构建；改完跑一次校验对比度。
+
 ```powershell
-python tools/gen_palette.py            # 重新生成两套色板并跑对比度校验
-# 输出里 "失败 0 项" 才算通过
+python tools/gen_palette.py     # 校验现有两套色板（只读，不生成也不写文件）
+# 输出里 "失败 0 项" 才算通过；有硬门槛失败项时退出码为 1
 ```
 
-改品牌色编辑 `tools/gen_palette.py` 顶部的种子值，然后重新构建。
+改中性面、浮雕双色、玻璃叠加色同理，直接编辑 `values/colors.xml` 与
+`values-night/colors.xml`，改完同样跑一遍校验。
+
+> `hyper_primary` 是**数组名**（`R.array.hyper_primary`），不是颜色令牌，
+> 色板里没有这个色值 —— 改品牌色落点是那 10 个 `scheme_N_*` 色值。
 
 ---
 
@@ -450,7 +471,9 @@ python tools/gen_palette.py            # 重新生成两套色板并跑对比度
 
 规范写在文档里没有用，得能被执行。下面四项每次改完界面都要重跑：
 
-1. **对比度** —— `python tools/gen_palette.py`，要求两套主题都「失败 0 项」
+1. **对比度** —— `python tools/gen_palette.py`，要求两套主题都「失败 0 项」。
+   它校验的是**已有的**色板（读 `colors.xml` 与 `arrays.xml`），**不生成**色值、也不写任何文件；
+   有硬门槛失败项时退出码为 1。当前基线与已知失败项见 §1「对比度是算出来的，不是看出来的」。
 2. **无字号字面量** —— 扫描 `res/` 里的 `android:textSize="数字` 与 Java 里的 `setTextSize(`，应为 0 处
 3. **无死资源** —— 统计每个 `dimen` / `style` / `string` / `drawable` / `layout` 的引用数（XML 认 `@type/name` 与 `parent="..."`，Java 认 `R.type.name`），应为 0 项
 4. **无硬编码文案** —— 扫描 Java 里的中文字面量。允许的例外只有纯 Java 核心层（`BiliApi` / `Json` / `Model` / `MuxUtil` / `MediaStoreSaver` / `WbiSigner`）里给日志和桌面测试看的消息
