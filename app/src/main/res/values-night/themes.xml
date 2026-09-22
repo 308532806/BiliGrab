@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  深色主题
+  ========
+  刻意与浅色分别设计（colorize.md: "Light and dark themes are each composed,
+  not mechanically inverted"）：表面用 neutral tone 6，层级靠 tone 递进，
+  系统栏图标转为浅色。
+-->
+<resources xmlns:tools="http://schemas.android.com/tools">
+
+    <style name="Theme.BiliGrab" parent="@android:style/Theme.Material.NoActionBar">
+
+        <item name="android:windowBackground">@color/m3_surface</item>
+        <item name="android:colorBackground">@color/m3_surface</item>
+        <item name="android:textColorPrimary">@color/m3_on_surface</item>
+        <item name="android:textColorSecondary">@color/m3_on_surface_variant</item>
+        <item name="android:textColorHint">@color/m3_on_surface_variant</item>
+
+        <item name="android:colorPrimary">@color/m3_primary</item>
+        <item name="android:colorPrimaryDark">@color/m3_surface</item>
+        <item name="android:colorAccent">@color/m3_primary</item>
+        <item name="android:colorControlActivated">@color/m3_primary</item>
+        <item name="android:colorControlNormal">@color/m3_on_surface_variant</item>
+        <item name="android:colorControlHighlight">@color/ripple_on_surface</item>
+
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <!-- 深色背景 → 系统栏图标必须转浅 -->
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar" tools:targetApi="27">false</item>
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
+
+        <item name="android:allowBackup">true</item>
+
+        <item name="android:colorBackgroundFloating">@color/m3_surface_container_high</item>
+        <item name="android:textColorPrimaryInverse">@color/m3_inverse_on_surface</item>
+
+        <item name="android:forceDarkAllowed" tools:targetApi="29">false</item>
+    </style>
+
+    <style name="Theme.BiliGrab.BottomSheet" parent="@android:style/Theme.Material.Dialog">
+        <item name="android:windowIsFloating">false</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:backgroundDimAmount">0.5</item>
+        <item name="android:windowAnimationStyle">@style/Animation.BiliGrab.Sheet</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+
+    <style name="Animation.BiliGrab.Sheet" parent="@android:style/Animation.Dialog">
+        <item name="android:windowEnterAnimation">@anim/sheet_enter</item>
+        <item name="android:windowExitAnimation">@anim/sheet_exit</item>
+    </style>
+
+</resources>

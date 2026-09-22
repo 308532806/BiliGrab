@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 错误横幅：用 error_container 表达状态，同时配图标（不以颜色为唯一编码） -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <corners android:radius="@dimen/shape_md" />
+    <solid android:color="@color/m3_error_container" />
+</shape>

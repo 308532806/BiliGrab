@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 填充按钮文字：禁用态用 on_surface 38%，不再单独定义灰色（colorize.md） -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:color="@color/m3_on_surface" android:alpha="0.38" android:state_enabled="false"/>
+    <item android:color="@color/m3_on_primary"/>
+</selector>

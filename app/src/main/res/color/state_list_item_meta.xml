@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 列表项次要文字色 -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:color="@color/m3_on_secondary_container" android:alpha="0.75" android:state_selected="true"/>
+    <item android:color="@color/m3_on_surface_variant"/>
+</selector>

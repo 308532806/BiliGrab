@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 骨架屏占位块：加载态用它替代整块内容，避免空白屏和跳动 -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <corners android:radius="@dimen/shape_xs" />
+    <solid android:color="@color/m3_surface_container_high" />
+</shape>

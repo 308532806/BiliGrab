@@ -12,7 +12,7 @@
 param(
     [string]$VersionName = "1.0.0",
     [int]$VersionCode = 1,
-    [string]$AppPackage = "com.biligrab.app",
+    [string]$AppPackage = "com.biligrab.downloader",
     [string]$OutDir = "",
     # 签名密钥库。默认放在仓库的 keystore/ 目录（已 gitignore）。
     # 关键：必须位于构建过程不会清空的位置，否则每次构建都会换一把新钥匙，

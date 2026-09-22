@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  扩展 FAB：M3 规定一屏只有一个，承载唯一的主要动作。
+  用 primary_container —— 让实心填充按钮仍能作为更强的强调保留。
+-->
+<ripple xmlns:android="http://schemas.android.com/apk/res/android"
+    android:color="@color/ripple_on_surface">
+    <item>
+        <shape android:shape="rectangle">
+            <corners android:radius="@dimen/shape_lg" />
+            <solid android:color="@color/state_fab_bg" />
+        </shape>
+    </item>
+</ripple>

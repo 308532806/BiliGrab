@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  启动图标底色
+  =============
+  单独放一个文件，避免被 tools/gen_palette.py 重新生成 colors.xml 时覆盖掉。
+
+  用的是品牌色相（与 M3 主色同源），但取更亮的一档：
+  M3 的 tonal primary 在深色主题下偏暗，直接拿来做图标会在桌面背景上糊成一团。
+-->
+<resources>
+    <color name="ic_launcher_background">#C02B5C</color>
+</resources>

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 状态药丸：登录态等简短状态，用容器色而不是纯色文字 -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <corners android:radius="@dimen/shape_full" />
+    <solid android:color="@color/m3_surface_container_highest" />
+</shape>

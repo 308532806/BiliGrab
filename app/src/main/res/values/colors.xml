@@ -1,14 +1,45 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  由 tools/gen_palette.py 自动生成，请勿手改。
+  种子色 #FB7299，色空间 OKLCH，映射遵循 Material 3 色角色。
+  重新生成：python tools/gen_palette.py
+-->
 <resources>
-    <color name="bg">#0F1115</color>
-    <color name="surface">#171A21</color>
-    <color name="surface2">#222733</color>
-    <color name="stroke">#2E3340</color>
-    <color name="text">#E9EBF2</color>
-    <color name="text_dim">#9AA1B1</color>
-    <color name="accent">#FB7299</color>
-    <color name="accent_dim">#C9527A</color>
-    <color name="ok">#41D17E</color>
-    <color name="err">#FF5A5F</color>
-    <color name="ic_launcher_background">#FB7299</color>
+
+
+    <!-- 浅色主题 — Material 3 色角色 -->
+
+    <color name="m3_primary">#A62152</color>
+    <color name="m3_on_primary">#FFFFFF</color>
+    <color name="m3_primary_container">#FFD6DF</color>
+    <color name="m3_on_primary_container">#3A0016</color>
+    <color name="m3_secondary">#79515A</color>
+    <color name="m3_on_secondary">#FFFFFF</color>
+    <color name="m3_secondary_container">#FFD6DF</color>
+    <color name="m3_on_secondary_container">#300F18</color>
+    <color name="m3_tertiary">#884F00</color>
+    <color name="m3_on_tertiary">#FFFFFF</color>
+    <color name="m3_tertiary_container">#FFDBBA</color>
+    <color name="m3_on_tertiary_container">#2C1500</color>
+    <color name="m3_error">#B10E16</color>
+    <color name="m3_on_error">#FFFFFF</color>
+    <color name="m3_error_container">#FFD8D3</color>
+    <color name="m3_on_error_container">#3C0002</color>
+    <color name="m3_surface_dim">#DED8D9</color>
+    <color name="m3_surface">#FDF8F9</color>
+    <color name="m3_surface_bright">#FDF8F9</color>
+    <color name="m3_surface_container_lowest">#FFFFFF</color>
+    <color name="m3_surface_container_low">#F7F2F3</color>
+    <color name="m3_surface_container">#F2ECED</color>
+    <color name="m3_surface_container_high">#ECE7E8</color>
+    <color name="m3_surface_container_highest">#E6E1E2</color>
+    <color name="m3_on_surface">#1E1A1B</color>
+    <color name="m3_surface_variant">#EFDDE1</color>
+    <color name="m3_on_surface_variant">#514245</color>
+    <color name="m3_outline">#827275</color>
+    <color name="m3_outline_variant">#D3C1C5</color>
+    <color name="m3_inverse_surface">#332F30</color>
+    <color name="m3_inverse_on_surface">#F5EFF0</color>
+    <color name="m3_inverse_primary">#FFABBE</color>
+    <color name="m3_surface_tint">#A62152</color>
 </resources>

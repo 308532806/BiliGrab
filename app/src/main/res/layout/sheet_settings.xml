@@ -1,0 +1,227 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  设置底部表单
+  =============
+  用底部表单而不是 AlertDialog：设置是一个不需要打断、也不需要保护焦点的任务，
+  craft-floor 明确把这类任务上的模态对话框列为反模式。
+
+  同时提供两种关闭方式：右上角关闭按钮，以及点击外部 / 返回键（Dialog 默认行为）。
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/sheetRoot"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@drawable/bg_bottom_sheet"
+    android:orientation="vertical"
+    android:paddingBottom="@dimen/space_lg">
+
+    <!-- 拖拽把手 -->
+    <View
+        android:layout_width="32dp"
+        android:layout_height="4dp"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginTop="@dimen/space_sm"
+        android:background="@drawable/bg_sheet_handle" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="@dimen/top_app_bar_height"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="@dimen/screen_margin"
+        android:paddingEnd="@dimen/space_sm">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/settings_title"
+            android:textAppearance="@style/Text.TitleLarge" />
+
+        <ImageButton
+            android:id="@+id/btnSheetClose"
+            style="@style/Widget.IconButton"
+            android:contentDescription="@string/cd_close"
+            android:src="@drawable/ic_close"
+            android:tint="@color/m3_on_surface_variant" />
+    </LinearLayout>
+
+    <ScrollView
+        android:id="@+id/sheetScroll"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:scrollbarStyle="outsideOverlay">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:paddingStart="@dimen/screen_margin"
+            android:paddingEnd="@dimen/screen_margin">
+
+            <!-- ==================== 账号 ==================== -->
+
+            <TextView
+                style="@style/Widget.SectionTitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/settings_account_title" />
+
+            <TextView
+                android:id="@+id/labelSessdata"
+                style="@style/Widget.FieldLabel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/space_lg"
+                android:layout_marginBottom="@dimen/space_sm"
+                android:labelFor="@id/etSessdata"
+                android:text="@string/settings_sessdata_label" />
+
+            <EditText
+                android:id="@+id/etSessdata"
+                style="@style/Widget.TextField"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="@string/settings_sessdata_hint"
+                android:importantForAutofill="no"
+                android:inputType="textNoSuggestions"
+                tools:ignore="TextViewEdits" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/space_sm"
+                android:text="@string/settings_sessdata_help"
+                android:textAppearance="@style/Text.BodySmall" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/space_md"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/tvLoginState"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:background="@drawable/bg_status_pill"
+                    android:paddingStart="@dimen/space_md"
+                    android:paddingTop="@dimen/space_xs"
+                    android:paddingEnd="@dimen/space_md"
+                    android:paddingBottom="@dimen/space_xs"
+                    android:textAppearance="@style/Text.LabelMedium"
+                    android:textColor="@color/m3_on_surface_variant"
+                    tools:text="@string/settings_login_state_off" />
+
+                <View
+                    android:layout_width="0dp"
+                    android:layout_height="1dp"
+                    android:layout_weight="1" />
+
+                <Button
+                    android:id="@+id/btnClearCookie"
+                    style="@style/Widget.Button.Outlined"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/settings_clear_cookie" />
+            </LinearLayout>
+
+            <!-- ==================== 下载偏好 ==================== -->
+
+            <TextView
+                style="@style/Widget.SectionTitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/section_gap"
+                android:text="@string/settings_playback_title" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/title_gap"
+                android:gravity="center_vertical"
+                android:minHeight="@dimen/touch_min"
+                android:orientation="horizontal">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:paddingEnd="@dimen/space_lg">
+
+                    <TextView
+                        android:id="@+id/tvPreferAvcLabel"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:labelFor="@id/swPreferAvc"
+                        android:text="@string/settings_prefer_avc"
+                        android:textAppearance="@style/Text.TitleSmall" />
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp"
+                        android:text="@string/settings_prefer_avc_desc"
+                        android:textAppearance="@style/Text.BodySmall" />
+                </LinearLayout>
+
+                <Switch
+                    android:id="@+id/swPreferAvc"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:thumbTint="@color/switch_thumb"
+                    android:trackTint="@color/switch_track" />
+            </LinearLayout>
+
+            <!-- ==================== 外观 ==================== -->
+
+            <TextView
+                style="@style/Widget.SectionTitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/section_gap"
+                android:text="@string/settings_theme_title" />
+
+            <TextView
+                style="@style/Widget.FieldLabel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/space_lg" />
+
+            <com.biligrab.downloader.FlowLayout
+                android:id="@+id/chipTheme"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/title_gap" />
+
+            <!-- ==================== 关于 ==================== -->
+
+            <TextView
+                style="@style/Widget.SectionTitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/section_gap"
+                android:text="@string/settings_about_title" />
+
+            <TextView
+                android:id="@+id/tvVersion"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/title_gap"
+                android:textAppearance="@style/Text.BodyMedium"
+                android:textColor="@color/m3_on_surface"
+                tools:text="版本 1.1.0" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/space_xs"
+                android:text="@string/settings_about_body"
+                android:textAppearance="@style/Text.BodySmall" />
+
+        </LinearLayout>
+    </ScrollView>
+</LinearLayout>

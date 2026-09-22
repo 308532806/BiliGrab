@@ -3,11 +3,11 @@ plugins {
 }
 
 android {
-    namespace = "com.biligrab.app"
+    namespace = "com.biligrab.downloader"
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.biligrab.app"
+        applicationId = "com.biligrab.downloader"
         minSdk = 26
         targetSdk = 34
         versionCode = 1

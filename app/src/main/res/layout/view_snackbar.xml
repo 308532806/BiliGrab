@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Snackbar 视图
+  =============
+  用 inverse_surface 反色底 + on_inverse_surface 文字，
+  保证在浅色和深色主题下都与背景形成明确反差。
+  动作按钮是可选的（仅在确有必要时使用，不做「无意义的确认」）。
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/snackbarCard"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@drawable/bg_snackbar"
+    android:elevation="6dp"
+    android:gravity="center_vertical"
+    android:minHeight="@dimen/touch_min"
+    android:orientation="horizontal"
+    android:paddingStart="@dimen/space_lg"
+    android:paddingEnd="@dimen/space_sm">
+
+    <ImageView
+        android:id="@+id/ivSnackbarIcon"
+        android:layout_width="@dimen/icon_size_sm"
+        android:layout_height="@dimen/icon_size_sm"
+        android:contentDescription="@null"
+        android:src="@drawable/ic_info"
+        android:tint="@color/m3_inverse_on_surface" />
+
+    <TextView
+        android:id="@+id/tvSnackbarMessage"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="@dimen/space_md"
+        android:layout_weight="1"
+        android:paddingTop="@dimen/space_md"
+        android:paddingBottom="@dimen/space_md"
+        android:textAppearance="@style/Text.BodyMedium"
+        android:textColor="@color/m3_inverse_on_surface" />
+
+    <Button
+        android:id="@+id/btnSnackbarAction"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:background="?android:attr/selectableItemBackgroundBorderless"
+        android:minHeight="@dimen/touch_min"
+        android:minWidth="@dimen/touch_min"
+        android:paddingStart="@dimen/space_md"
+        android:paddingEnd="@dimen/space_md"
+        android:textAllCaps="false"
+        android:textAppearance="@style/Text.LabelLarge"
+        android:textColor="@color/m3_inverse_primary"
+        android:visibility="gone" />
+
+</LinearLayout>

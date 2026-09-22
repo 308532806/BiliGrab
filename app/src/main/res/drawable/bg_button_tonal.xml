@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 色调按钮 -->
+<ripple xmlns:android="http://schemas.android.com/apk/res/android"
+    android:color="@color/ripple_on_surface">
+    <item>
+        <shape android:shape="rectangle">
+            <corners android:radius="@dimen/shape_full"/>
+            <solid android:color="@color/state_button_tonal_bg"/>
+        </shape>
+    </item>
+</ripple>

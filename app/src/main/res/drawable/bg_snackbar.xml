@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Snackbar：M3 用 inverse_surface 反色底，保证在任意背景上都突出 -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <corners android:radius="@dimen/shape_xs" />
+    <solid android:color="@color/m3_inverse_surface" />
+</shape>

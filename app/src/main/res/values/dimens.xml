@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  尺寸令牌
+  =========
+  命名描述**用途**而不是数值（impeccable: "Role names and tokens should
+  describe purpose rather than values"），这样调整比例时调用方不需要改。
+
+  间距遵循 4dp 栅格；形状遵循 Material 3 形状阶。
+-->
+<resources>
+
+    <!-- ==================== 间距：4dp 栅格 ==================== -->
+
+    <dimen name="space_xs">4dp</dimen>
+    <dimen name="space_sm">8dp</dimen>
+    <dimen name="space_md">12dp</dimen>
+    <dimen name="space_lg">16dp</dimen>
+    <dimen name="space_xl">24dp</dimen>
+    <dimen name="space_2xl">32dp</dimen>
+    <dimen name="space_3xl">48dp</dimen>
+
+    <!-- 语义化间距 -->
+    <dimen name="screen_margin">16dp</dimen>
+    <dimen name="content_gap">24dp</dimen>
+    <!-- 比 title_gap 大：impeccable 要求"标题上方的留白多于下方" -->
+    <dimen name="section_gap">32dp</dimen>
+    <dimen name="title_gap">12dp</dimen>
+    <dimen name="item_gap">8dp</dimen>
+    <dimen name="card_padding">16dp</dimen>
+
+    <!-- ==================== 形状：Material 3 形状阶 ==================== -->
+
+    <dimen name="shape_xs">4dp</dimen>
+    <dimen name="shape_sm">8dp</dimen>
+    <dimen name="shape_md">12dp</dimen>
+    <dimen name="shape_lg">16dp</dimen>
+    <dimen name="shape_xl">28dp</dimen>
+    <dimen name="shape_full">999dp</dimen>
+
+    <!-- ==================== 触控：Material 3 可达性下限 ==================== -->
+
+    <!-- 任何可点区域不得小于此值 -->
+    <dimen name="touch_min">48dp</dimen>
+    <!-- 相邻可点目标之间的最小间隙 -->
+    <dimen name="touch_gap">8dp</dimen>
+
+    <!-- ==================== 组件尺寸 ==================== -->
+
+    <dimen name="top_app_bar_height">64dp</dimen>
+    <dimen name="icon_size">24dp</dimen>
+    <dimen name="icon_size_sm">20dp</dimen>
+    <dimen name="button_height">48dp</dimen>
+    <dimen name="field_height">56dp</dimen>
+    <dimen name="chip_height">36dp</dimen>
+    <dimen name="progress_height">4dp</dimen>
+
+    <!-- ==================== 其他 ==================== -->
+
+    <!-- 描边宽度：统一 1dp，避免出现某处 2dp 的"重点边框" -->
+    <dimen name="stroke">1dp</dimen>
+
+    <!-- 封面固定高度：固定值可避免图片加载造成的布局跳动 -->
+    <dimen name="cover_height">180dp</dimen>
+
+    <!-- 分 P 列表最大高度：超过就滚动，避免把操作区顶出屏幕 -->
+    <dimen name="parts_list_max_height">240dp</dimen>
+
+</resources>

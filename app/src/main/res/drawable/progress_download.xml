@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  M3 线性进度指示器
+  轨道用 secondary_container，指示条用 primary —— 两个都是色角色，自动跟随明暗。
+-->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:id="@android:id/background">
+        <shape android:shape="rectangle">
+            <corners android:radius="@dimen/shape_full" />
+            <solid android:color="@color/m3_secondary_container" />
+        </shape>
+    </item>
+    <item android:id="@android:id/progress">
+        <clip>
+            <shape android:shape="rectangle">
+                <corners android:radius="@dimen/shape_full" />
+                <solid android:color="@color/m3_primary" />
+            </shape>
+        </clip>
+    </item>
+</layer-list>

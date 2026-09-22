@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 封面占位：图片加载完成前占据同样的空间，避免布局跳动（ux-guidelines #19） -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <corners android:radius="@dimen/shape_md" />
+    <solid android:color="@color/m3_surface_container_highest" />
+</shape>

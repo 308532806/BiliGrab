@@ -1,271 +1,597 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<!--
+  主界面
+  =======
+  结构遵循 Material 3：小顶栏 + 可滚动内容 + 唯一的主要动作（扩展 FAB）。
+
+  五种状态互斥显示，全部在同一棵视图树里，靠可见性切换：
+    空        emptyBox    —— 引导用户完成第一步
+    加载      loadingBox  —— 骨架屏，不用空白页
+    错误      errorBox    —— 说明问题 + 给出恢复动作
+    结果      resultBox   —— 封面 / 标题 / 分 P / 画质 / 仅音频
+    下载中    progressBox —— 阶段文字 + 百分比 + 确定性进度条
+-->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/bg"
-    android:fitsSystemWindows="true"
-    android:orientation="vertical">
+    android:background="@color/m3_surface">
 
-    <!-- ============ 顶栏 ============ -->
     <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:gravity="center_vertical"
-        android:orientation="horizontal"
-        android:paddingLeft="16dp"
-        android:paddingTop="12dp"
-        android:paddingRight="8dp"
-        android:paddingBottom="8dp">
+        android:layout_height="match_parent"
+        android:orientation="vertical">
 
-        <TextView
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="@string/app_name"
-            android:textColor="@color/text"
-            android:textSize="21sp"
-            android:textStyle="bold" />
-
-        <TextView
-            android:id="@+id/btnSettings"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:background="?android:attr/selectableItemBackground"
-            android:paddingLeft="14dp"
-            android:paddingTop="8dp"
-            android:paddingRight="14dp"
-            android:paddingBottom="8dp"
-            android:text="@string/settings"
-            android:textColor="@color/accent"
-            android:textSize="14sp" />
-    </LinearLayout>
-
-    <!-- ============ 输入区 ============ -->
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:paddingLeft="16dp"
-        android:paddingRight="16dp">
-
-        <EditText
-            android:id="@+id/inputUrl"
-            android:layout_width="0dp"
-            android:layout_height="48dp"
-            android:layout_weight="1"
-            android:background="@drawable/bg_input"
-            android:hint="@string/hint_input"
-            android:imeOptions="actionSearch"
-            android:inputType="textUri"
-            android:maxLines="1"
-            android:paddingLeft="14dp"
-            android:paddingRight="14dp"
-            android:singleLine="true"
-            android:textColor="@color/text"
-            android:textColorHint="@color/text_dim"
-            android:textSize="14sp" />
-
-        <Button
-            android:id="@+id/btnParse"
-            style="@style/PrimaryButton"
-            android:layout_width="84dp"
-            android:layout_height="48dp"
-            android:layout_marginLeft="8dp"
-            android:text="@string/parse" />
-    </LinearLayout>
-
-    <TextView
-        android:id="@+id/tvLogin"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:paddingLeft="18dp"
-        android:paddingTop="8dp"
-        android:paddingRight="18dp"
-        android:text="@string/not_logged_in"
-        android:textColor="@color/text_dim"
-        android:textSize="12sp" />
-
-    <!-- ============ 视频信息卡片 ============ -->
-    <LinearLayout
-        android:id="@+id/infoBox"
-        style="@style/Card"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginLeft="16dp"
-        android:layout_marginTop="12dp"
-        android:layout_marginRight="16dp"
-        android:orientation="horizontal"
-        android:visibility="gone">
-
-        <ImageView
-            android:id="@+id/ivCover"
-            android:layout_width="104dp"
-            android:layout_height="66dp"
-            android:background="@color/surface2"
-            android:contentDescription="@string/loading_cover"
-            android:scaleType="centerCrop" />
+        <!-- ==================== 顶栏 ==================== -->
+        <!-- 高度 64dp，顶部 padding 由代码按状态栏 inset 补齐 -->
 
         <LinearLayout
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_marginLeft="12dp"
-            android:layout_weight="1"
-            android:orientation="vertical">
-
-            <TextView
-                android:id="@+id/tvTitle"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:ellipsize="end"
-                android:maxLines="2"
-                android:textColor="@color/text"
-                android:textSize="14sp"
-                android:textStyle="bold" />
-
-            <TextView
-                android:id="@+id/tvMeta"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="6dp"
-                android:textColor="@color/text_dim"
-                android:textSize="12sp" />
-        </LinearLayout>
-    </LinearLayout>
-
-    <!-- ============ 分 P 列表 ============ -->
-    <TextView
-        android:id="@+id/tvPartsLabel"
-        style="@style/SectionLabel"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:paddingLeft="20dp"
-        android:paddingTop="16dp"
-        android:paddingBottom="6dp"
-        android:text="分 P 列表"
-        android:visibility="gone" />
-
-    <ListView
-        android:id="@+id/listParts"
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_marginLeft="16dp"
-        android:layout_marginRight="16dp"
-        android:layout_weight="1"
-        android:divider="@null"
-        android:dividerHeight="0dp"
-        android:scrollbars="none"
-        android:visibility="gone" />
-
-    <!-- 占位提示 -->
-    <TextView
-        android:id="@+id/tvPlaceholder"
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"
-        android:gravity="center"
-        android:padding="32dp"
-        android:text="@string/tip"
-        android:textColor="@color/text_dim"
-        android:textSize="13sp" />
-
-    <!-- ============ 底部控制区 ============ -->
-    <LinearLayout
-        android:id="@+id/controlBox"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:background="@color/surface"
-        android:orientation="vertical"
-        android:paddingLeft="16dp"
-        android:paddingTop="12dp"
-        android:paddingRight="16dp"
-        android:paddingBottom="14dp"
-        android:visibility="gone">
-
-        <LinearLayout
+            android:id="@+id/topBar"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
+            android:layout_height="@dimen/top_app_bar_height"
+            android:background="@color/m3_surface"
             android:gravity="center_vertical"
-            android:orientation="horizontal">
+            android:orientation="horizontal"
+            android:paddingStart="@dimen/space_lg"
+            android:paddingEnd="@dimen/space_xs">
 
             <TextView
-                style="@style/SectionLabel"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="@string/quality" />
-
-            <Spinner
-                android:id="@+id/spQuality"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_marginLeft="12dp"
-                android:layout_weight="1" />
-        </LinearLayout>
-
-        <CheckBox
-            android:id="@+id/cbAudioOnly"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:text="@string/audio_only"
-            android:textColor="@color/text_dim"
-            android:textSize="13sp" />
-
-        <Button
-            android:id="@+id/btnDownload"
-            style="@style/PrimaryButton"
-            android:layout_width="match_parent"
-            android:layout_height="48dp"
-            android:layout_marginTop="10dp"
-            android:text="@string/download" />
-    </LinearLayout>
-
-    <!-- ============ 进度区 ============ -->
-    <LinearLayout
-        android:id="@+id/progressBox"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:background="@color/surface"
-        android:orientation="vertical"
-        android:paddingLeft="16dp"
-        android:paddingTop="14dp"
-        android:paddingRight="16dp"
-        android:paddingBottom="16dp"
-        android:visibility="gone">
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal">
-
-            <TextView
-                android:id="@+id/tvStage"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:ellipsize="end"
-                android:maxLines="1"
-                android:text="@string/ready"
-                android:textColor="@color/text"
-                android:textSize="13sp" />
+                android:text="@string/title_main"
+                android:textAppearance="@style/Text.TitleLarge" />
 
-            <TextView
-                android:id="@+id/tvPercent"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:textColor="@color/accent"
-                android:textSize="13sp"
-                android:textStyle="bold" />
+            <ImageButton
+                android:id="@+id/btnSettings"
+                style="@style/Widget.IconButton"
+                android:contentDescription="@string/cd_settings"
+                android:src="@drawable/ic_settings"
+                android:tint="@color/m3_on_surface_variant" />
         </LinearLayout>
 
-        <ProgressBar
-            android:id="@+id/progress"
-            style="?android:attr/progressBarStyleHorizontal"
+        <!-- ==================== 内容 ==================== -->
+
+        <ScrollView
+            android:id="@+id/scroll"
             android:layout_width="match_parent"
-            android:layout_height="6dp"
-            android:layout_marginTop="10dp"
-            android:max="100"
-            android:progressTint="@color/accent"
-            android:progressBackgroundTint="@color/surface2" />
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:clipToPadding="false"
+            android:fillViewport="true"
+            android:paddingBottom="104dp"
+            android:scrollbarStyle="outsideOverlay">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:paddingStart="@dimen/screen_margin"
+                android:paddingEnd="@dimen/screen_margin">
+
+                <!-- == 链接输入 == -->
+
+                <TextView
+                    android:id="@+id/labelUrl"
+                    style="@style/Widget.FieldLabel"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="@dimen/space_sm"
+                    android:labelFor="@id/inputUrl"
+                    android:text="@string/label_url" />
+
+                <!-- 字段与尾部图标按钮叠放，按钮 48dp 触控区 -->
+                <FrameLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content">
+
+                    <EditText
+                        android:id="@+id/inputUrl"
+                        style="@style/Widget.TextField"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:hint="@string/hint_url"
+                        android:imeOptions="actionSearch"
+                        android:importantForAutofill="no"
+                        android:inputType="textUri"
+                        android:paddingEnd="56dp"
+                        android:selectAllOnFocus="false"
+                        tools:ignore="TextViewEdits" />
+
+                    <ImageButton
+                        android:id="@+id/btnPaste"
+                        style="@style/Widget.IconButton"
+                        android:layout_gravity="end|center_vertical"
+                        android:contentDescription="@string/cd_paste"
+                        android:src="@drawable/ic_paste"
+                        android:tint="@color/m3_on_surface_variant" />
+                </FrameLayout>
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/space_sm"
+                    android:text="@string/helper_url"
+                    android:textAppearance="@style/Text.BodySmall" />
+
+                <Button
+                    android:id="@+id/btnParse"
+                    style="@style/Widget.Button.Filled"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/space_lg"
+                    android:text="@string/action_parse" />
+
+                <!-- == 错误：问题 + 恢复动作 == -->
+
+                <LinearLayout
+                    android:id="@+id/errorBox"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/content_gap"
+                    android:background="@drawable/bg_error_banner"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:padding="@dimen/card_padding"
+                    android:visibility="gone"
+                    tools:visibility="visible">
+
+                    <ImageView
+                        android:layout_width="@dimen/icon_size"
+                        android:layout_height="@dimen/icon_size"
+                        android:contentDescription="@null"
+                        android:src="@drawable/ic_error"
+                        android:tint="@color/m3_on_error_container" />
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="@dimen/space_md"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:id="@+id/errorTitle"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:textAppearance="@style/Text.TitleSmall"
+                            android:textColor="@color/m3_on_error_container" />
+
+                        <TextView
+                            android:id="@+id/errorFix"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="2dp"
+                            android:textAppearance="@style/Text.BodySmall"
+                            android:textColor="@color/m3_on_error_container" />
+
+                        <!-- 原始错误信息：出现问题时用户能据此反馈，不必去翻日志 -->
+                        <TextView
+                            android:id="@+id/errorDetail"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="@dimen/space_xs"
+                            android:fontFamily="monospace"
+                            android:textAppearance="@style/Text.BodySmall"
+                            android:textColor="@color/m3_on_error_container"
+                            android:textSize="11sp"
+                            android:visibility="gone"
+                            tools:text="code=-403 请求被拒绝"
+                            tools:visibility="visible" />
+                    </LinearLayout>
+
+                    <Button
+                        android:id="@+id/btnRetry"
+                        style="@style/Widget.Button.Outlined"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="@dimen/space_sm"
+                        android:text="@string/action_retry" />
+                </LinearLayout>
+
+                <!-- == 空状态 == -->
+
+                <LinearLayout
+                    android:id="@+id/emptyBox"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/space_3xl"
+                    android:gravity="center_horizontal"
+                    android:orientation="vertical">
+
+                    <FrameLayout
+                        android:layout_width="96dp"
+                        android:layout_height="96dp"
+                        android:background="@drawable/bg_empty_icon">
+
+                        <ImageView
+                            android:layout_width="44dp"
+                            android:layout_height="44dp"
+                            android:layout_gravity="center"
+                            android:contentDescription="@null"
+                            android:src="@drawable/ic_search"
+                            android:tint="@color/m3_on_secondary_container" />
+                    </FrameLayout>
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/space_xl"
+                        android:gravity="center"
+                        android:text="@string/empty_title"
+                        android:textAppearance="@style/Text.HeadlineSmall" />
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/space_sm"
+                        android:gravity="center"
+                        android:text="@string/empty_body"
+                        android:textAppearance="@style/Text.BodyMedium" />
+
+                    <!-- 两条能力提示，各带图标，不靠颜色区分 -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/content_gap"
+                        android:background="@drawable/bg_card"
+                        android:orientation="vertical"
+                        android:padding="@dimen/card_padding">
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:gravity="center_vertical"
+                            android:orientation="horizontal">
+
+                            <ImageView
+                                android:layout_width="@dimen/icon_size_sm"
+                                android:layout_height="@dimen/icon_size_sm"
+                                android:contentDescription="@null"
+                                android:src="@drawable/ic_link"
+                                android:tint="@color/m3_on_surface_variant" />
+
+                            <TextView
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="@dimen/space_md"
+                                android:layout_weight="1"
+                                android:text="@string/empty_hint_link"
+                                android:textAppearance="@style/Text.BodySmall" />
+                        </LinearLayout>
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="@dimen/space_md"
+                            android:gravity="center_vertical"
+                            android:orientation="horizontal">
+
+                            <ImageView
+                                android:layout_width="@dimen/icon_size_sm"
+                                android:layout_height="@dimen/icon_size_sm"
+                                android:contentDescription="@null"
+                                android:src="@drawable/ic_music"
+                                android:tint="@color/m3_on_surface_variant" />
+
+                            <TextView
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="@dimen/space_md"
+                                android:layout_weight="1"
+                                android:text="@string/empty_hint_login"
+                                android:textAppearance="@style/Text.BodySmall" />
+                        </LinearLayout>
+                    </LinearLayout>
+                </LinearLayout>
+
+                <!-- == 加载骨架 == -->
+
+                <LinearLayout
+                    android:id="@+id/loadingBox"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/content_gap"
+                    android:orientation="vertical"
+                    android:visibility="gone">
+
+                    <View
+                        android:layout_width="match_parent"
+                        android:layout_height="@dimen/cover_height"
+                        android:background="@drawable/bg_skeleton" />
+
+                    <View
+                        android:layout_width="match_parent"
+                        android:layout_height="22dp"
+                        android:layout_marginTop="@dimen/space_lg"
+                        android:background="@drawable/bg_skeleton" />
+
+                    <View
+                        android:layout_width="180dp"
+                        android:layout_height="16dp"
+                        android:layout_marginTop="@dimen/space_md"
+                        android:background="@drawable/bg_skeleton" />
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/content_gap"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <ProgressBar
+                            android:id="@+id/loadingSpinner"
+                            style="?android:attr/progressBarStyleSmall"
+                            android:layout_width="20dp"
+                            android:layout_height="20dp"
+                            android:indeterminateTint="@color/m3_primary" />
+
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="@dimen/space_md"
+                            android:layout_weight="1"
+                            android:text="@string/loading_title"
+                            android:textAppearance="@style/Text.TitleSmall" />
+                    </LinearLayout>
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/space_xs"
+                        android:text="@string/loading_body"
+                        android:textAppearance="@style/Text.BodySmall" />
+                </LinearLayout>
+
+                <!-- == 解析结果 == -->
+
+                <LinearLayout
+                    android:id="@+id/resultBox"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:visibility="gone"
+                    tools:visibility="visible">
+
+                    <ImageView
+                        android:id="@+id/ivCover"
+                        android:layout_width="match_parent"
+                        android:layout_height="@dimen/cover_height"
+                        android:layout_marginTop="@dimen/content_gap"
+                        android:background="@drawable/bg_cover_placeholder"
+                        android:clipToOutline="true"
+                        android:contentDescription="@null"
+                        android:scaleType="centerCrop" />
+
+                    <TextView
+                        android:id="@+id/tvTitle"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/space_lg"
+                        android:textAppearance="@style/Text.TitleLarge" />
+
+                    <TextView
+                        android:id="@+id/tvMeta"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/space_xs"
+                        android:textAppearance="@style/Text.BodyMedium" />
+
+                    <!-- 仅在「未登录导致画质受限」时出现：说明原因，并直接给出动作 -->
+                    <LinearLayout
+                        android:id="@+id/qualityHintBox"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/space_lg"
+                        android:background="@drawable/bg_card"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal"
+                        android:paddingStart="@dimen/card_padding"
+                        android:paddingTop="@dimen/space_md"
+                        android:paddingEnd="@dimen/space_sm"
+                        android:paddingBottom="@dimen/space_md"
+                        android:visibility="gone"
+                        tools:visibility="visible">
+
+                        <ImageView
+                            android:layout_width="@dimen/icon_size_sm"
+                            android:layout_height="@dimen/icon_size_sm"
+                            android:contentDescription="@null"
+                            android:src="@drawable/ic_info"
+                            android:tint="@color/m3_primary" />
+
+                        <TextView
+                            android:id="@+id/tvQualityHint"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="@dimen/space_md"
+                            android:layout_weight="1"
+                            android:textAppearance="@style/Text.BodySmall" />
+
+                        <Button
+                            android:id="@+id/btnQualityHintAction"
+                            style="@style/Widget.Button.Outlined"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="@dimen/space_sm"
+                            android:text="@string/action_open_settings" />
+                    </LinearLayout>
+
+                    <!-- 分 P 选择 -->
+
+                    <TextView
+                        android:id="@+id/tvPartsLabel"
+                        style="@style/Widget.SectionTitle"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/section_gap"
+                        android:text="@string/section_parts" />
+
+                    <ListView
+                        android:id="@+id/listParts"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/title_gap"
+                        android:background="@drawable/bg_card"
+                        android:divider="@null"
+                        android:dividerHeight="0dp"
+                        android:maxHeight="@dimen/parts_list_max_height"
+                        android:nestedScrollingEnabled="true"
+                        android:padding="@dimen/space_sm"
+                        android:scrollbarStyle="outsideOverlay" />
+
+                    <!-- 画质选择 -->
+
+                    <TextView
+                        android:id="@+id/tvQualityLabel"
+                        style="@style/Widget.SectionTitle"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/section_gap"
+                        android:text="@string/section_quality" />
+
+                    <com.biligrab.downloader.FlowLayout
+                        android:id="@+id/chipQuality"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/title_gap" />
+
+                    <!-- 仅音频 -->
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/content_gap"
+                        android:gravity="center_vertical"
+                        android:minHeight="@dimen/touch_min"
+                        android:orientation="horizontal">
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:orientation="vertical"
+                            android:paddingEnd="@dimen/space_lg">
+
+                            <TextView
+                                android:id="@+id/tvAudioOnlyLabel"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:labelFor="@id/swAudioOnly"
+                                android:text="@string/label_audio_only"
+                                android:textAppearance="@style/Text.TitleSmall" />
+
+                            <TextView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="2dp"
+                                android:text="@string/label_audio_only_desc"
+                                android:textAppearance="@style/Text.BodySmall" />
+                        </LinearLayout>
+
+                        <Switch
+                            android:id="@+id/swAudioOnly"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:thumbTint="@color/switch_thumb"
+                            android:trackTint="@color/switch_track" />
+                    </LinearLayout>
+
+                    <!-- == 下载进度 == -->
+
+                    <LinearLayout
+                        android:id="@+id/progressBox"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/section_gap"
+                        android:background="@drawable/bg_card"
+                        android:orientation="vertical"
+                        android:padding="@dimen/card_padding"
+                        android:visibility="gone"
+                        tools:visibility="visible">
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:gravity="center_vertical"
+                            android:orientation="horizontal">
+
+                            <TextView
+                                android:id="@+id/tvStage"
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:textAppearance="@style/Text.TitleSmall" />
+
+                            <!-- 百分比用等宽数字，变化时不会左右抖动 -->
+                            <TextView
+                                android:id="@+id/tvPercent"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:fontFamily="sans-serif-medium"
+                                android:textAppearance="@style/Text.TitleSmall"
+                                android:textColor="@color/m3_primary" />
+                        </LinearLayout>
+
+                        <ProgressBar
+                            android:id="@+id/progress"
+                            style="?android:attr/progressBarStyleHorizontal"
+                            android:layout_width="match_parent"
+                            android:layout_height="@dimen/progress_height"
+                            android:layout_marginTop="@dimen/space_md"
+                            android:contentDescription="@string/cd_progress"
+                            android:max="100"
+                            android:progressDrawable="@drawable/progress_download" />
+
+                        <TextView
+                            android:id="@+id/tvSavedTo"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="@dimen/space_md"
+                            android:textAppearance="@style/Text.BodySmall"
+                            android:visibility="gone" />
+                    </LinearLayout>
+                </LinearLayout>
+            </LinearLayout>
+        </ScrollView>
     </LinearLayout>
 
-</LinearLayout>
+    <!-- ==================== 扩展 FAB：唯一主要动作 ==================== -->
+    <!-- 底部与右侧的 inset 由代码补齐 -->
+
+    <LinearLayout
+        android:id="@+id/fab"
+        android:layout_width="wrap_content"
+        android:layout_height="56dp"
+        android:layout_gravity="bottom|end"
+        android:layout_margin="@dimen/screen_margin"
+        android:background="@drawable/bg_fab"
+        android:clickable="true"
+        android:contentDescription="@string/action_download"
+        android:elevation="3dp"
+        android:focusable="true"
+        android:gravity="center"
+        android:orientation="horizontal"
+        android:paddingStart="@dimen/space_xl"
+        android:paddingEnd="@dimen/space_xl">
+
+        <ImageView
+            android:id="@+id/ivFabIcon"
+            android:layout_width="@dimen/icon_size"
+            android:layout_height="@dimen/icon_size"
+            android:contentDescription="@null"
+            android:src="@drawable/ic_download"
+            android:tint="@color/state_fab_content" />
+
+        <TextView
+            android:id="@+id/tvFabLabel"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="@dimen/space_md"
+            android:text="@string/action_download"
+            android:textAppearance="@style/Text.LabelLarge"
+            android:textColor="@color/state_fab_content" />
+    </LinearLayout>
+
+</FrameLayout>

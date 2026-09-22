@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 填充按钮：M3 全圆角，涟漪用 on_primary -->
+<ripple xmlns:android="http://schemas.android.com/apk/res/android"
+    android:color="@color/ripple_on_primary">
+    <item>
+        <shape android:shape="rectangle">
+            <corners android:radius="@dimen/shape_full"/>
+            <solid android:color="@color/state_button_filled_bg"/>
+        </shape>
+    </item>
+</ripple>

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 芯片底色：选中 → secondary_container。用 state_selected 以便普通 TextView 直接复用 -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:color="@color/m3_on_surface" android:alpha="0.12" android:state_enabled="false"/>
+    <item android:color="@color/m3_secondary_container" android:state_selected="true"/>
+    <item android:color="@android:color/transparent"/>
+</selector>

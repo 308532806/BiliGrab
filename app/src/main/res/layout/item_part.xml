@@ -1,30 +1,40 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  分 P 列表项
+  ============
+  透明底 + 选中态底色，**不做成卡片** —— 它本来就位于一张卡片内部，
+  卡片套卡片是 impeccable 明确列出的反模式。
+
+  选中状态同时用三种编码表达：底色、标题色、右侧对勾图标。
+  「不以颜色为唯一编码」（ux-guidelines #37）。
+-->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:layout_marginTop="8dp"
-    android:background="@drawable/bg_card"
+    android:background="@drawable/bg_list_item"
     android:gravity="center_vertical"
+    android:minHeight="@dimen/touch_min"
     android:orientation="horizontal"
-    android:paddingLeft="14dp"
-    android:paddingTop="12dp"
-    android:paddingRight="14dp"
-    android:paddingBottom="12dp">
+    android:paddingStart="@dimen/space_md"
+    android:paddingTop="@dimen/space_md"
+    android:paddingEnd="@dimen/space_md"
+    android:paddingBottom="@dimen/space_md">
 
+    <!-- 序号：等宽数字，避免 P1 / P10 对不齐 -->
     <TextView
         android:id="@+id/tvIndex"
-        android:layout_width="34dp"
-        android:layout_height="26dp"
-        android:background="@drawable/bg_chip"
+        android:layout_width="32dp"
+        android:layout_height="32dp"
+        android:background="@drawable/bg_index_badge"
+        android:fontFamily="sans-serif-medium"
         android:gravity="center"
-        android:textColor="@color/accent"
-        android:textSize="12sp"
-        android:textStyle="bold" />
+        android:textColor="@color/m3_on_tertiary_container"
+        android:textSize="14sp" />
 
     <LinearLayout
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_marginLeft="12dp"
+        android:layout_marginStart="@dimen/space_md"
         android:layout_weight="1"
         android:orientation="vertical">
 
@@ -34,24 +44,27 @@
             android:layout_height="wrap_content"
             android:ellipsize="end"
             android:maxLines="2"
-            android:textColor="@color/text"
-            android:textSize="13sp" />
+            android:textAppearance="@style/Text.TitleSmall"
+            android:textColor="@color/state_list_item_title" />
 
         <TextView
             android:id="@+id/tvPartDuration"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="3dp"
-            android:textColor="@color/text_dim"
-            android:textSize="11sp" />
+            android:layout_marginTop="2dp"
+            android:textAppearance="@style/Text.BodySmall"
+            android:textColor="@color/state_list_item_meta" />
     </LinearLayout>
 
-    <View
-        android:id="@+id/vSelected"
-        android:layout_width="3dp"
-        android:layout_height="30dp"
-        android:layout_marginLeft="8dp"
-        android:background="@color/accent"
+    <!-- 选中标记：让状态不只靠颜色传达 -->
+    <ImageView
+        android:id="@+id/ivSelected"
+        android:layout_width="@dimen/icon_size"
+        android:layout_height="@dimen/icon_size"
+        android:layout_marginStart="@dimen/space_sm"
+        android:contentDescription="@null"
+        android:src="@drawable/ic_check"
+        android:tint="@color/m3_primary"
         android:visibility="invisible" />
 
 </LinearLayout>

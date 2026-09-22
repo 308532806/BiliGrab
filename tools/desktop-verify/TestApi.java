@@ -1,7 +1,7 @@
-import com.biligrab.app.BiliApi;
-import com.biligrab.app.Http;
-import com.biligrab.app.Model;
-import com.biligrab.app.WbiSigner;
+import com.biligrab.downloader.BiliApi;
+import com.biligrab.downloader.Http;
+import com.biligrab.downloader.Model;
+import com.biligrab.downloader.WbiSigner;
 
 import java.io.InputStream;
 import java.net.HttpURLConnection;

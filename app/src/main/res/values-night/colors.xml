@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  由 tools/gen_palette.py 自动生成，请勿手改。
+  种子色 #FB7299，色空间 OKLCH，映射遵循 Material 3 色角色。
+  重新生成：python tools/gen_palette.py
+-->
+<resources>
+
+
+    <!-- 深色主题 — Material 3 色角色 -->
+
+    <color name="m3_primary">#FFABBE</color>
+    <color name="m3_on_primary">#5E0028</color>
+    <color name="m3_primary_container">#85003C</color>
+    <color name="m3_on_primary_container">#FFD6DF</color>
+    <color name="m3_secondary">#E7B8C2</color>
+    <color name="m3_on_secondary">#47242D</color>
+    <color name="m3_secondary_container">#603A43</color>
+    <color name="m3_on_secondary_container">#FFD6DF</color>
+    <color name="m3_tertiary">#FBB674</color>
+    <color name="m3_on_tertiary">#482700</color>
+    <color name="m3_tertiary_container">#673B00</color>
+    <color name="m3_on_tertiary_container">#FFDBBA</color>
+    <color name="m3_error">#FFAFA5</color>
+    <color name="m3_on_error">#610005</color>
+    <color name="m3_error_container">#89000A</color>
+    <color name="m3_on_error_container">#FFD8D3</color>
+    <color name="m3_surface_dim">#161213</color>
+    <color name="m3_surface">#161213</color>
+    <color name="m3_surface_bright">#3C3839</color>
+    <color name="m3_surface_container_lowest">#110D0E</color>
+    <color name="m3_surface_container_low">#1E1A1B</color>
+    <color name="m3_surface_container">#221E1F</color>
+    <color name="m3_surface_container_high">#2D292A</color>
+    <color name="m3_surface_container_highest">#383334</color>
+    <color name="m3_on_surface">#E6E1E2</color>
+    <color name="m3_surface_variant">#514245</color>
+    <color name="m3_on_surface_variant">#D3C1C5</color>
+    <color name="m3_outline">#9C8C8F</color>
+    <color name="m3_outline_variant">#514245</color>
+    <color name="m3_inverse_surface">#E6E1E2</color>
+    <color name="m3_inverse_on_surface">#332F30</color>
+    <color name="m3_inverse_primary">#A62152</color>
+    <color name="m3_surface_tint">#FFABBE</color>
+</resources>

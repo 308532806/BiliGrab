@@ -1,48 +1,219 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  排版与组件样式
+  ================
+  全部字号取自 Material 3 字阶（Display / Headline / Title / Body / Label），
+  不在这里手写任意字号 —— 这是 impeccable 的 craft-floor 明确要求的：
+  "obvious scale and weight steps"，以及 android.md 的 "never hand-pick sizes"。
+
+  单位一律 sp，跟随系统字体缩放。
+  浅色深色通过 @color/m3_* 自动切换（values-night/colors.xml）。
+
+  注意：Android 样式名里的点号表示**继承**。所以 Text.TitleLarge 会被当作
+  Text 的子样式，Widget.Button.Filled 会一路找 Widget.Button 和 Widget。
+  这些基类必须真的存在，否则 aapt2 link 会报 "resource style/Text not found"。
+-->
 <resources>
 
-    <style name="AppTheme" parent="@android:style/Theme.Material.NoActionBar">
-        <item name="android:colorPrimary">@color/bg</item>
-        <item name="android:colorPrimaryDark">@color/bg</item>
-        <item name="android:colorAccent">@color/accent</item>
-        <item name="android:windowBackground">@color/bg</item>
-        <item name="android:colorBackground">@color/bg</item>
-        <item name="android:textColorPrimary">@color/text</item>
-        <item name="android:textColorSecondary">@color/text_dim</item>
-        <item name="android:textColorHint">@color/text_dim</item>
-        <item name="android:colorControlNormal">@color/text_dim</item>
-        <item name="android:colorControlActivated">@color/accent</item>
-        <item name="android:colorControlHighlight">#33FB7299</item>
-        <item name="android:colorForeground">@color/surface2</item>
-    </style>
+    <!-- ================================================================
+         命名基类
+         本身不带属性，只用于承载下方带点的样式名。
+         ================================================================ -->
 
-    <style name="Card">
-        <item name="android:background">@drawable/bg_card</item>
-        <item name="android:padding">12dp</item>
-    </style>
+    <style name="Text" parent="" />
 
-    <style name="PrimaryButton" parent="@android:style/Widget.Material.Button">
-        <item name="android:background">@drawable/bg_button_primary</item>
-        <item name="android:textColor">#FFFFFF</item>
-        <item name="android:textSize">15sp</item>
+    <style name="Widget" parent="" />
+
+    <!-- 按钮公共属性。Filled / Tonal / Outlined 只覆盖底色的文字色 -->
+    <style name="Widget.Button" parent="Widget">
+        <item name="android:textAppearance">@style/Text.LabelLarge</item>
         <item name="android:textAllCaps">false</item>
-        <item name="android:minHeight">46dp</item>
+        <item name="android:minHeight">@dimen/button_height</item>
+        <item name="android:minWidth">@dimen/button_height</item>
+        <item name="android:paddingStart">@dimen/space_xl</item>
+        <item name="android:paddingEnd">@dimen/space_xl</item>
+        <item name="android:gravity">center</item>
         <item name="android:stateListAnimator">@null</item>
     </style>
 
-    <style name="GhostButton" parent="@android:style/Widget.Material.Button">
-        <item name="android:background">@drawable/bg_button_ghost</item>
-        <item name="android:textColor">@color/text</item>
-        <item name="android:textSize">15sp</item>
-        <item name="android:textAllCaps">false</item>
-        <item name="android:minHeight">46dp</item>
-        <item name="android:stateListAnimator">@null</item>
+    <!-- ================================================================
+         Material 3 字阶
+         ================================================================ -->
+
+    <style name="Text.HeadlineSmall">
+        <item name="android:textSize">24sp</item>
+        <item name="android:lineHeight">32sp</item>
+        <item name="android:letterSpacing">0</item>
+        <item name="android:textColor">@color/m3_on_surface</item>
+        <item name="android:fontFamily">sans-serif</item>
+        <item name="android:includeFontPadding">false</item>
     </style>
 
-    <style name="SectionLabel">
-        <item name="android:textColor">@color/text_dim</item>
+    <!-- Title：页面标题、卡片标题、列表主标题 -->
+    <style name="Text.TitleLarge">
+        <item name="android:textSize">22sp</item>
+        <item name="android:lineHeight">28sp</item>
+        <item name="android:letterSpacing">0</item>
+        <item name="android:textColor">@color/m3_on_surface</item>
+        <item name="android:fontFamily">sans-serif</item>
+        <item name="android:includeFontPadding">false</item>
+    </style>
+
+    <style name="Text.TitleMedium">
+        <item name="android:textSize">16sp</item>
+        <item name="android:lineHeight">24sp</item>
+        <item name="android:letterSpacing">0.009</item>
+        <item name="android:textColor">@color/m3_on_surface</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:includeFontPadding">false</item>
+    </style>
+
+    <style name="Text.TitleSmall">
+        <item name="android:textSize">14sp</item>
+        <item name="android:lineHeight">20sp</item>
+        <item name="android:letterSpacing">0.007</item>
+        <item name="android:textColor">@color/m3_on_surface</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:includeFontPadding">false</item>
+    </style>
+
+    <!-- Body：正文。深色主题是分别设计的，不是浅色的机械反转 -->
+    <style name="Text.BodyLarge">
+        <item name="android:textSize">16sp</item>
+        <item name="android:lineHeight">24sp</item>
+        <item name="android:letterSpacing">0.031</item>
+        <item name="android:textColor">@color/m3_on_surface</item>
+        <item name="android:fontFamily">sans-serif</item>
+        <item name="android:includeFontPadding">false</item>
+    </style>
+
+    <style name="Text.BodyMedium">
+        <item name="android:textSize">14sp</item>
+        <item name="android:lineHeight">22sp</item>
+        <item name="android:letterSpacing">0.018</item>
+        <item name="android:textColor">@color/m3_on_surface_variant</item>
+        <item name="android:fontFamily">sans-serif</item>
+        <item name="android:includeFontPadding">false</item>
+    </style>
+
+    <style name="Text.BodySmall">
         <item name="android:textSize">12sp</item>
-        <item name="android:letterSpacing">0.06</item>
+        <item name="android:lineHeight">18sp</item>
+        <item name="android:letterSpacing">0.033</item>
+        <item name="android:textColor">@color/m3_on_surface_variant</item>
+        <item name="android:fontFamily">sans-serif</item>
+        <item name="android:includeFontPadding">false</item>
+    </style>
+
+    <!-- Label：按钮、芯片、字段标签 -->
+    <style name="Text.LabelLarge">
+        <item name="android:textSize">14sp</item>
+        <item name="android:lineHeight">20sp</item>
+        <item name="android:letterSpacing">0.007</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:includeFontPadding">false</item>
+    </style>
+
+    <style name="Text.LabelMedium">
+        <item name="android:textSize">12sp</item>
+        <item name="android:lineHeight">16sp</item>
+        <item name="android:letterSpacing">0.042</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:includeFontPadding">false</item>
+    </style>
+
+    <!-- ================================================================
+         组件
+         ================================================================ -->
+
+    <!-- 图标按钮：触控区固定 48dp，视觉图标 24dp -->
+    <style name="Widget.IconButton">
+        <item name="android:layout_width">@dimen/touch_min</item>
+        <item name="android:layout_height">@dimen/touch_min</item>
+        <item name="android:background">@drawable/bg_icon_button</item>
+        <item name="android:padding">@dimen/space_md</item>
+        <item name="android:scaleType">fitCenter</item>
+        <item name="android:stateListAnimator">@null</item>
+    </style>
+
+    <!-- 填充按钮：主要动作，一屏只允许一个 -->
+    <style name="Widget.Button.Filled">
+        <item name="android:background">@drawable/bg_button_filled</item>
+        <item name="android:textColor">@color/state_button_filled_text</item>
+    </style>
+
+    <!-- 色调按钮：次级动作 -->
+    <style name="Widget.Button.Tonal">
+        <item name="android:background">@drawable/bg_button_tonal</item>
+        <item name="android:textColor">@color/state_button_tonal_text</item>
+    </style>
+
+    <!-- 描边按钮：与填充按钮并列时的次要选择 -->
+    <style name="Widget.Button.Outlined">
+        <item name="android:background">@drawable/bg_button_outlined</item>
+        <item name="android:textColor">@color/state_button_outlined_text</item>
+    </style>
+
+    <!-- 卡片：M3 用色调表达层级，而不是投影 -->
+    <style name="Widget.Card">
+        <item name="android:background">@drawable/bg_card</item>
+        <item name="android:padding">@dimen/card_padding</item>
+    </style>
+
+    <!-- 列表项：保证 48dp 最小高度 -->
+    <style name="Widget.ListItem">
+        <item name="android:background">@drawable/bg_list_item</item>
+        <item name="android:minHeight">@dimen/touch_min</item>
+        <item name="android:paddingStart">@dimen/space_lg</item>
+        <item name="android:paddingEnd">@dimen/space_lg</item>
+        <item name="android:paddingTop">@dimen/space_md</item>
+        <item name="android:paddingBottom">@dimen/space_md</item>
+    </style>
+
+    <!-- 芯片：可选中的画质筛选项 -->
+    <style name="Widget.Chip">
+        <item name="android:background">@drawable/bg_chip</item>
+        <item name="android:textColor">@color/state_chip_text</item>
+        <item name="android:textAppearance">@style/Text.LabelLarge</item>
+        <item name="android:textAllCaps">false</item>
+        <item name="android:minHeight">@dimen/chip_height</item>
+        <item name="android:paddingStart">@dimen/space_lg</item>
+        <item name="android:paddingEnd">@dimen/space_lg</item>
+        <item name="android:gravity">center</item>
+        <item name="android:singleLine">true</item>
+        <item name="android:stateListAnimator">@null</item>
+    </style>
+
+    <!-- 文本字段：M3 filled 风格 -->
+    <style name="Widget.TextField">
+        <item name="android:textAppearance">@style/Text.BodyLarge</item>
+        <item name="android:textColor">@color/m3_on_surface</item>
+        <item name="android:textColorHint">@color/m3_on_surface_variant</item>
+        <item name="android:background">@drawable/bg_textfield</item>
+        <item name="android:minHeight">@dimen/field_height</item>
+        <item name="android:paddingStart">@dimen/space_lg</item>
+        <item name="android:paddingEnd">@dimen/space_lg</item>
+        <item name="android:paddingTop">@dimen/space_lg</item>
+        <item name="android:paddingBottom">@dimen/space_lg</item>
+        <item name="android:singleLine">true</item>
+        <item name="android:gravity">center_vertical</item>
+    </style>
+
+    <!-- 字段标签：始终可见，绝不用 placeholder 当标签 -->
+    <style name="Widget.FieldLabel" parent="Text.LabelMedium">
+        <item name="android:textColor">@color/m3_on_surface_variant</item>
+    </style>
+
+    <!-- 分区标题 -->
+    <style name="Widget.SectionTitle" parent="Text.TitleMedium">
+        <item name="android:textColor">@color/m3_on_surface</item>
+    </style>
+
+    <!-- 分隔线 -->
+    <style name="Widget.Divider">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">@dimen/stroke</item>
+        <item name="android:background">@color/m3_outline_variant</item>
     </style>
 
 </resources>

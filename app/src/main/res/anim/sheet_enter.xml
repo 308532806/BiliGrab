@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  底部表单进场：Material 3 的 emphasized decelerate —— 快速起步，缓慢收尾。
+  用户若在系统里选择「移除动画」，系统会自动跳过窗口动画。
+-->
+<set xmlns:android="http://schemas.android.com/apk/res/android"
+    android:interpolator="@android:interpolator/decelerate_cubic">
+    <translate
+        android:duration="280"
+        android:fromYDelta="100%"
+        android:toYDelta="0" />
+    <alpha
+        android:duration="200"
+        android:fromAlpha="0.7"
+        android:toAlpha="1.0" />
+</set>

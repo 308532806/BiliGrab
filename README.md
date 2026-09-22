@@ -5,7 +5,7 @@
 
 [![Build APK](https://github.com/308532806/BiliGrab/actions/workflows/build.yml/badge.svg)](https://github.com/308532806/BiliGrab/actions/workflows/build.yml)
 ![Android](https://img.shields.io/badge/Android-8.0%2B%20(API%2026)-3DDC84)
-![APK Size](https://img.shields.io/badge/APK-~90%20KB-blue)
+![APK Size](https://img.shields.io/badge/APK-~105%20KB-blue)
 ![Dependencies](https://img.shields.io/badge/dependencies-none-success)
 
 ---
@@ -57,7 +57,18 @@ BiliGrab 是从零重写的独立实现，**没有复用 BILIBILIAS 的任何代
 - 多 CDN 备用地址自动切换（主地址失败时重试 `backupUrl`）
 - 前台服务 + 通知栏实时进度
 - 完成后写入系统媒体库，相册直接可见
-- 深色界面，自适应图标
+- Material 3 界面，浅色 / 深色 / 跟随系统三选一
+- 自适应启动图标（含 Android 13+ 主题化图标）
+
+## 界面
+
+界面完全是手写的 Material 3 —— M3 的色角色、字阶、形状阶、动效、涟漪、48dp 触控目标、
+edge-to-edge、Snackbar、底部表单，全部基于平台原生 API 实现。
+
+色彩由 `tools/gen_palette.py` 从单一品牌色相**推导**（OKLCH 色彩空间），
+并自动跑完整 WCAG 对比度校验；浅色与深色是分别设计的，不是机械反转。
+
+完整的设计规则、推导过程和被明确拒绝的做法，见 **[DESIGN.md](DESIGN.md)**。
 
 ## 技术特点
 
@@ -68,10 +79,10 @@ BiliGrab 是从零重写的独立实现，**没有复用 BILIBILIAS 的任何代
 | JSON | 系统自带 `org.json` |
 | 网络 | 系统自带 `HttpURLConnection` |
 | 合成 | 系统自带 `MediaMuxer` + `MediaExtractor`（不打包 ffmpeg） |
-| 包体 | 约 90 KB |
+| 包体 | 约 105 KB |
 | 构建 | `aapt2` + `javac` + `d8` + `zipalign` + `apksigner`，**不依赖 Gradle** |
 
-因为不引入任何第三方库，整个 APK 只有一个 12 KB 的 `classes.dex`，
+因为不引入任何第三方库，整个 APK 只有一个 80 KB 的 `classes.dex`，
 冷启动快，也没有供应链风险。
 
 ## 它是怎么工作的
@@ -106,8 +117,8 @@ BiliGrab 是从零重写的独立实现，**没有复用 BILIBILIAS 的任何代
 powershell -ExecutionPolicy Bypass -File scripts\setup-sdk.ps1
 
 # 2) 编译（另需 JDK 17）
-powershell -ExecutionPolicy Bypass -File scripts\build-apk.ps1 -VersionName 1.0.0
-# 产物：dist\BiliGrab-1.0.0.apk
+powershell -ExecutionPolicy Bypass -File scripts\build-apk.ps1 -VersionName 1.1.0
+# 产物：dist\BiliGrab-1.1.0.apk
 ```
 
 可用环境变量 `JAVA_HOME`、`ANDROID_HOME` 指定工具链位置。
@@ -178,8 +189,8 @@ tag 触发 Release 时会给出 `::warning::` 提示。
 BiliGrab/
 ├── app/src/main/
 │   ├── AndroidManifest.xml
-│   ├── java/com/biligrab/app/
-│   │   ├── MainActivity.java          # 界面、解析、交互
+│   ├── java/com/biligrab/downloader/
+│   │   ├── MainActivity.java          # 界面状态机与交互
 │   │   ├── DownloadService.java       # 前台服务、下载流程、通知
 │   │   ├── BiliApi.java               # 接口封装与参数校验
 │   │   ├── WbiSigner.java             # WBI 风控签名
@@ -188,15 +199,18 @@ BiliGrab/
 │   │   ├── Http.java                  # HttpURLConnection 封装
 │   │   ├── Json.java                  # org.json 包装
 │   │   ├── Model.java                 # 数据模型
-│   │   └── Prefs.java                 # 偏好设置
-│   └── res/                           # 布局、颜色、图标
+│   │   ├── Prefs.java                 # 偏好设置
+│   │   ├── FlowLayout.java            # 可换行的芯片容器
+│   │   └── Snackbar.java              # M3 Snackbar 宿主
+│   └── res/                           # 色板、字阶、布局、矢量图标（含 values-night）
 ├── scripts/
 │   ├── setup-sdk.ps1                  # 下载 Android SDK 组件
 │   └── build-apk.ps1                  # 无 Gradle 构建脚本
 ├── tools/
-│   ├── desktop-verify/TestApi.java    # 桌面端接口联调测试
-│   └── make_icons.py                  # 图标生成
+│   ├── gen_palette.py                 # 由品牌色相推导 M3 色板 + WCAG 校验
+│   └── desktop-verify/TestApi.java    # 桌面端接口联调测试
 ├── keystore/                          # 签名密钥（gitignore，请自行备份）
+├── DESIGN.md                          # 设计系统与规则
 └── .github/workflows/build.yml        # CI 自动打包
 ```
 
