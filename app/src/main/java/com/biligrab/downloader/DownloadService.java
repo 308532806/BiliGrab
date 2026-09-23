@@ -669,7 +669,7 @@ public class DownloadService extends Service {
             //
             // 复制一个正确的文件不可能出错，重写一个正确的文件却可以。
             // 所以这条路径上不做无谓的重写。
-            copyFile(aFile, outFile);
+            copyFile(aFile, outFile, dt::shouldStop);
             if (!MuxUtil.hasPlayableAudio(outFile)) {
                 throw new IOException(getString(R.string.err_audio_incomplete));
             }
@@ -716,8 +716,12 @@ public class DownloadService extends Service {
      * 文件系统上（工作目录在应用私有区、目标是 SAF 那边或公共目录），
      * 跨设备的重命名在 Java 层会直接返回 false，而且它失败时不抛异常、
      * 只给一个布尔值，很容易被忽略成一件事都没发生。</p>
+     *
+     * @param abort 复制几十 MB 也是要时间的，期间要能被「暂停 / 取消」打断。
+     *              不查的话，用户点了取消、界面也回到了待下载，文件却还在写，
+     *              最后凭空冒出一个他没要的成品。
      */
-    private static void copyFile(File src, File dst) throws IOException {
+    private static void copyFile(File src, File dst, Http.Abort abort) throws IOException {
         if (src == null || !src.exists() || src.length() <= 0) {
             throw new IOException("音频文件不存在或为空");
         }
@@ -729,6 +733,9 @@ public class DownloadService extends Service {
             byte[] buf = new byte[256 * 1024];
             int n;
             while ((n = in.read(buf)) > 0) {
+                if (abort != null && abort.shouldStop()) {
+                    throw new Http.AbortedException(0);
+                }
                 out.write(buf, 0, n);
             }
             out.flush();
@@ -736,6 +743,8 @@ public class DownloadService extends Service {
             Http.closeQuietly(in);
             Http.closeQuietly(out);
         }
+        // 字节数对不上就一定不能交出去：半截的音频文件播到中途断掉，
+        // 比直接报错更难查。
         if (dst.length() != src.length()) {
             throw new IOException("复制不完整：源 " + src.length() + " 字节，结果 "
                     + dst.length() + " 字节");

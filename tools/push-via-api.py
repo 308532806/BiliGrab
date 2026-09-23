@@ -12,6 +12,7 @@
 import base64
 import json
 import os
+import re
 import subprocess
 import sys
 import urllib.error
@@ -61,6 +62,20 @@ if not TAG:
     print("用法: push-via-api.py <tag> [tag说明] [基线提交]")
     print("  例如: push-via-api.py v1.5.2 \"v1.5.2：...\"")
     print("  多个提交一起推: push-via-api.py v1.7.0 \"...\" 025b6c1")
+    sys.exit(1)
+
+# tag 必须是 tag 的样子。参数顺序是 <tag> [说明] [基线]，很容易把基线
+# 提交当成第一个参数传进来 —— 那样会在远端建出一个名叫 commit 哈希的
+# tag（v1.7.0 那轮真的建出过 refs/tags/4a9bce9），而且因为脚本照常输出
+# 「推送完成」，看起来一切正常，只有去列 tag 才会发现多了一个垃圾。
+if re.fullmatch(r"[0-9a-fA-F]{7,40}", TAG):
+    print("第一个参数看起来是提交哈希，不是 tag：'%s'" % TAG)
+    print("参数顺序是 <tag> [tag说明] [基线提交]，要指定基线请放到第三个：")
+    print("  push-via-api.py v1.7.1 \"v1.7.1：...\" %s" % TAG)
+    sys.exit(1)
+if not re.match(r"^v?\d+\.\d+", TAG):
+    print("tag '%s' 不符合版本号格式（期望形如 v1.7.1）。" % TAG)
+    print("确认要建这个 tag 的话，请手动用 API 建。")
     sys.exit(1)
 
 
