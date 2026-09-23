@@ -419,13 +419,35 @@ public final class YouTubeEngine {
             return false;
         }
         String m = msg.toLowerCase(Locale.US);
+
+        // 403 / 410 单独认，不看它们前面写的是什么。
+        //
+        // 这一条是踩出来的，而且代价很大：原来是靠 "http error 403"、
+        // "403 forbidden" 这类**词组**去认，结果两种真实文案一个都命不中：
+        //
+        //   应用自己的文案（CDN 直接拒绝）：
+        //       "YouTube CDN 返回 HTTP 403。"     ← 是 "http 403"，没有 error
+        //   代理隧道被拒（走代理时的常见形态）：
+        //       "Unexpected response code for CONNECT: 403"  ← 没有 http，也没有 forbidden
+        //
+        // 也就是说那两条重试分支从来没触发过 —— 用户看到的「重新解析一次再下载」
+        // 提示里承诺的事，代码一次都没做过。
+        //
+        // 教训是：靠措辞去认错误，漏掉的写法只会越来越多；状态码本身才是稳定的。
+        //
+        // 410 一并认下：googlevideo 的地址过期时回的就是 Gone，
+        // 而「重新解析换一条新地址」恰好正是那种情况该做的事。
+        if (hasStatus(m, "403") || hasStatus(m, "410")) {
+            return true;
+        }
+
         String[] marks = {
                 "not a bot",              // Sign in to confirm you're not a bot
                 "po token", "po_token", "potoken",
                 "unable to extract", "failed to extract",
                 "player response",
                 "nsig",
-                "http error 403", "403 forbidden", "forbidden",
+                "forbidden",              // 有些路径只回这个字，不带码
                 "content is not available",
                 "only images are available",
                 "requested format is not available",
@@ -437,6 +459,29 @@ public final class YouTubeEngine {
             }
         }
         return false;
+    }
+
+    /**
+     * {@code m} 里是否出现了独立的状态码 {@code code}。
+     *
+     * <p>要求两侧都不是数字，否则 {@code 403} 会命中 {@code 1403} 或
+     * {@code 4031} 这类无关数字 —— 那样判断就变成瞎猜了。</p>
+     */
+    private static boolean hasStatus(String m, String code) {
+        int from = 0;
+        while (true) {
+            int i = m.indexOf(code, from);
+            if (i < 0) {
+                return false;
+            }
+            int end = i + code.length();
+            boolean leftOk = i == 0 || !Character.isDigit(m.charAt(i - 1));
+            boolean rightOk = end >= m.length() || !Character.isDigit(m.charAt(end));
+            if (leftOk && rightOk) {
+                return true;
+            }
+            from = i + 1;
+        }
     }
 
     /** 阶梯里一共有几档播放器客户端。下载阶段靠它判断还有没有下一档可换。 */
@@ -910,6 +955,13 @@ public final class YouTubeEngine {
         if (m.contains("private video") || m.contains("video unavailable")
                 || m.contains("no longer available")) {
             return "这个视频不可用 —— 可能已被删除、设为私有，或限制了地区。";
+        }
+        if (hasStatus(m, "403") || hasStatus(m, "410")) {
+            // 走到这里说明四档客户端都试过了，问题不在客户端选择上。
+            return "YouTube 的 CDN 拒绝了这条下载地址。\n"
+                    + "地址本身带着签发时的客户端与网络出口信息，换了出口就对不上 ——\n"
+                    + "代理 / VPN 中途切换节点，或者解析和下载走了不同的出口，都会这样。\n"
+                    + "确认代理稳定后重新解析一次再下载。";
         }
         if (m.contains("errno 110") || m.contains("timed out")) {
             return "连不上 YouTube。请确认代理 / VPN 正在工作，"
