@@ -1,8 +1,159 @@
-# BiliGrab 1.6.0 状态
+# BiliGrab 1.6.1 状态
 
 > 本文件记录 1.5.0 起的进展，最新的在最前。
 
-## 1.6.0（最新）—— 应用内登录
+## 1.6.1 —— 修掉「写了但从没生效」的 403 重试
+
+### 一句话
+
+**v1.5.2 加的 403 换档重试，靠措辞去认错误，两种真实文案一个都命不中，
+从上线起就没执行过。现已改为认状态码本身，并在真机上验证到它真的触发、
+真的恢复了。**
+
+### 修的是什么
+
+那张特征词表和真实报错的对照：
+
+| 实际报错 | 表里写的 | 命中 |
+|---|---|---|
+| `YouTube CDN 返回 HTTP 403。` | `http error 403` | ✗ |
+| `Unexpected response code for CONNECT: 403` | （没有对应项） | ✗ |
+
+`http 403` ≠ `http error 403`；后者更是既没有 `http` 也没有 `forbidden`。
+
+改成 `hasStatus(m, "403") \|\| hasStatus(m, "410")` —— 两侧不许是数字，
+免得命中 `1403` 这类无关数字。措辞类特征词降级为兜底保留。
+410 一并认下是因为 googlevideo 地址过期回的就是 Gone，
+而「重新解析换条新地址」正是那种情况该做的事。
+
+### 怎么验的
+
+没有靠读代码下结论 —— 写了 `tools/relay-with-403.py` 主动注入故障，
+把发往**媒体流主机**的 CONNECT 掐掉一次回真 403，逼出重试路径。
+
+修完真机实测：
+
+```
+17:58:07  YouTube 直链 host=rr4---sn-oguelnze.googlevideo.com  头=0  UA=(无)
+17:58:07  java.io.IOException: Unexpected response code for CONNECT: 403
+17:58:07  视频流失败（…），改用播放器客户端 web_embedded,tv,mweb 重新解析后重试
+17:58:29  解析完成：…（换档后重新解析）
+17:58:29  YouTube 直链 host=…  头=4  UA=Mozilla/5.0 … Chrome/150.0.0.0
+17:58:30  下载成功，落盘 636,212 字节
+```
+
+注入器那边的账也对得上：
+
+```
+> 放行媒体流：CONNECT manifest.googlevideo.com:443      ← 解析阶段，放行
+X 掐掉 #1：   CONNECT rr4---sn-oguelnze.googlevideo.com:443   ← 下载第 1 次
+> 放行媒体流：CONNECT rr4---sn-oguelnze.googlevideo.com:443   ← 重试后放行
+```
+
+**注意换档改变了请求形态**：档位 0 是 `头=0 UA=(无)`，
+档位 1 是 `头=4 UA=Chrome/150`。这正是重试有意义的原因 ——
+不是把同一个请求重发一遍，而是换一套客户端身份重新要地址。
+
+### 已经确认的事（1.6.0 之后新查到的）
+
+1. **PC 上有个能用的代理出口。** `127.0.0.1:7897`（Clash 一类，TUN 模式），
+   出口 IP `216.23.121.26`。**这条出口对 YouTube 是干净的** —— 实测 yt-dlp
+   经它下载 format 160 / 251 都拿到了完整字节，没有 403。
+
+2. **我确认了 `visionos` 客户端本身没问题。** 之前推测「没有 JS 运行时 →
+   落到 `_DEFAULT_JSLESS_CLIENTS` → 只剩 visionos → 403」这个链条，
+   只在**出口 IP 被风控**时才成立。PC 上的 yt-dlp **同样没有 JS 运行时**
+   （`JS runtimes: none`），但下载正常。所以：
+   - **解析失败 = 出口 IP 信誉问题**（手机之前那两个代理就是这样）
+   - **下载 403 = 另一回事**，需要单独解释
+
+3. **YouTube 全链路第一次在真机上跑通了。**
+   `https://youtu.be/jNQXAC9IVRw` → 解析成功（默认客户端一次过）→
+   下载 → 合流 → 落盘 `Me at the zoo.mp4`，636,212 字节。
+   日志：`YouTube 直链 host=rr4---sn-oguelnze.googlevideo.com 头=0`
+
+4. **`tools/lan-proxy-relay.py`** —— 把 `127.0.0.1:7897` 转发到局域网
+   （`0.0.0.0:7899`）。手机填 `192.168.8.104:7899` 即可用上 PC 那条干净出口。
+   不改用户的代理配置，用完关掉。
+
+5. **`tools/relay-with-403.py`** —— 同上，但会把发往**媒体流主机**的
+   CONNECT 掐掉前 N 次，回一个真 403。用来逼出重试路径。
+
+   > 踩过的坑：第一版只匹配 `googlevideo.com`，结果掐中的是
+   > `manifest.googlevideo.com` —— 那是 yt-dlp **解析阶段**取 HLS 清单用的。
+   > 下载连的是 `rr3---sn-oguesndl.googlevideo.com`。掐错地方的后果是
+   > 解析照常成功（yt-dlp 对清单取不到会优雅降级），但下载一次就过，
+   > 重试路径完全没被碰到 —— 测试等于白做。
+   > 现在按 `TARGET_EXCLUDE = "manifest."` 排除掉了。
+
+### 那条 bug 的现场记录（已修，留档）
+
+注入 403 之后，异常确实从 `downloadYouTubeStream` 抛出来了，但**没有重试**：
+
+```
+java.io.IOException: Unexpected response code for CONNECT: 403
+    at DownloadService.downloadUrl(DownloadService.java:557)
+    at DownloadService.downloadStream(DownloadService.java:490)
+    at DownloadService.downloadYouTubeStream(DownloadService.java:355)
+```
+
+对照 `YouTubeEngine.clientRelated()` 原来的匹配表：
+
+```java
+"http error 403", "403 forbidden", "forbidden",
+```
+
+**三个都没命中。** 更糟的是用户的原始报错也命不中 ——
+`Http.errorSnippet` 那条路径产出的是 `YouTube CDN 返回 HTTP 403。`，
+而表里写的是 `http error 403`。也就是说 **v1.5.2 加的下载侧换档重试，
+在两种真实文案下都不会触发**。
+
+修法与验证见本文档顶部 1.6.1 一节。
+**教训：靠措辞去认错误，漏掉的写法只会越来越多；状态码本身才是稳定的。**
+
+### 复现步骤（下一轮直接照做）
+
+```powershell
+# 1. 起转发器（干净出口）
+& $py "E:\Deepseek工作目录\BiliGrab\tools\lan-proxy-relay.py"        # 7899
+
+# 2. 或起故障注入版（逼重试）
+& $py "E:\Deepseek工作目录\BiliGrab\tools\relay-with-403.py" 7899 1
+
+# 3. 加防火墙规则（需要管理员）
+netsh advfirewall firewall add rule name="BiliGrab lan relay 7899" `
+      dir=in action=allow protocol=TCP localport=7899
+
+# 4. 手机 side：写 prefs 时属主必须是 10280:10280
+#    （写成 system:system 会让应用读不到，日志报
+#     "Attempt to read preferences file ... without permission"）
+#    youtube_proxy = 192.168.8.104:7899
+
+# 5. 分享 https://youtu.be/jNQXAC9IVRw → 等解析 → 点 240P 那一行
+
+# 6. 收尾：删防火墙规则、清掉手机上的 youtube_proxy、关转发器
+```
+
+`prefer_qn` 是 360P 那一档（16）还是 80 都不影响这个测试，
+YouTube 那边的 `quality` 就是高度。
+
+### 还没做的
+
+* **B 站 4K / 真彩 / 8K 仍受大会员账号权限限制。** 1.6.0 加了应用内登录，
+  **登录一个大会员账号后四档能否真的下载，还没验证过** —— 之前所有结论
+  都是匿名态下测的（结论：`support_formats` 会广告 4K，但匿名 `dash.video`
+  永远不超过 id 80）。这是 item 1 唯一还能推进的地方。
+
+* 用户手上那个原始症状（**解析成功、下载恒 403**）**始终没有复现**。
+  在这条干净出口上，下载一次就过。修好的重试是防御性的 ——
+  它现在能救回「第一次被拒」的情况，但**为什么会第一次被拒，仍未坐实**。
+  两个候选解释都还只是候选：
+  1. 部分被风控的 IP 上，某些格式需要 PO token；
+  2. googlevideo 签名与请求出口 IP 绑定，解析后换节点会让签名失效。
+
+---
+
+## 1.6.0 —— 应用内登录
 
 **已发布。** tag `v1.6.0`。
 
