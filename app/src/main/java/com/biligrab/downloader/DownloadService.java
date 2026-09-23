@@ -278,10 +278,15 @@ public class DownloadService extends Service {
     // ------------------------------------------------------------------
 
     /**
-     * <p>不在服务里重新解析是有意为之：YouTube 的解析要跑一整个 Python
-     * 解释器，实测量级 10-20 秒。用户刚在界面上看到画质列表就点了下载，
+     * <p>正常路径下不在服务里重新解析，是有意为之：YouTube 的解析要跑一整个
+     * Python 解释器，实测量级 10-20 秒。用户刚在界面上看到画质列表就点了下载，
      * 再让他对着通知栏等一次解析没有道理。直链在点击后立即使用，
      * 远早于 googlevideo 的过期时间。</p>
+     *
+     * <p>唯一的例外是**下载被 CDN 拒了**（403 之类）：那时会换一档播放器
+     * 客户端重新解析一次，见 {@link #downloadYouTubeStream}。宁可多等十几秒，
+     * 也好过让用户对着一条「签名已失效」的通知不明所以 —— 而那句话
+     * 往往根本不是签名的问题。</p>
      */
     private String runYouTubeTask(Model.Task task, File work) throws Exception {
         java.net.Proxy proxy = Http.parseProxy(task.proxy);
@@ -303,8 +308,7 @@ public class DownloadService extends Service {
             emitProgress(label, 5);
             // 不传 Cookie、不带 B 站 Referer：googlevideo 的直链自带签名，
             // 多送一个 B 站 Referer 反而会被 CDN 当成异常请求。
-            downloadStream(java.util.Collections.singletonList(task.videoUrl), vFile,
-                    null, false, proxy, true, task.videoHeaders, 5, 50, label, task.title);
+            downloadYouTubeStream(task, true, vFile, 5, 50, label);
         }
 
         if (task.audioOnly || !task.audioUrl.isEmpty()) {
@@ -315,11 +319,93 @@ public class DownloadService extends Service {
             int lo = task.audioOnly ? 5 : 50;
             String stageAudio = getString(R.string.stage_audio);
             emitProgress(stageAudio, lo);
-            downloadStream(java.util.Collections.singletonList(task.audioUrl), aFile,
-                    null, false, proxy, true, task.audioHeaders, lo, 85, stageAudio, task.title);
+            downloadYouTubeStream(task, false, aFile, lo, 85, stageAudio);
         }
 
         return muxAndSave(task, work, vFile, aFile);
+    }
+
+    /**
+     * 下载 YouTube 的一条流；被 CDN 拒了就换一档播放器客户端重新拿地址再试。
+     *
+     * <p>为什么下载阶段还要再解析一次：yt-dlp 给出的直链是绑在某个播放器
+     * 客户端上的，而客户端决定了这条地址在 CDN 那边要不要额外凭证。
+     * 被风控的出口 IP 上，默认客户端发出的地址会被 googlevideo 判 403 ——
+     * 而本应用没有 JS 运行时，那份默认实际只有一个 {@code visionos}。
+     * 换成 {@code web_embedded} / {@code tv} 这类往往就正常了。</p>
+     *
+     * <p>所以 403 不等于「这个视频下不了」，只等于「这一档客户端给的地址
+     * 不能用」。这也正是原来那句「播放地址的签名已失效」会误导人的地方。</p>
+     *
+     * <p>换档时重新解析**整个视频**，视频轨和音频轨的地址一起换掉 ——
+     * 同一档客户端给出的两条轨本来就是配套的，只换一条会不搭。</p>
+     *
+     * @param isVideo true 下载视频轨，false 下载音频轨
+     */
+    private void downloadYouTubeStream(Model.Task task, boolean isVideo, File dst,
+                                       int lo, int hi, String stage) throws IOException {
+        // 从解析时成功的那一档往后走，不回头 —— 前面几档已经证明不行了
+        int profile = task.youtubeClientProfile;
+        while (true) {
+            String url = isVideo ? task.videoUrl : task.audioUrl;
+            java.util.Map<String, String> headers = isVideo ? task.videoHeaders : task.audioHeaders;
+            try {
+                downloadStream(java.util.Collections.singletonList(url), dst, null, false,
+                        Http.parseProxy(task.proxy), true, headers, lo, hi, stage, task.title);
+                return;
+            } catch (IOException e) {
+                String msg = e.getMessage() == null ? "" : e.getMessage();
+                profile++;
+                if (!YouTubeEngine.isClientRelated(msg)
+                        || profile >= YouTubeEngine.clientProfiles()) {
+                    throw e;
+                }
+                Log.w(TAG, (isVideo ? "视频流" : "音频流") + "失败（" + msg + "），改用播放器客户端 "
+                        + YouTubeEngine.clientProfileName(profile) + " 重新解析后重试");
+                try {
+                    refreshYouTubeUrls(task, profile);
+                } catch (IOException again) {
+                    // 换客户端重解析也失败了。这时**要报原始的下载错误**，
+                    // 而不是这个新的解析错误 —— 用户点的是下载，下载为什么失败
+                    // 才是他要知道的事。重解析的失败原因记进日志就够了。
+                    Log.w(TAG, "改用 " + YouTubeEngine.clientProfileName(profile)
+                            + " 重新解析也失败：" + again.getMessage());
+                    throw e;
+                }
+            }
+        }
+    }
+
+    /**
+     * 换一档播放器客户端重新解析，把 task 里的直链与请求头换成新的。
+     *
+     * <p>只认**同一档画质**：用户选的是哪一档就下哪一档。新客户端没给这一档时
+     * 宁可让它失败，也不该偷偷换成别的分辨率 —— 那等于把用户的选择改掉。</p>
+     */
+    private void refreshYouTubeUrls(Model.Task task, int profile) throws IOException {
+        YouTubeEngine.Result r = YouTubeEngine.resolveWithClient(
+                this, task.pageUrl, task.proxy, profile);
+        Model.PlayInfo info = r.play;
+
+        for (Model.Stream s : info.videos) {
+            if (s.quality == task.qn) {
+                task.videoUrl = s.url;
+                task.videoSize = s.size;
+                task.videoHeaders.clear();
+                task.videoHeaders.putAll(s.headers);
+                break;
+            }
+        }
+
+        if (task.audioOnly || !task.audioUrl.isEmpty()) {
+            Model.Stream a = info.audioFor(task.webm);
+            if (a != null) {
+                task.audioUrl = a.url;
+                task.audioSize = a.size;
+                task.audioHeaders.clear();
+                task.audioHeaders.putAll(a.headers);
+            }
+        }
     }
 
     // ------------------------------------------------------------------

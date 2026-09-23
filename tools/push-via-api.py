@@ -177,9 +177,21 @@ if status not in (200, 201) or not tagobj:
     sys.exit(1)
 status, tagref = api("/repos/%s/git/refs" % REPO, "POST",
                      {"ref": "refs/tags/" + TAG, "sha": tagobj["sha"]})
-if status not in (200, 201) or not tagref:
-    sys.exit(1)
-print("  refs/tags/%s -> %s" % (TAG, tagobj["sha"]))
+if status == 422:
+    # 这个 tag 已经存在。多数情况是上一次跑已经建过 —— 不算失败，
+    # 但要把话说出来：如果它指向的commit 不是这次的，说明同名 tag 指向别处。
+    st2, existing = api("/repos/%s/git/ref/tags/%s" % (REPO, TAG))
+    if st2 == 200 and existing:
+        cur = existing["object"]["sha"]
+        if cur == tagobj["sha"]:
+            print("  refs/tags/%s 已存在且指向同一个 tag 对象，跳过" % TAG)
+        else:
+            print("  refs/tags/%s 已存在，指向 %s（本次新对象是 %s）"
+                  % (TAG, cur[:12], tagobj["sha"][:12]))
+else:
+    if status not in (200, 201) or not tagref:
+        sys.exit(1)
+    print("  refs/tags/%s -> %s" % (TAG, tagobj["sha"]))
 
 print()
 print("推送完成：%s" % commit["sha"])

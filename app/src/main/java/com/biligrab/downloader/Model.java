@@ -120,6 +120,15 @@ public final class Model {
          */
         public boolean webmAudioAvailable;
 
+        /**
+         * YouTube 专用：这次解析是在第几档播放器客户端上成功的。
+         *
+         * <p>下载阶段要靠它决定「还能往哪换」。被风控的 IP 上，某个客户端给出的
+         * 流地址可能在 CDN 那边过不了（表现为 403），换下一档往往就好了 ——
+         * 但只有知道当前站在第几档，才谈得上「下一档」。</p>
+         */
+        public int youtubeClientProfile;
+
         /** 按目标容器挑音轨。找不到对应容器的音轨时返回 {@code null}。 */
         public Stream audioFor(boolean webm) {
             for (Stream s : audios) {
@@ -244,6 +253,12 @@ public final class Model {
         public boolean webm;
         /** 下载 YouTube 直链所用的代理，空串表示直连。 */
         public String proxy = "";
+        /**
+         * 解析成功时用的播放器客户端档位，供下载阶段换档重试。
+         *
+         * @see PlayInfo#youtubeClientProfile
+         */
+        public int youtubeClientProfile;
 
         public String displayName() {
             String base = sanitize(title);

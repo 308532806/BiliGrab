@@ -1314,6 +1314,11 @@ public class MainActivity extends Activity implements DownloadService.Listener {
             task.videoWidth = row.stream != null ? row.stream.width : 0;
             task.videoHeight = row.stream != null ? row.stream.height : row.qn;
             task.proxy = prefs.youtubeProxy();
+            // 记下解析是在哪一档客户端上成功的。下载时若被 CDN 拒了，
+            // 服务端就从下一档继续换 —— 没有这个数字就只能瞎试。
+            // 注意是 currentProbe（PlayInfo）而不是 current（Video）：
+            // 档位信息属于这次解析的产物，不属于视频元数据。
+            task.youtubeClientProfile = currentProbe.youtubeClientProfile;
 
             if (row.stream == null) {
                 Snackbar.show(findViewById(R.id.root), getString(R.string.err_no_video_stream));

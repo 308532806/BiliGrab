@@ -21,6 +21,7 @@ import java.net.HttpURLConnection;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * YouTube 解析引擎。
@@ -334,6 +335,162 @@ public final class YouTubeEngine {
             throw new IOException(err);
         }
 
+        IOException first = null;
+        IOException firstClientRelated = null;
+        IOException last = null;
+        for (int i = 0; i < PLAYER_CLIENT_LADDER.length; i++) {
+            String clients = PLAYER_CLIENT_LADDER[i];
+            try {
+                Result r = resolveOnce(ctx, url, proxySpec, clients);
+                r.play.youtubeClientProfile = i;
+                if (i > 0) {
+                    Log.i(TAG, "换用播放器客户端 " + clients + " 后解析成功");
+                }
+                return r;
+            } catch (IOException e) {
+                if (first == null) {
+                    first = e;
+                }
+                last = e;
+                boolean related = clientRelated(e.getMessage());
+                if (related && firstClientRelated == null) {
+                    firstClientRelated = e;
+                }
+                boolean more = i < PLAYER_CLIENT_LADDER.length - 1;
+                // 只有看着像风控时才继续往下试。视频是私有的、已删除的，
+                // 换客户端也没用，不该让人白等四个来回。
+                if (!more || !related) {
+                    throw e;
+                }
+                Log.w(TAG, "客户端 " + clients + " 解析失败（" + shorten(e.getMessage(), 120)
+                        + "），改用 " + PLAYER_CLIENT_LADDER[i + 1] + " 重试");
+            }
+        }
+
+        // 全试完了还是不行。报**风控那一次**的错，因为那才是有话可说的那个。
+        //
+        // 后面的客户端有时会给出误导性的说法 —— 实测中 player_client=all 在同一个
+        // 被风控的 IP 上返回的是 "Video unavailable"，而视频本身明明没问题。
+        // 照原样报出去，用户会以为视频坏了，跑去换链接，白费功夫。
+        if (firstClientRelated != null) {
+            Log.w(TAG, "所有播放器客户端都被拒绝，以首次的判断为准");
+            throw firstClientRelated;
+        }
+        throw first != null ? first : (last == null ? new IOException("yt-dlp 解析失败") : last);
+    }
+
+    /**
+     * 阶梯式尝试的播放器客户端组合。第一项为 {@code null}，表示不干预、用 yt-dlp 自己的选择。
+     *
+     * <p>为什么要阶梯，而不是一次就传一组"好"的：</p>
+     *
+     * <p>本应用没有 JS 运行时（Deno / Node），yt-dlp 2026.08.19 因此在
+     * {@code _video.py} 里落到 {@code _DEFAULT_JSLESS_CLIENTS}，而那一项**只有
+     * {@code visionos} 一个**。也就是说正常情况下所有请求都只经由这一个客户端。
+     * 机房 IP（机场、云主机上的 VPN）一旦被 YouTube 风控，这个客户端给出的流地址
+     * 是带 PO token 校验的 —— 表现为**画质列表正常、一下载就 403**，
+     * 而 CDN 还会报「签名失效」，极具误导性。</p>
+     *
+     * <p>换客户端往往能绕开：{@code web_embedded} / {@code tv} / {@code mweb}
+     * 对同一个 IP 的容忍度并不一样。所以先试默认（干净 IP 上最快），
+     * 失败且原因与客户端有关时再往下走。</p>
+     *
+     * <p>客户端名取自该版本 yt-dlp 的 {@code INNERTUBE_CLIENTS}，不是凭记忆写的：
+     * {@code web_safari, web_embedded, web_music, web_creator, android, android_vr,
+     * ios, visionos, mweb, tv, tv_downgraded, tv_simply}。
+     * 末项 {@code all} 是 yt-dlp 自己支持的取值，会把允许的客户端全试一遍。</p>
+     */
+    private static final String[] PLAYER_CLIENT_LADDER = {
+            null,
+            "web_embedded,tv,mweb",
+            "tv_simply,android_vr,web_safari",
+            "all",
+    };
+
+    /**
+     * 这个失败原因是否可能靠换客户端解决。
+     *
+     * <p>只认风控与播放器相关的特征。「视频是私有的」「已被删除」这类
+     * 换客户端也没用，不该触发重试 —— 那只会让用户多等几十秒，
+     * 最后看到一模一样的错误。</p>
+     */
+    private static boolean clientRelated(String msg) {
+        if (msg == null || msg.isEmpty()) {
+            return false;
+        }
+        String m = msg.toLowerCase(Locale.US);
+        String[] marks = {
+                "not a bot",              // Sign in to confirm you're not a bot
+                "po token", "po_token", "potoken",
+                "unable to extract", "failed to extract",
+                "player response",
+                "nsig",
+                "http error 403", "403 forbidden", "forbidden",
+                "content is not available",
+                "only images are available",
+                "requested format is not available",
+                "no formats",
+        };
+        for (String k : marks) {
+            if (m.contains(k)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** 阶梯里一共有几档播放器客户端。下载阶段靠它判断还有没有下一档可换。 */
+    public static int clientProfiles() {
+        return PLAYER_CLIENT_LADDER.length;
+    }
+
+    /** 第 {@code index} 档客户端的可读名字，仅用于日志。 */
+    public static String clientProfileName(int index) {
+        if (index < 0 || index >= PLAYER_CLIENT_LADDER.length) {
+            return "(" + index + ")";
+        }
+        String c = PLAYER_CLIENT_LADDER[index];
+        return c == null ? "默认" : c;
+    }
+
+    /**
+     * 这个失败原因是否与播放器客户端有关。
+     *
+     * <p>下载阶段用它判断「是要换客户端重来，还是这个视频本来就没戏」。</p>
+     */
+    public static boolean isClientRelated(String message) {
+        return clientRelated(message);
+    }
+
+    /**
+     * 用指定档位的播放器客户端解析。
+     *
+     * <p>给下载阶段用：某条流在 CDN 那边栽了，换一档客户端重新拿一次直链。
+     * 注意这里**不做阶梯循环** —— 调用方自己决定往哪走，否则很容易
+     * 变成「重试里套重试」，一次失败要跑十几遍 Python。</p>
+     */
+    public static Result resolveWithClient(Context ctx, String url, String proxySpec,
+                                           int profile) throws IOException {
+        String err = ensureReady(ctx);
+        if (!err.isEmpty()) {
+            throw new IOException(err);
+        }
+        if (profile < 0 || profile >= PLAYER_CLIENT_LADDER.length) {
+            throw new IOException("播放器客户端档位越界：" + profile);
+        }
+        Result r = resolveOnce(ctx, url, proxySpec, PLAYER_CLIENT_LADDER[profile]);
+        r.play.youtubeClientProfile = profile;
+        return r;
+    }
+
+    /**
+     * 用指定的播放器客户端组合解析一次。
+     *
+     * @param playerClients {@code --extractor-args youtube:player_client=} 的取值，
+     *                      {@code null} 表示不加这个参数
+     */
+    private static Result resolveOnce(Context ctx, String url, String proxySpec,
+                                      String playerClients) throws IOException {
         YoutubeDLRequest req = new YoutubeDLRequest(url);
         // --dump-single-json：把解析结果整个吐成一行 JSON，不下载任何字节。
         // 这是把 yt-dlp 当「纯解析器」用的关键。
@@ -353,6 +510,12 @@ public final class YouTubeEngine {
         if (proxySpec != null && !proxySpec.trim().isEmpty()) {
             String p = proxySpec.trim();
             req.addOption("--proxy", p.startsWith("http") ? p : "http://" + p);
+        }
+
+        // 指定播放器客户端。不加就等于让 yt-dlp 走默认，
+        // 而在没有 JS 运行时的 Android 上那份默认只有一个 visionos。
+        if (playerClients != null && !playerClients.isEmpty()) {
+            req.addOption("--extractor-args", "youtube:player_client=" + playerClients);
         }
 
         YoutubeDLResponse resp;
@@ -718,7 +881,41 @@ public final class YouTubeEngine {
         if (m == null || m.isEmpty()) {
             return name;
         }
+        // yt-dlp 的报错是英文的、很长，而且读起来像是应用自己坏了。
+        // 已知的常见情况先换成一句能照着做的话，原文附在后头备查。
+        String friendly = explain(m);
+        if (friendly != null) {
+            return friendly + "\n\n原始报错：" + shorten(m, 200);
+        }
         return name + ": " + shorten(m, 240);
+    }
+
+    /**
+     * 把 yt-dlp 最常撞上的几类英文报错翻成能照着做的中文。
+     *
+     * @return {@code null} 表示不是已知类型，交给调用方原样显示
+     */
+    private static String explain(String msg) {
+        String m = msg.toLowerCase(Locale.US);
+        if (m.contains("not a bot")) {
+            return "YouTube 判定这个网络出口是机器人，拒绝了本次解析。\n"
+                    + "通常是因为代理 / VPN 的出口 IP 落在机房地址段（机场、云主机多半如此）。\n"
+                    + "换一个住宅 IP 的节点再试。";
+        }
+        if (m.contains("po token") || m.contains("po_token") || m.contains("potoken")) {
+            return "YouTube 要求这个视频的流地址附带 PO token。\n"
+                    + "本应用没有 JS 运行时，只能用受限的播放器客户端取地址。\n"
+                    + "换一个出口 IP 一般可以绕开。";
+        }
+        if (m.contains("private video") || m.contains("video unavailable")
+                || m.contains("no longer available")) {
+            return "这个视频不可用 —— 可能已被删除、设为私有，或限制了地区。";
+        }
+        if (m.contains("errno 110") || m.contains("timed out")) {
+            return "连不上 YouTube。请确认代理 / VPN 正在工作，"
+                    + "并且设置里的代理地址填写正确。";
+        }
+        return null;
     }
 
     private static String shorten(String s, int max) {
