@@ -337,8 +337,10 @@ public class DownloadService extends Service {
      * <p>所以 403 不等于「这个视频下不了」，只等于「这一档客户端给的地址
      * 不能用」。这也正是原来那句「播放地址的签名已失效」会误导人的地方。</p>
      *
-     * <p>换档时重新解析**整个视频**，视频轨和音频轨的地址一起换掉 ——
-     * 同一档客户端给出的两条轨本来就是配套的，只换一条会不搭。</p>
+     * <p>换档时重新解析**整个视频**，把两条轨的地址一起刷新。
+     * 这不是为了"配套" —— 视频和音频各自独立下载、本地合流，混用两档也没关系。
+     * 而是因为一次解析本来就同时产出两条轨的地址，只更新失败的那一条，
+     * 会把另一条留着下次再用，而它多半也已经不能用了。</p>
      *
      * @param isVideo true 下载视频轨，false 下载音频轨
      */
@@ -387,21 +389,35 @@ public class DownloadService extends Service {
                 this, task.pageUrl, task.proxy, profile);
         Model.PlayInfo info = r.play;
 
+        boolean gotVideo = false;
         for (Model.Stream s : info.videos) {
             if (s.quality == task.qn) {
                 task.videoUrl = s.url;
-                task.videoSize = s.size;
+                // 只在服务端确实报了体积时才覆盖。yt-dlp 对某些格式不给 filesize，
+                // 那会是个 0；拿 0 把原来已知的体积冲掉，进度条就没法按比例走了。
+                if (s.size > 0) {
+                    task.videoSize = s.size;
+                }
                 task.videoHeaders.clear();
                 task.videoHeaders.putAll(s.headers);
+                gotVideo = true;
                 break;
             }
+        }
+        if (!gotVideo) {
+            // 这一档没有用户要的画质。地址保持原样，下一轮会带着旧地址再试一次
+            // 然后失败 —— 但要在日志里说清楚，否则看起来像"换了档却毫无变化"。
+            Log.w(TAG, "客户端 " + YouTubeEngine.clientProfileName(profile)
+                    + " 没有 " + YouTubeEngine.describeHeight(task.qn) + " 这一档，保留原地址");
         }
 
         if (task.audioOnly || !task.audioUrl.isEmpty()) {
             Model.Stream a = info.audioFor(task.webm);
             if (a != null) {
                 task.audioUrl = a.url;
-                task.audioSize = a.size;
+                if (a.size > 0) {
+                    task.audioSize = a.size;
+                }
                 task.audioHeaders.clear();
                 task.audioHeaders.putAll(a.headers);
             }
