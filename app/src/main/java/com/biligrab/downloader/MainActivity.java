@@ -95,6 +95,8 @@ public class MainActivity extends Activity implements DownloadService.Listener {
     // ---- 四个互斥状态 ----
     private View emptyBox;
     private View loadingBox;
+    /** 加载态的副标题。文案按来源切换，所以要在代码里改。 */
+    private TextView tvLoadingBody;
     private View errorBox;
     private View resultBox;
 
@@ -421,6 +423,7 @@ public class MainActivity extends Activity implements DownloadService.Listener {
 
         emptyBox = findViewById(R.id.emptyBox);
         loadingBox = findViewById(R.id.loadingBox);
+        tvLoadingBody = findViewById(R.id.tvLoadingBody);
         errorBox = findViewById(R.id.errorBox);
         resultBox = findViewById(R.id.resultBox);
 
@@ -669,12 +672,17 @@ public class MainActivity extends Activity implements DownloadService.Listener {
         emptyBox.setVisibility(View.VISIBLE);
     }
 
-    private void renderLoading() {
+    private void renderLoading(boolean youtube) {
         hideAllStates();
         // 开始解析就停掉上一个视频的预览：它马上就和新结果对不上了
         if (preview != null) {
             preview.reset();
         }
+        // 加载文案必须分来源。写死「正在向哔哩哔哩请求稿件信息与可用画质」，
+        // 解析 YouTube 链接时就会在屏幕上明说自己在问 B 站 —— 这和下载报错
+        // 串成 B 站话术是同一类错误，只是发生在加载阶段。
+        tvLoadingBody.setText(youtube
+                ? R.string.loading_body_youtube : R.string.loading_body);
         loadingBox.setVisibility(View.VISIBLE);
         btnParse.setEnabled(false);
         btnParse.setText(R.string.action_parsing);
@@ -810,9 +818,10 @@ public class MainActivity extends Activity implements DownloadService.Listener {
             return;
         }
 
-        renderLoading();
-
+        // 来源要在 renderLoading 之前算出来：加载文案得按来源选
         final boolean youtube = YouTubeEngine.isYouTubeUrl(raw);
+        renderLoading(youtube);
+
         bg.execute(() -> {
             try {
                 if (youtube) {
@@ -827,7 +836,7 @@ public class MainActivity extends Activity implements DownloadService.Listener {
                     ui.post(() -> onParsed(v, probe));
                 }
             } catch (Exception e) {
-                ui.post(() -> onParseFailed(e));
+                ui.post(() -> onParseFailed(e, youtube));
             }
         });
     }
@@ -865,13 +874,22 @@ public class MainActivity extends Activity implements DownloadService.Listener {
         scroll.post(() -> scroll.scrollTo(0, 0));
     }
 
-    private void onParseFailed(Exception e) {
+    /**
+     * 连不上时的标题。两条来源共用同一个异常分支（{@link UnknownHostException}
+     * 和通用 {@code IOException}），但文案不能说错对象 —— 解析 YouTube 时
+     * 弹出「无法连接到哔哩哔哩」就是第 4 条报告那类问题。
+     */
+    private static int networkTitle(boolean youtube) {
+        return youtube ? R.string.err_network_youtube : R.string.err_network;
+    }
+
+    private void onParseFailed(Exception e, boolean youtube) {
         String raw = describeRaw(e);
         String title;
         String fix;
 
         if (e instanceof UnknownHostException) {
-            title = getString(R.string.err_network);
+            title = getString(networkTitle(youtube));
             fix = getString(R.string.err_network_fix);
         } else if (e instanceof SocketTimeoutException) {
             title = getString(R.string.err_timeout);
@@ -918,7 +936,7 @@ public class MainActivity extends Activity implements DownloadService.Listener {
                     break;
             }
         } else if (e instanceof java.io.IOException) {
-            title = getString(R.string.err_network);
+            title = getString(networkTitle(youtube));
             fix = getString(R.string.err_network_fix);
         } else {
             title = getString(R.string.err_generic);

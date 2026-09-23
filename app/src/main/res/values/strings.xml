@@ -38,6 +38,14 @@
 
     <string name="loading_title">正在解析视频…</string>
     <string name="loading_body">正在向哔哩哔哩请求稿件信息与可用画质</string>
+    <!--
+      YouTube 专用的加载文案。
+
+      原来两条路共用上面那句，解析 YouTube 链接时屏幕上会明说自己在问 B 站 ——
+      和下载出错时错用 B 站话术是同一类问题（第 4 条报告），只是发生在加载阶段。
+      文案由 MainActivity.renderLoading(boolean) 按来源选。
+    -->
+    <string name="loading_body_youtube">正在向 YouTube 请求视频信息与可用画质</string>
 
     <!-- ==================== 错误：问题 + 恢复 ==================== -->
 
@@ -47,6 +55,14 @@
     <string name="err_empty_input_fix">请先粘贴一个哔哩哔哩链接或 BV 号</string>
 
     <string name="err_network">无法连接到哔哩哔哩</string>
+    <!--
+      YouTube 断网时的标题。
+
+      连不上这个异常分支是两条来源共用的，原来只有上面那句「无法连接到哔哩哔哩」，
+      于是解析 YouTube 链接失败时会弹出在说 B 站 —— 和第 4 条报告同一个毛病。
+      由 MainActivity.networkTitle(boolean) 按来源选。
+    -->
+    <string name="err_network_youtube">无法连接到 YouTube</string>
     <string name="err_network_fix">请检查网络连接或代理设置后重试</string>
 
     <string name="err_timeout">服务器响应超时</string>

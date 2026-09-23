@@ -371,6 +371,7 @@
                     </com.biligrab.downloader.ui.NeuLayout>
 
                     <com.biligrab.downloader.ui.NeuText
+                        android:id="@+id/tvLoadingBody"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="@dimen/space_xs"
