@@ -193,5 +193,37 @@ if found["size"] != size:
     print("  大小对不上：远端 %d，本地 %d" % (found["size"], size))
     sys.exit(1)
 print("  远端附件 %s，%d 字节，状态 %s" % (found["name"], found["size"], found["state"]))
+
+# 最后确认 Release 没被搞成草稿、也没跟 tag 脱钩。
+#
+# 这一步是吃过亏才加的：move-tag.py 会先删 tag 再重建，而 GitHub 在 tag
+# 被删的瞬间会把 Release 变成 draft、tag_name 换成一串
+# `untagged-<hash>`。此时如果上传附件，附件是传上去了，但下载地址变成
+# `releases/download/untagged-xxx/...`，而且 Release 在页面上**看不见**
+# —— 因为它还是草稿。工具照样报「发布完成」，只有去查 API 才发现。
+# 所以这里主动修一次并核对。
+status, nowrel = api("/repos/%s/releases/%d" % (REPO, rel["id"]))
+if status != 200 or not nowrel:
+    print("  回读 Release 失败")
+    sys.exit(1)
+if nowrel.get("draft") or nowrel.get("tag_name") != TAG:
+    print("  Release 是草稿或跟 tag 脱钩（tag_name=%r），修复"
+          % nowrel.get("tag_name"))
+    status, fixed = api("/repos/%s/releases/%d" % (REPO, rel["id"]), "PATCH", {
+        "tag_name": TAG, "name": "BiliGrab %s" % TAG,
+        "body": NOTES, "draft": False, "prerelease": False,
+    })
+    if status not in (200, 201) or not fixed:
+        print("  修复失败")
+        sys.exit(1)
+    nowrel = fixed
+if nowrel.get("draft"):
+    print("  仍然是草稿，中止")
+    sys.exit(1)
+if nowrel.get("tag_name") != TAG:
+    print("  tag_name 仍是 %r，中止" % nowrel.get("tag_name"))
+    sys.exit(1)
+print("  Release 状态正常：tag=%s，draft=False，附件 %d 个"
+      % (nowrel["tag_name"], len(nowrel.get("assets") or [])))
 print()
 print("发布完成：%s" % found["browser_download_url"])
