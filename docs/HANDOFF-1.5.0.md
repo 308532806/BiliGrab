@@ -1,4 +1,86 @@
-# BiliGrab 1.5.0 状态
+# BiliGrab 1.5.1 状态
+
+> 本文件记录 1.5.0 / 1.5.1 两版的进展。1.5.0 的部分在本节之后。
+
+## 1.5.1（最新）
+
+**已发布。** tag `v1.5.1`，release id `394318046`。
+https://github.com/308532806/BiliGrab/releases/tag/v1.5.1
+
+- APK `BiliGrab-1.5.1.apk`，19,426,666 bytes
+- SHA-256 `1BC08C5D46017681C025540E78D23E198B6C3AE77704EB0D13054108D9234C99`
+- 远端 main HEAD `8150bb3a`，本地 `c57a64a` —— **内容一致、SHA 不同**，原因见下
+
+### ① B 站 4K / 真彩 → 查清了，是大会员权限
+
+**结论：4K / HDR 真彩 / 杜比视界 / 8K 需要大会员账号。** 未登录拿不到，
+原项目 bilibilias 同样拿不到。不是本应用的缺陷。
+
+实测四个热门稿件 × 四种组合（旧端点/WBI × 有无 `try_look`），结果完全一致：
+
+```
+support_formats 报：120=4K 超高清, 116=1080P 60帧, 80=1080P 高清, ...
+dash 实给        ：最高 [16, 32, 64, 80]  →  1080P
+```
+
+服务端对匿名会话**广告 4K 但拒绝发放**。`qn=127` / `fnval=4048` / `fourk=1` /
+`fnver=0` 本来就都发着，和原项目一字不差。
+
+原项目「看起来支持 4K」是因为它不裁剪 —— 把 `support_formats` 看到的档位
+全列出来，选了下不到就静默回退。1.5.0 剔掉了这些行（留着是骗人），
+但**只剔不说**会让人以为应用不支持 4K，这是 1.5.0 的疏漏。
+
+现在 `PlayInfo.lockedQualities` 记下被剔掉的档位，界面明确说：
+
+> 本稿件支持 4K 超高清、1080P 高码率，需要大会员账号才能下载。当前最高只能拿到 1080P 高清
+
+### ② YouTube 403 → 找到两个缺陷，但根因仍未坐实
+
+- **确凿**：`YouTubeEngine` 从不读 yt-dlp 为每个 format 声明的 `http_headers`，
+  下载时用 `Http.open` 里那套**为 B 站准备的**桌面 Chrome UA 打 googlevideo。
+  现已原样带上（视频/音轨分开存，两者常来自不同 itag）。
+- **可能**：无条件发 `Range: bytes=0-`。部分 googlevideo 直链把区间写进签名
+  （查询串里的 `&range=`），再叠一个 `Range` 会因区间与签名不符而 403，
+  且报的正是「签名失效」。现只在地址自身不带 `range` 时才发。
+
+**但都没能真机验证** —— 实测时 PC 的代理软件已关闭、手机 VPN 也没有 tun 接口，
+两边都连不上 YouTube。
+
+**而且有一条反证**：改之前的实测里，用可用代理时下载是能开始的（跑到 5% 才断），
+并没有 403。说明 UA 不匹配并非唯一成因，**出口 IP 那条链路同样可疑**。
+→ **403 的根因仍然开放。**
+
+下一轮怎么定位：出 403 时日志会打印直链主机、头数、是否自带 `range`、
+实际 User-Agent，以及 **CDN 响应体**（响应体是区分「签名过期 / IP 不符 /
+客户端不匹配」的唯一证据）。
+
+```powershell
+adb logcat -d -s BiliGrab:* | Select-String "YouTube 直链"
+```
+
+### 真机验证
+
+| 项目 | 结果 |
+| --- | --- |
+| 4K 大会员提示文案 | ✅ `BV1J7hE6aEDQ`，未登录 |
+| 档位列表无幻影 4K 行 | ✅ |
+| B 站下载回归 `BV1GJ411x7h7` 360P | ✅ 完整落盘 14,728,731 字节 |
+| YouTube 403 修复 | ⚠️ 未能验证 |
+
+### 推送到 GitHub 的备用路径
+
+**`github.com:443` 在境内经常连不上（DNS 能解析，TCP 不通），但 `api.github.com`
+和 `uploads.github.com` 通常是通的。** 这时 `git push` 走不了，用
+`tools/push-via-api.py`：它用 Git Data API 手工做一遍 push 做的事
+（建 blob → 建 tree → 建 commit → 移动 ref → 建 tag）。
+
+副作用：服务端重新构造的对象，**SHA 与本地不同**（内容一致）。
+脚本因此从**远端 main HEAD** 取父提交，而不是本地 `HEAD~1`。
+GitHub 恢复后 `git fetch && git reset --hard origin/main` 即可对齐。
+
+---
+
+# 1.5.0
 
 **已发布。** 代码 `19b5e34`，tag `v1.5.0`，release id `394300751`。
 
