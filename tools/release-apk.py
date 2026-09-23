@@ -97,18 +97,48 @@ status, rel = api("/repos/%s/releases/tags/%s" % (REPO, TAG))
 if status == 200 and rel:
     print("  已存在 Release id=%s" % rel["id"])
 else:
-    print("  还没有，创建一个")
-    status, rel = api("/repos/%s/releases" % REPO, "POST", {
-        "tag_name": TAG,
-        "name": "BiliGrab %s" % TAG,
-        "body": NOTES,
-        "draft": False,
-        "prerelease": False,
-    })
-    if status not in (200, 201) or not rel:
-        print("  创建 Release 失败")
-        sys.exit(1)
-    print("  已创建 Release id=%s" % rel["id"])
+    # 404 有两种情况，必须分开处理。
+    #
+    # 一种是「这个 tag 还真没发过」。另一种是**发过，但 tag 被移动过**
+    # （move-tag.py 会把 tag 删掉重建），于是旧 Release 跟 tag 脱钩，
+    # 按 tag 查就 404 了。这时如果直接新建，远端会出现两个同 tag_name 的
+    # Release：v1.7.1 那轮真的这样了，用户点进去看到的是哪一个全看运气，
+    # 而旧的里面是修复前的 APK。
+    #
+    # 所以先按 tag_name 在列表里捞一遍：捞到就是脱钩的那个，改它，
+    # 不要新建。
+    print("  按 tag 查不到，先在列表里找有没有脱钩的同名 Release")
+    stale = None
+    st2, all_rels = api("/repos/%s/releases?per_page=100" % REPO)
+    if st2 == 200 and all_rels:
+        for r in all_rels:
+            if r.get("tag_name") == TAG:
+                stale = r
+                break
+    if stale:
+        rel = stale
+        print("  找到脱钩的 Release id=%s（tag 指向 %s），改它而不是新建"
+              % (rel["id"], rel.get("target_commitish")))
+        # 顺手把说明补回去
+        st3, rel = api("/repos/%s/releases/%d" % (REPO, rel["id"]), "PATCH",
+                       {"body": NOTES})
+        if st3 not in (200, 201) or not rel:
+            print("  更新说明失败")
+            sys.exit(1)
+        print("  说明已更新")
+    else:
+        print("  确实没发过，创建一个")
+        status, rel = api("/repos/%s/releases" % REPO, "POST", {
+            "tag_name": TAG,
+            "name": "BiliGrab %s" % TAG,
+            "body": NOTES,
+            "draft": False,
+            "prerelease": False,
+        })
+        if status not in (200, 201) or not rel:
+            print("  创建 Release 失败")
+            sys.exit(1)
+        print("  已创建 Release id=%s" % rel["id"])
 
 name = os.path.basename(APK)
 size = os.path.getsize(APK)

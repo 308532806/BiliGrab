@@ -176,7 +176,15 @@ public class DownloadService extends Service {
         }
         DownloadService s = INSTANCE;
         if (s != null && t.id.equals(s.currentId)) {
+            // 正在跑：只挂标志，由下载线程自己收尾（它会按状态写成
+            // 已取消或已暂停，并清掉工作目录）。
             t.requestCancel();
+            return;
+        }
+        // 已经落盘的不能再取消。判断必须放在这里，因为界面走的是**本方法**
+        // 而不是 onStartCommand —— 这一处漏掉的话，无论那边改得多对都白搭。
+        // （实测踩过：文件完完整整存进 MyGrab，记录却成了「已取消」。）
+        if (t.status() == DownloadTask.STATUS_DONE) {
             return;
         }
         s = INSTANCE;
@@ -230,13 +238,26 @@ public class DownloadService extends Service {
         if (ACTION_CANCEL.equals(action)) {
             DownloadTask t = store.byId(id);
             if (t != null && id.equals(currentId)) {
+                // 正在跑：只挂个标志，由下载线程自己收尾
                 t.requestCancel();
             } else if (t != null) {
-                queue.remove(id);
-                t.setStatus(DownloadTask.STATUS_CANCELLED);
-                WorkDir.delete(this, id);
-                store.markDirty(this);
-                store.notifyProgress();
+                // 没在跑。可能是排队中、暂停中，也可能**刚刚已经跑完了** ——
+                // 这三种从 currentId 上看不出区别。所以必须看状态：
+                // 已经落盘的（DONE）不能被改成「已取消」。
+                //
+                // 实测踩到过：取消点下去时任务刚好合成完，文件完整地存进了
+                // MyGrab（74,151,424 字节），而这条分支把记录改成了
+                // 「已取消、已下 0 字节、残留已清理」。用户看到的是「没下成」，
+                // 磁盘上却躺着一个他找不到来源的文件 —— 比直接失败更难受。
+                if (t.status() == DownloadTask.STATUS_DONE) {
+                    Log.i(TAG, "取消来得太晚，任务已经完成：" + t.title);
+                } else {
+                    queue.remove(id);
+                    t.setStatus(DownloadTask.STATUS_CANCELLED);
+                    WorkDir.delete(this, id);
+                    store.markDirty(this);
+                    store.notifyProgress();
+                }
             }
             if (currentId.isEmpty()) {
                 stopSelf(startId);

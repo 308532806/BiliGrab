@@ -207,9 +207,35 @@ public class DownloadsActivity extends Activity
         // 它只发 onTasksChanged，**不会**发 onTaskFinished（因为没有任何线程
         // 需要等）。所以这条路径也要收尾，否则等在那里的 pendingDelete
         // 永远不会被清掉，界面就此停住不再刷新。
+        //
+        // 但「不活跃」不等于「被取消了」——**下载成功也是不活跃**。
+        // service 完成任务时先 notifyProgress() 再 emitFinished()，
+        // 于是这里会先被叫到：如果只看「不活跃」就把记录按取消处理，
+        // 一个刚刚成功落盘的任务会被写成「已取消、已下 0 字节」。
+        // 实测踩到过：文件完完整整躺在 MyGrab 里（74,151,424 字节），
+        // 管理页却显示「已取消，残留已清理 · 共占用 0 B」，用户
+        // 以为没下成，磁盘上却躺着一个他找不到来源的文件。
         if (pendingDelete != null) {
             DownloadTask t = TaskStore.get().byId(pendingDelete);
-            if (t == null || !t.isActive()) {
+            if (t == null) {
+                String id = pendingDelete;
+                pendingDelete = null;
+                ui.post(() -> finishPendingDelete(id));
+                return;
+            }
+            if (!t.isActive()) {
+                // 已完成：像 onTaskFinished 那样按「你点晚了」处理，
+                // 不要动记录 —— 成功就是成功。
+                if (pendingCancelOnly && t.status() == DownloadTask.STATUS_DONE) {
+                    pendingCancelOnly = false;
+                    pendingDelete = null;
+                    ui.post(() -> {
+                        Snackbar.show(findViewById(R.id.root),
+                                getString(R.string.snack_cancel_too_late, t.title));
+                        refreshAll();
+                    });
+                    return;
+                }
                 String id = pendingDelete;
                 pendingDelete = null;
                 ui.post(() -> finishPendingDelete(id));
@@ -799,6 +825,18 @@ public class DownloadsActivity extends Activity
             // 「已取消 · 已暂停 · 71.2 MB / 71.2 MB」，而汇总那里写着
             // 「共占用 0 B」—— 同一个屏幕上两个数字互相矛盾，用户没法判断
             // 那些字节到底还在不在。
+            //
+            // 已完成的任务绝不能走到这里：那样会把一个存好的文件写成
+            //「已取消、已下 0 字节」。正常路径下 service 会拦住这种取消，
+            // 这里是第二道闸 —— 记录已经是 DONE 就按成功展示。
+            if (t.status() == DownloadTask.STATUS_DONE) {
+                ui.post(() -> {
+                    Snackbar.show(findViewById(R.id.root),
+                            getString(R.string.snack_cancel_too_late, t.title));
+                    rebuild();
+                });
+                return;
+            }
             t.resetVideo();
             t.resetAudio();
             t.setStage(getString(R.string.stage_cancelled_clean));
