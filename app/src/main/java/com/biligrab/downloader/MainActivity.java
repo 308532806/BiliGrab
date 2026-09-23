@@ -72,6 +72,8 @@ public class MainActivity extends Activity implements DownloadService.Listener {
     private static final String TAG = "BiliGrab";
 
     private static final int REQ_PERMS = 1001;
+    /** 应用内登录。和权限请求分开编号，否则回调里分不清是谁返回的。 */
+    private static final int REQ_LOGIN = 1002;
 
     private static final String STATE_URL = "state_url";
     private static final String STATE_HAD_RESULT = "state_had_result";
@@ -1416,6 +1418,49 @@ public class MainActivity extends Activity implements DownloadService.Listener {
     // 设置：底部表单
     // ==================================================================
 
+    /**
+     * 把登录态药丸刷成当前的值。
+     *
+     * <p>登录成功和退出登录都会调用它，所以抽出来 —— 两处各写一遍的话，
+     * 早晚有一处忘了改，就会出现「已经退出了还显示已登录」。</p>
+     */
+    private void refreshLoginState(TextView tv, Prefs prefs) {
+        if (!prefs.hasLogin()) {
+            tv.setText(R.string.settings_login_state_off);
+            return;
+        }
+        String uname = prefs.loginUname();
+        // 用户名可能是空的 —— 旧版本只存了 SESSDATA，没有这一步。
+        // 那种情况下退回「已登录」，不要去猜一个名字出来。
+        tv.setText(uname.isEmpty()
+                ? getString(R.string.settings_login_state_on)
+                : getString(R.string.settings_login_state_on_as, uname));
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode != REQ_LOGIN) {
+            return;
+        }
+        Prefs prefs = new Prefs(this);
+        if (resultCode != RESULT_OK || !prefs.hasLogin()) {
+            // 用户自己关掉了登录页。这不是错误，不需要弹提示。
+            return;
+        }
+        String uname = prefs.loginUname();
+        if (data != null && data.hasExtra(LoginActivity.EXTRA_UNAME)) {
+            uname = data.getStringExtra(LoginActivity.EXTRA_UNAME);
+        }
+        Snackbar.show(findViewById(R.id.root), getString(R.string.snack_logged_in, uname));
+
+        // 登录态直接决定画质上限，刚才那份解析结果已经不作数了。
+        // 输入框里还有内容就重解析一次，否则用户得手动再点一下。
+        if (!inputUrl.getText().toString().trim().isEmpty()) {
+            doParse();
+        }
+    }
+
     private void showSettings() {
         final Dialog sheet = new Dialog(this, R.style.Theme_BiliGrab_BottomSheet);
         View content = LayoutInflater.from(this).inflate(R.layout.sheet_settings, null, false);
@@ -1449,20 +1494,25 @@ public class MainActivity extends Activity implements DownloadService.Listener {
         });
 
         // ---- 账号 ----
-        final EditText et = content.findViewById(R.id.etSessdata);
-        et.setText(prefs.sessdata());
-
+        // 登录改成在应用内完成。以前是让用户去浏览器 F12 里翻出 SESSDATA 粘进来，
+        // 那个值取错了不会报错，只会表现为「明明登录了却还是 480P」，
+        // 用户没有任何办法自查。现在点一下按钮，走 B 站官方登录页。
         final TextView tvState = content.findViewById(R.id.tvLoginState);
-        tvState.setText(prefs.hasLogin()
-                ? R.string.settings_login_state_on : R.string.settings_login_state_off);
+        refreshLoginState(tvState, prefs);
         // 药丸在 XML 里是编译期兜底色，换主题色后会留在蓝色上，这里跟着主色走
         applyPill(tvState, HyperTheme.primary(this));
 
+        final Button btnLogin = content.findViewById(R.id.btnLogin);
+        // 面板收起来，否则它会盖在整屏的登录页上
+        btnLogin.setOnClickListener(v -> {
+            sheet.dismiss();
+            startActivityForResult(new Intent(this, LoginActivity.class), REQ_LOGIN);
+        });
+
         final Button btnClear = content.findViewById(R.id.btnClearCookie);
         btnClear.setOnClickListener(v -> {
-            prefs.setSessdata("");
-            et.setText("");
-            tvState.setText(R.string.settings_login_state_off);
+            prefs.clearLogin();
+            refreshLoginState(tvState, prefs);
             Snackbar.show(findViewById(R.id.root), getString(R.string.snack_cookie_cleared));
         });
 
@@ -1630,23 +1680,23 @@ public class MainActivity extends Activity implements DownloadService.Listener {
 
         // ---- 关闭 ----
         content.findViewById(R.id.btnSheetClose).setOnClickListener(v -> {
-            commitSettings(et, swAvc, etProxy);
+            commitSettings(swAvc, etProxy);
             sheet.dismiss();
         });
 
-        sheet.setOnDismissListener(d -> commitSettings(et, swAvc, etProxy));
+        sheet.setOnDismissListener(d -> commitSettings(swAvc, etProxy));
         sheet.show();
     }
 
-    private void commitSettings(EditText et, Switch swAvc) {
-        commitSettings(et, swAvc, null);
-    }
-
-    private void commitSettings(EditText et, Switch swAvc, EditText etProxy) {
-        String sess = et.getText().toString().trim();
-        boolean changed = !sess.equals(prefs.sessdata())
-                || swAvc.isChecked() != prefs.preferAvc();
-        prefs.setSessdata(sess);
+    /**
+     * 把面板上的改动落盘。
+     *
+     * <p>这里**不再处理登录态**：它已经改成在 {@link LoginActivity} 里登录后立即保存，
+     * 不需要也不应该由「面板关闭」这个动作来同步。以前它每次收起面板都会把输入框
+     * 里的内容写回 SESSDATA，万一用户改了一半没提交，反而会把好的登录态覆盖掉。</p>
+     */
+    private void commitSettings(Switch swAvc, EditText etProxy) {
+        boolean changed = swAvc.isChecked() != prefs.preferAvc();
         prefs.setPreferAvc(swAvc.isChecked());
 
         if (etProxy != null) {

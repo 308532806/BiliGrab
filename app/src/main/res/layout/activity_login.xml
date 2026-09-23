@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  应用内登录页 —— Hyper-Neumorphic
+  ===============================
+
+  这一屏只做一件事：把 B 站官方登录页装进来，登录成功后抓 Cookie 返回。
+
+  为什么是网页而不是自己画表单：
+  账号密码登录的接口会直接回「-105 验证码错误」，要求带极验的
+  challenge / validate。第三方应用不接打码服务就完不成，
+  原项目 bilibilias 也没做 —— 它只做了扫码。
+  用官方页面就绕过了这件事：验证码由页面自己处理，
+  而且账号密码、短信、扫码三种方式一个不少。
+
+  结构：标题栏（关闭） + 说明 + 网页。
+  网页用 weight 撑满剩余高度，这样键盘弹出时（adjustResize）
+  它会跟着缩，输入框不会被顶到屏幕外。
+-->
+<com.biligrab.downloader.ui.NeuLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/hyper_background"
+    android:orientation="vertical"
+    android:paddingStart="@dimen/screen_margin"
+    android:paddingTop="@dimen/space_lg"
+    android:paddingEnd="@dimen/screen_margin"
+    android:paddingBottom="@dimen/space_lg">
+
+    <!-- 标题栏。关闭按钮放右边，用图标 + 无涟漪的浮雕按钮，
+         与主界面右上角的设置入口保持一致。 -->
+    <com.biligrab.downloader.ui.NeuLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <com.biligrab.downloader.ui.NeuText
+            style="@style/Text.TitleLarge"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/login_title" />
+
+        <com.biligrab.downloader.ui.NeuImageButton
+            android:id="@+id/btnCloseLogin"
+            style="@style/Widget.IconButton"
+            android:layout_width="@dimen/button_height_compact"
+            android:layout_height="@dimen/button_height_compact"
+            android:contentDescription="@string/login_close"
+            android:src="@drawable/ic_close" />
+    </com.biligrab.downloader.ui.NeuLayout>
+
+    <com.biligrab.downloader.ui.NeuText
+        android:id="@+id/tvLoginHint"
+        style="@style/Text.BodySmall"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/space_sm"
+        android:text="@string/login_hint" />
+
+    <WebView
+        android:id="@+id/webLogin"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_marginTop="@dimen/space_md"
+        android:layout_weight="1"
+        android:background="@drawable/bg_login_frame"
+        tools:ignore="WebViewLayout" />
+
+</com.biligrab.downloader.ui.NeuLayout>

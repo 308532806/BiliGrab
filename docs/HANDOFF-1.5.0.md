@@ -1,8 +1,92 @@
-# BiliGrab 1.5.2 状态
+# BiliGrab 1.6.0 状态
 
-> 本文件记录 1.5.0 / 1.5.1 / 1.5.2 三版的进展，最新的在最前。
+> 本文件记录 1.5.0 起的进展，最新的在最前。
 
-## 1.5.2（最新）
+## 1.6.0（最新）—— 应用内登录
+
+**已发布。** tag `v1.6.0`。
+
+### 改了什么
+
+账号登录从「粘贴 SESSDATA」换成「在应用内登录 B 站账号」。
+
+原来那个输入框要求用户自己去浏览器开 F12，翻到 Application → Cookies，
+从里面挑出 SESSDATA 复制进来。这个流程有两个问题，而且都不小：
+
+1. **取错了不会报错。** 少复制一个字符，应用只会表现为「明明登录了却还是 480P」。
+   用户没有任何办法自查 —— 界面上没有一处能区分「没登录」和「登录了但值不对」。
+2. **它把一件本该一键完成的事，变成了要先懂开发者工具。**
+
+### 为什么不是「账号密码表单」，而是官方登录页
+
+用户要的是账号密码登录。**但这条路自己实现不了**，这不是偷懒：
+
+```
+POST passport.bilibili.com/x/passport-login/web/login
+  username=13800000000 & password=deadbeef & keep=0
+  token= & challenge= & validate= & seccode=
+→ HTTP 200  code=-105  message=验证码错误
+```
+
+服务端要求同时带上极验的 `challenge` / `validate` / `seccode`，
+而这三样只能由极验的前端算出来。不接打码服务就没有合法途径拿到。
+
+**原项目也没做。** 两个镜像（`yss161/bilibilias_code`、`SOCK-MAGIC/bilibilias`）
+的登录相关文件完全一致，一共 13 个，没有一个是账号密码：
+
+```
+ui/login/LoginScreen.kt              ← 选平台
+ui/login/QRCodeLoginScreen.kt        ← 扫码
+ui/login/CookieLoginScreen.kt        ← 粘贴 Cookie
+core/data/.../QRCodeLoginRepository.kt
+```
+
+也就是说，原项目用的是**扫码**，而"粘贴 Cookie"它本来也有 ——
+我们现在这个反而是从它那儿沿袭来的。
+
+### 采用的方案：把官方登录页装进 WebView
+
+`https://passport.bilibili.com/login` 是一个单页应用（返回的 HTML 只有 948 字节，
+内容全靠 JS 渲染），所以必须在 WebView 里跑。这样：
+
+* **账号密码登录**：界面底部的「账号密码登录」直接可用（已真机截图确认）
+* **手机短信登录**：默认页就是
+* **扫码登录**：也在同一个页面里
+* **验证码由 B 站自己的页面处理** —— 这正是自己实现走不通的那一环
+
+登录完成后抓 `CookieManager` 里的 SESSDATA，先用 `x/web-interface/nav`
+验一次（`isLogin` + `uname`）再保存。**这一步不能省**：存一份无效的
+SESSDATA 比不存更糟 —— 界面会显示「已登录」，画质还是 480P。
+
+### 真机验证
+
+| 项目 | 结果 |
+| --- | --- |
+| 登录页在 WebView 里渲染 | ✅ 手机号登录/注册 页完整呈现 |
+| 「账号密码登录」入口可用 | ✅ 账号 / 密码 / 忘记密码 / 登录 一应俱全 |
+| **Cookie 抓取通路** | ✅ 日志：`WebView Cookie 罐：buvid3, b_nut, _uuid, buvid4` |
+| `exported=false` 生效 | ✅ adb 直接 `am start` 被 SecurityException 拒绝 |
+| SESSDATA 输入框已移除 | ✅ 界面里找不到 |
+| B 站下载回归 `BV1GJ411x7h7` | ✅ 14,728,731 字节 |
+| B 站 4K 大会员提示 | ✅ |
+| **实际登录一次** | ⚠️ 未能验证 —— 需要真实账号，这是用户的动作 |
+
+Cookie 罐那一行是关键证据：它证明 `CookieManager.getCookie()` 确实读得到
+WebView 里的 Cookie。既然 `buvid3` 之类的匿名 Cookie 能读到，
+SESSDATA 出现时同样能读到。
+
+> 那一行**只记 Cookie 名字，不记值**。SESSDATA 本身就是密码等价物，
+> 写进 logcat 等于把账号摊开 —— 别的应用读得到 logcat。
+
+### 顺带修掉的一个隐患
+
+`commitSettings` 原来每次关闭设置面板都会把输入框里的内容写回 SESSDATA。
+用户改了一半没提交，反而会把好的登录态覆盖掉。登录态现在由
+`LoginActivity` 登录成功后立即保存，不再经过「面板关闭」这个动作。
+
+---
+
+## 1.5.2
 
 **已发布。** tag `v1.5.2`。
 

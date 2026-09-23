@@ -230,12 +230,33 @@
     <string name="settings_title">设置</string>
 
     <string name="settings_account_title">账号</string>
-    <string name="settings_sessdata_label">SESSDATA</string>
-    <string name="settings_sessdata_hint">粘贴 Cookie 中 SESSDATA 的值</string>
-    <string name="settings_sessdata_help">不填写时最高只能下载 480P。获取方法：电脑浏览器登录 bilibili.com → F12 → Application → Cookies → 复制 SESSDATA 的值。</string>
-    <string name="settings_clear_cookie">清除登录态</string>
+    <string name="settings_login_button">登录哔哩哔哩</string>
+    <!--
+      为什么不再让用户粘贴 SESSDATA：那个值取起来要开 F12 翻开发者工具，
+      取错了只会表现为「登录了但还是 480P」，极难自查。改成在应用内登录。
+    -->
+    <string name="settings_login_help">在应用内登录 B 站账号，登录态自动保存。不登录时最高只能下载 480P。</string>
+    <string name="settings_clear_cookie">退出登录</string>
     <string name="settings_login_state_on">已登录</string>
+    <string name="settings_login_state_on_as">已登录：%1$s</string>
     <string name="settings_login_state_off">未登录</string>
+
+    <!-- ==================== 应用内登录 ==================== -->
+    <string name="login_title">登录哔哩哔哩</string>
+    <string name="login_close">关闭</string>
+    <string name="login_back">返回</string>
+    <string name="login_hint">登录成功后会自动返回，无需手动填写 Cookie</string>
+    <string name="login_verifying">正在确认登录状态…</string>
+    <!--
+      载入官方登录页，等于把 B 站的登录界面原样搬过来：
+      账号密码、短信验证码、扫码三种都在，验证码也由官方页面自己处理。
+      第三方应用自己实现账号密码登录是走不通的 —— 接口会直接回
+      「-105 验证码错误」，要求带极验的 challenge/validate，不接打码服务没戏。
+    -->
+    <string name="login_page_failed">登录页打不开：%1$s\n请检查网络后重试。</string>
+    <string name="login_success">登录成功：%1$s</string>
+    <string name="login_failed">登录未完成：%1$s</string>
+    <string name="snack_logged_in">已登录：%1$s</string>
 
     <string name="settings_playback_title">下载偏好</string>
     <string name="settings_prefer_avc">优先 H.264</string>
@@ -278,7 +299,7 @@
          因为失败的正文就是 DownloadService 传回来的具体原因 -->
     <string name="snack_need_parse">请先解析一个视频</string>
     <string name="snack_settings_saved">设置已保存</string>
-    <string name="snack_cookie_cleared">已清除登录态</string>
+    <string name="snack_cookie_cleared">已退出登录</string>
     <string name="snack_copied">已从剪贴板粘贴</string>
     <string name="snack_clipboard_empty">剪贴板里没有文本</string>
 

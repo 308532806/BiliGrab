@@ -8,6 +8,13 @@ public final class Prefs {
 
     private static final String FILE = "biligrab";
     private static final String KEY_SESSDATA = "sessdata";
+    /**
+     * 登录后的用户名，只用来显示。
+     *
+     * <p>存它是为了让设置页能明确写出「已登录：某某」—— 只说「已登录」的话，
+     * 用户没法判断登进去的是不是自己想用的那个号（多账号很常见）。</p>
+     */
+    private static final String KEY_LOGIN_UNAME = "login_uname";
     private static final String KEY_BUVID3 = "buvid3";
     private static final String KEY_QN = "prefer_qn";
     private static final String KEY_PREFER_AVC = "prefer_avc";
@@ -50,6 +57,19 @@ public final class Prefs {
 
     public void setSessdata(String v) {
         sp.edit().putString(KEY_SESSDATA, v == null ? "" : v.trim()).apply();
+    }
+
+    public String loginUname() {
+        return sp.getString(KEY_LOGIN_UNAME, "");
+    }
+
+    public void setLoginUname(String v) {
+        sp.edit().putString(KEY_LOGIN_UNAME, v == null ? "" : v.trim()).apply();
+    }
+
+    /** 退出登录：SESSDATA 和用户名一起清，不能只清一个。 */
+    public void clearLogin() {
+        sp.edit().remove(KEY_SESSDATA).remove(KEY_LOGIN_UNAME).apply();
     }
 
     public String buvid3() {

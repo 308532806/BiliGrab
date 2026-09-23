@@ -99,31 +99,19 @@
                     android:text="@string/settings_account_title" />
 
                 <com.biligrab.downloader.ui.NeuText
-                    android:id="@+id/labelSessdata"
-                    style="@style/Widget.FieldLabel"
-                    android:layout_width="wrap_content"
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="@dimen/space_lg"
-                    android:layout_marginBottom="@dimen/space_sm"
-                    android:labelFor="@id/etSessdata"
-                    android:text="@string/settings_sessdata_label" />
-
-                <com.biligrab.downloader.ui.NeuEdit
-                    android:id="@+id/etSessdata"
-                    style="@style/Widget.TextField"
-                    android:layout_width="match_parent"
-                    android:layout_height="@dimen/field_height"
-                    android:hint="@string/settings_sessdata_hint"
-                    android:importantForAutofill="no"
-                    android:inputType="textNoSuggestions"
-                    tools:ignore="TextViewEdits" />
-
-                <com.biligrab.downloader.ui.NeuText
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="@dimen/space_sm"
-                    android:text="@string/settings_sessdata_help"
+                    android:text="@string/settings_login_help"
                     android:textAppearance="@style/Text.BodySmall" />
+
+                <com.biligrab.downloader.ui.NeuButton
+                    android:id="@+id/btnLogin"
+                    style="@style/Widget.Button"
+                    android:layout_width="match_parent"
+                    android:layout_height="@dimen/button_height"
+                    android:layout_marginTop="@dimen/space_md"
+                    android:text="@string/settings_login_button" />
 
                 <com.biligrab.downloader.ui.NeuLayout
                     android:layout_width="match_parent"

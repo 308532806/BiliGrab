@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  登录页的外框。
+
+  底色是纯白而不是主题色：B 站官方登录页本身就是白底的，
+  用主题色打底的话，页面加载完成的那一瞬间会闪一下色。
+  圆角与页面卡片一致（radius_card），这样它看起来是页面里的一块，
+  而不是把网页硬贴上去。
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="#FFFFFF" />
+    <corners android:radius="@dimen/radius_card" />
+</shape>
