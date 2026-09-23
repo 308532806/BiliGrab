@@ -74,6 +74,19 @@
             android:launchMode="singleTop"
             android:windowSoftInputMode="adjustResize" />
 
+        <!--
+            下载管理页。不导出：它读的是本应用的下载记录，
+            外部应用没有任何理由直接打开它。
+            顶栏会自己避开状态栏，所以保留 configChanges 让转屏不重建 ——
+            重建会丢掉正在滚动的列表位置。
+        -->
+        <activity
+            android:name=".DownloadsActivity"
+            android:configChanges="orientation|screenSize|keyboardHidden"
+            android:exported="false"
+            android:label="@string/downloads_title"
+            android:launchMode="singleTop" />
+
         <service
             android:name=".DownloadService"
             android:exported="false"

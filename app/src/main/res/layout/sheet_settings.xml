@@ -214,6 +214,71 @@
                 </com.biligrab.downloader.ui.NeuLayout>
             </com.biligrab.downloader.ui.NeuLayout>
 
+            <!-- ==================== 下载位置 ==================== -->
+
+            <com.biligrab.downloader.ui.NeuLayout
+                style="@style/Widget.Card"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/card_gap"
+                android:orientation="vertical"
+                android:padding="@dimen/card_padding">
+
+                <com.biligrab.downloader.ui.NeuText
+                    style="@style/Widget.SectionTitle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/settings_storage_title" />
+
+                <com.biligrab.downloader.ui.NeuText
+                    android:id="@+id/tvDirLabel"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/title_gap"
+                    android:text="@string/settings_dir_label"
+                    android:textAppearance="@style/Text.TitleSmall" />
+
+                <!-- 当前目录。给足两行：自选目录的路径可能很长，
+                     截断到一行会让用户看不出自己选的是哪一层 -->
+                <com.biligrab.downloader.ui.NeuText
+                    android:id="@+id/tvDirValue"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:textAppearance="@style/Text.BodySmall"
+                    tools:text="当前：Download/BiliGrab（默认）" />
+
+                <com.biligrab.downloader.ui.NeuLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/space_md"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <com.biligrab.downloader.ui.NeuButton
+                        android:id="@+id/btnPickDir"
+                        style="@style/Widget.Button.Tonal.Compact"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/settings_dir_pick" />
+
+                    <com.biligrab.downloader.ui.NeuButton
+                        android:id="@+id/btnResetDir"
+                        style="@style/Widget.Button.Outlined"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="@dimen/touch_gap"
+                        android:text="@string/settings_dir_reset" />
+                </com.biligrab.downloader.ui.NeuLayout>
+
+                <com.biligrab.downloader.ui.NeuText
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/space_sm"
+                    android:text="@string/settings_dir_help"
+                    android:textAppearance="@style/Text.BodySmall" />
+            </com.biligrab.downloader.ui.NeuLayout>
+
             <!-- ==================== YouTube ==================== -->
 
             <com.biligrab.downloader.ui.NeuLayout

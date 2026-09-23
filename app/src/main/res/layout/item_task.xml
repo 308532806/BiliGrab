@@ -1,0 +1,183 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  下载管理里的一条任务 —— Hyper-Neumorphic
+  ========================================
+  这张卡承载的是一条下载的全部状态，所以比首页的下载行重：
+  标题、来源与画质、进度条、已下载/总量、速度、剩余时间、以及操作按钮。
+
+  几个刻意的取舍：
+
+  1. 操作按钮**不给全部图标**。暂停/继续和删除是主操作，做成图标按钮；
+     取消、重试、打开这些低频且方向相反的（继续 vs 取消）混在一起会点错。
+     低频项收进一个「更多」里，主操作只有两个 —— 拇指一下就够。
+
+  2. 进度条占满整行宽度，放在文字下面。它比任何百分比数字都更快被读懂。
+
+  3. 状态用文字（「已暂停」）而不是只用颜色。颜色在色觉障碍下会失效，
+     而且换主色后同一个颜色还可能表示别的东西。
+
+  4. 卡片的凸起等级用 elev_card（和首页下载行一致）—— 它是可点的整体。
+     内部按钮各自是独立的小浮雕，层级差正好说明「卡里还有按钮」。
+-->
+<com.biligrab.downloader.ui.NeuLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginBottom="@dimen/card_gap"
+    android:orientation="vertical">
+
+    <com.biligrab.downloader.ui.NeuLayout
+        style="@style/Widget.DownloadRow"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingStart="@dimen/card_padding"
+        android:paddingTop="@dimen/card_padding"
+        android:paddingEnd="@dimen/card_padding"
+        android:paddingBottom="@dimen/card_padding">
+
+        <!-- == 标题行 == -->
+
+        <com.biligrab.downloader.ui.NeuLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <com.biligrab.downloader.ui.NeuText
+                android:id="@+id/tvTitle"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:ellipsize="end"
+                android:maxLines="2"
+                android:textAppearance="@style/Text.TitleSmall"
+                tools:text="【4K修复】某个很长的视频标题" />
+
+            <com.biligrab.downloader.ui.NeuText
+                android:id="@+id/tvState"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="@dimen/space_md"
+                android:fontFeatureSettings="tnum"
+                android:textAppearance="@style/Text.LabelMedium"
+                tools:text="下载中" />
+        </com.biligrab.downloader.ui.NeuLayout>
+
+        <!-- == 来源与画质 == -->
+
+        <com.biligrab.downloader.ui.NeuText
+            android:id="@+id/tvMeta"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:textAppearance="@style/Text.BodySmall"
+            tools:text="哔哩哔哩 · 1080P 高清 · H.264" />
+
+        <!-- == 进度条 == -->
+        <!--
+          不确定态（总量未知）时把它藏掉，改用 tvPercent 显示「不确定」。
+          画一个从 0 慢慢爬的假进度，比不画更糟 —— 用户会以为进度是准的。
+        -->
+
+        <ProgressBar
+            android:id="@+id/pbProgress"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="match_parent"
+            android:layout_height="@dimen/progress_height"
+            android:layout_marginTop="@dimen/space_md"
+            android:contentDescription="@string/cd_progress"
+            android:max="100"
+            android:progressDrawable="@drawable/progress_download"
+            tools:progress="42" />
+
+        <!-- == 数值行：已下/总量 · 速度 · 剩余 == -->
+
+        <com.biligrab.downloader.ui.NeuLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/space_sm"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <com.biligrab.downloader.ui.NeuText
+                android:id="@+id/tvBytes"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:fontFeatureSettings="tnum"
+                android:textAppearance="@style/Text.BodySmall"
+                tools:text="18.4 MB / 43.7 MB" />
+
+            <com.biligrab.downloader.ui.NeuText
+                android:id="@+id/tvSpeed"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="@dimen/space_md"
+                android:fontFeatureSettings="tnum"
+                android:textAppearance="@style/Text.BodySmall"
+                android:textColor="@color/scheme_0_primary"
+                tools:text="2.9 MB/s" />
+        </com.biligrab.downloader.ui.NeuLayout>
+
+        <!-- 剩余时间单独一行：它比前面那三项更长，挤在一行会把它们压掉 -->
+        <com.biligrab.downloader.ui.NeuText
+            android:id="@+id/tvEta"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:fontFeatureSettings="tnum"
+            android:textAppearance="@style/Text.BodySmall"
+            android:visibility="gone"
+            tools:text="还剩 8 秒"
+            tools:visibility="visible" />
+
+        <!-- == 操作 == -->
+
+        <com.biligrab.downloader.ui.NeuLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/space_md"
+            android:gravity="end|center_vertical"
+            android:orientation="horizontal">
+
+            <!--
+              三个按钮都是文字，不用图标。理由是这样一组动作
+              （暂停 / 取消 / 继续 / 重试）语义**互相接近而方向相反**：
+              「暂停」是可恢复的，「取消」不是，图标画出来几乎一样，
+              点错的代价却是一整次下载白费。文字没有这个歧义。
+
+              取消常驻而不是藏进「更多」：它和暂停必须同时看得见 ——
+              用户想「不下了」的时候，界面上要有一个按钮能表达这件事，
+              否则他只能去点暂停，然后疑惑为什么任务还占着空间。
+              窄屏放不下时它会换行，不会把暂停挤掉（见 layout_weight）。
+            -->
+            <com.biligrab.downloader.ui.NeuButton
+                android:id="@+id/btnCancel"
+                style="@style/Widget.Button.Outlined"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minWidth="80dp"
+                android:text="@string/action_cancel" />
+
+            <com.biligrab.downloader.ui.NeuButton
+                android:id="@+id/btnPrimary"
+                style="@style/Widget.Button.Tonal.Compact"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="@dimen/touch_gap"
+                android:minWidth="80dp"
+                android:text="@string/action_pause" />
+
+            <!-- 删除：立刻可点，不再藏进「更多」里 —— 用户来这一页最想做的
+                 就是清掉不想要的东西 -->
+            <com.biligrab.downloader.ui.NeuButton
+                android:id="@+id/btnDelete"
+                style="@style/Widget.Button.Outlined"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="@dimen/touch_gap"
+                android:minWidth="80dp"
+                android:text="@string/action_delete" />
+        </com.biligrab.downloader.ui.NeuLayout>
+    </com.biligrab.downloader.ui.NeuLayout>
+</com.biligrab.downloader.ui.NeuLayout>

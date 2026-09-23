@@ -211,6 +211,26 @@ public final class Http {
      */
     public static long copy(InputStream in, OutputStream out, Progress progress, long expected)
             throws IOException {
+        return copy(in, out, progress, expected, null);
+    }
+
+    /**
+     * 流式拷贝，支持中途停止。
+     *
+     * <h3>为什么停止检查放在每一块数据之后</h3>
+     * <p>暂停和取消都要求「尽快、并且停在一个干净的位置」。如果只在若干块之后
+     * 才检查，用户点暂停时还会多下一整段；而如果在写文件写到一半时强行中断，
+     * 半成品文件就是碎的。</p>
+     *
+     * <p>检查点选在**写完一块之后**：那一刻数据已经完整落进文件，停在这里
+     * 得到的半成品是「前 N 块是完好的、后面没有」，正好是续传需要的形态。
+     * 每个 64KB 块检查一次，代价是一次 volatile 读，对吞吐没有可观测影响。</p>
+     *
+     * @param abort 返回 true 表示应当停止。{@code null} 表示不检查
+     * @throws AbortedException 被中止时抛出（它是 IOException 的子类，不会漏接）
+     */
+    public static long copy(InputStream in, OutputStream out, Progress progress, long expected,
+                            Abort abort) throws IOException {
         byte[] buf = new byte[1 << 16];
         long total = 0L;
         int n;
@@ -220,8 +240,35 @@ public final class Http {
             if (progress != null) {
                 progress.onBytes(total, expected);
             }
+            if (abort != null && abort.shouldStop()) {
+                throw new AbortedException(total);
+            }
         }
         return total;
+    }
+
+    /** 中止信号。 */
+    public interface Abort {
+        boolean shouldStop();
+    }
+
+    /**
+     * 下载被主动中止（暂停或取消）。
+     *
+     * <p>刻意做成 {@link IOException} 的子类：整条下载链路上每一层都声明了
+     * {@code throws IOException}，这样它自然向上传播 —— 不需要在每一层新增
+     * 一个受检异常，也不会在哪个 {@code catch (IOException)} 里被漏掉。
+     * 上层靠 {@code instanceof} 把它和真正的网络错误区分开：
+     * 被用户暂停不该报成「下载失败」。</p>
+     */
+    public static final class AbortedException extends IOException {
+        /** 停下来时已经写进文件的字节数。 */
+        public final long bytesWritten;
+
+        public AbortedException(long bytesWritten) {
+            super("已停止（已写入 " + bytesWritten + " 字节）");
+            this.bytesWritten = bytesWritten;
+        }
     }
 
     /** 静默关闭。用 {@link AutoCloseable} 而非 Closeable，以便同时接受流与 MediaExtractor。 */

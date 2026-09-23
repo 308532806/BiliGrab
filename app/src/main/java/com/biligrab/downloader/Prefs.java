@@ -23,6 +23,15 @@ public final class Prefs {
     private static final String KEY_SKIN = "ui_skin";
     private static final String KEY_PRIMARY = "ui_primary";
 
+    /**
+     * 用户自选的下载目录（SAF 的 tree URI）与它的显示名。
+     *
+     * <p>空串表示用默认目录。存两份不是冗余：URI 是给系统用的句柄，
+     * 拿它拼不出「下载/BiliGrab」这种给人看的路径，而设置页需要显示后者。</p>
+     */
+    private static final String KEY_TREE_URI = "download_tree_uri";
+    private static final String KEY_TREE_LABEL = "download_tree_label";
+
     public static final int DEFAULT_QN = 80;
 
     /** 外观：跟随系统 / 强制浅色 / 强制深色。 */
@@ -124,6 +133,25 @@ public final class Prefs {
 
     public void setYoutubeProxy(String v) {
         sp.edit().putString(KEY_PROXY, v == null ? "" : v.trim()).apply();
+    }
+
+    /**
+     * 自选的下载目录。空串表示用默认目录（视频进 Movies/BiliGrab，
+     * 音频进 Music/BiliGrab）。
+     */
+    public String downloadTreeUri() {
+        return sp.getString(KEY_TREE_URI, "");
+    }
+
+    public String downloadTreeLabel() {
+        return sp.getString(KEY_TREE_LABEL, "");
+    }
+
+    public void setDownloadTree(String uri, String label) {
+        sp.edit()
+                .putString(KEY_TREE_URI, uri == null ? "" : uri)
+                .putString(KEY_TREE_LABEL, label == null ? "" : label)
+                .apply();
     }
 
     /**

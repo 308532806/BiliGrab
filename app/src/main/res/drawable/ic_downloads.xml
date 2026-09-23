@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Material Symbols: list_alt —— 下载管理入口 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M19,5v14H5V5h14m1.1,-2H3.9c-0.5,0 -0.9,0.4 -0.9,0.9v16.2c0,0.5 0.4,0.9 0.9,0.9h16.2c0.5,0 0.9,-0.4 0.9,-0.9V3.9c0,-0.5 -0.4,-0.9 -0.9,-0.9zM11,7h6v2h-6V7zM11,11h6v2h-6v-2zM11,15h6v2h-6v-2zM7,7h2v2H7V7zM7,11h2v2H7v-2zM7,15h2v2H7v-2z" />
+</vector>

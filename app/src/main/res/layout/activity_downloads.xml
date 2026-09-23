@@ -1,0 +1,160 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  下载管理页 —— Hyper-Neumorphic
+  ==============================
+  结构与首页同源：NeuFrame 做根（Snackbar 的悬浮锚点）→ 顶栏 → 可滚动内容。
+
+  和首页的区别只在内容组织：首页是「一张输入卡片 + 一个结果列表」，
+  这里是「一句汇总 + 一串任务卡」。任务卡比首页的下载行信息密度更高
+  （进度条、速度、剩余时间、操作按钮），因为它就是这一页的全部内容，
+  用户是专门来看进度的。
+-->
+<com.biligrab.downloader.ui.NeuFrame xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/hyper_background">
+
+    <com.biligrab.downloader.ui.NeuLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical">
+
+        <!-- ==================== 顶栏 ==================== -->
+
+        <com.biligrab.downloader.ui.NeuLayout
+            android:id="@+id/topBar"
+            android:layout_width="match_parent"
+            android:layout_height="@dimen/top_app_bar_height"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingStart="@dimen/space_sm"
+            android:paddingEnd="@dimen/space_sm">
+
+            <com.biligrab.downloader.ui.NeuImageButton
+                android:id="@+id/btnBack"
+                style="@style/Widget.IconButton"
+                android:contentDescription="@string/cd_back"
+                android:src="@drawable/ic_close"
+                android:tint="@color/hyper_text_secondary" />
+
+            <com.biligrab.downloader.ui.NeuText
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="@dimen/space_sm"
+                android:layout_weight="1"
+                android:text="@string/downloads_title"
+                android:textAppearance="@style/Text.AppBar" />
+
+            <!-- 清除已完成：只在真的有已完成记录时出现，空的时候不该占位置 -->
+            <com.biligrab.downloader.ui.NeuText
+                android:id="@+id/btnClearDone"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="?android:attr/selectableItemBackground"
+                android:clickable="true"
+                android:focusable="true"
+                android:minHeight="@dimen/touch_min"
+                android:paddingStart="@dimen/space_md"
+                android:paddingEnd="@dimen/space_md"
+                android:paddingTop="@dimen/space_md"
+                android:paddingBottom="@dimen/space_md"
+                android:text="@string/downloads_clear_done"
+                android:textAppearance="@style/Text.LabelLarge"
+                android:textColor="@color/scheme_0_primary"
+                android:visibility="gone"
+                tools:visibility="visible" />
+        </com.biligrab.downloader.ui.NeuLayout>
+
+        <!-- ==================== 内容 ==================== -->
+
+        <ScrollView
+            android:id="@+id/scroll"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:clipToPadding="false"
+            android:fillViewport="true"
+            android:paddingBottom="@dimen/space_3xl"
+            android:scrollbarStyle="outsideOverlay">
+
+            <com.biligrab.downloader.ui.NeuLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:paddingStart="@dimen/screen_margin"
+                android:paddingEnd="@dimen/screen_margin"
+                android:paddingBottom="@dimen/space_xl">
+
+                <!-- == 汇总 == -->
+                <!--
+                  汇总里给出「共占用多少」。这一项是删除操作的安全网：
+                  用户看到占用不断变大，才会意识到残留文件真的占着空间，
+                  也才有动力去清。
+                -->
+
+                <com.biligrab.downloader.ui.NeuText
+                    android:id="@+id/tvSummary"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/space_sm"
+                    android:layout_marginBottom="@dimen/space_md"
+                    android:textAppearance="@style/Text.BodySmall"
+                    tools:text="3 个任务 · 共占用 1.2 GB" />
+
+                <!-- == 任务列表 == -->
+                <!-- 由代码往里 addView，顺序是最近的在上 -->
+
+                <com.biligrab.downloader.ui.NeuLayout
+                    android:id="@+id/listBox"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical" />
+
+                <!-- == 空状态 == -->
+
+                <com.biligrab.downloader.ui.NeuLayout
+                    android:id="@+id/emptyBox"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/section_gap"
+                    android:gravity="center_horizontal"
+                    android:orientation="vertical"
+                    android:visibility="gone"
+                    tools:visibility="visible">
+
+                    <com.biligrab.downloader.ui.NeuFrame
+                        style="@style/Widget.IconPlate"
+                        android:layout_width="96dp"
+                        android:layout_height="96dp">
+
+                        <com.biligrab.downloader.ui.NeuImage
+                            android:layout_width="44dp"
+                            android:layout_height="44dp"
+                            android:layout_gravity="center"
+                            android:contentDescription="@null"
+                            android:src="@drawable/ic_download"
+                            android:tint="@color/scheme_0_primary" />
+                    </com.biligrab.downloader.ui.NeuFrame>
+
+                    <com.biligrab.downloader.ui.NeuText
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/space_xl"
+                        android:gravity="center"
+                        android:text="@string/downloads_empty_title"
+                        android:textAppearance="@style/Text.HeadlineSmall" />
+
+                    <com.biligrab.downloader.ui.NeuText
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/space_sm"
+                        android:gravity="center"
+                        android:text="@string/downloads_empty_hint"
+                        android:textAppearance="@style/Text.BodyMedium" />
+                </com.biligrab.downloader.ui.NeuLayout>
+            </com.biligrab.downloader.ui.NeuLayout>
+        </ScrollView>
+    </com.biligrab.downloader.ui.NeuLayout>
+</com.biligrab.downloader.ui.NeuFrame>

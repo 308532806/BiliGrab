@@ -62,6 +62,13 @@
                 android:textAppearance="@style/Text.AppBar" />
 
             <com.biligrab.downloader.ui.NeuImageButton
+                android:id="@+id/btnDownloads"
+                style="@style/Widget.IconButton"
+                android:contentDescription="@string/cd_downloads"
+                android:src="@drawable/ic_downloads"
+                android:tint="@color/hyper_text_secondary" />
+
+            <com.biligrab.downloader.ui.NeuImageButton
                 android:id="@+id/btnSettings"
                 style="@style/Widget.IconButton"
                 android:contentDescription="@string/cd_settings"

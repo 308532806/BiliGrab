@@ -262,10 +262,30 @@ public final class Model {
 
         public String displayName() {
             String base = sanitize(title);
-            if (partTitle != null && !partTitle.isEmpty() && !partTitle.equals(title)) {
-                base = base + " - " + sanitize(partTitle);
+            if (partTitle == null || partTitle.isEmpty()) {
+                return base;
             }
-            return base;
+            String part = sanitize(partTitle);
+            // 单 P 视频里分 P 名往往就是视频名本身，或者只差一个前后缀。
+            // 直接拼起来会得到「标题 - 标题」这种文件名（实测
+            // 「…Rick Astley - Never Gonna Give You Up - Rick Astley.mp4」）。
+            // 所以：相等就跳过，是子串或只差少量字符也不重复写。
+            if (part.equals(base)) {
+                return base;
+            }
+            if (base.contains(part)) {
+                return base;
+            }
+            if (part.contains(base)) {
+                return part;
+            }
+            String out = base + " - " + part;
+            // 文件名有 255 字节的上限（且中文一个字占 3 字节），
+            // 超了系统会截断甚至写入失败，这里主动收一下
+            if (out.length() > 80) {
+                out = out.substring(0, 80);
+            }
+            return out;
         }
 
         private static String sanitize(String s) {

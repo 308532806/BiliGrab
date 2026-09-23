@@ -3,6 +3,7 @@ package com.biligrab.downloader;
 import android.app.Activity;
 import android.app.Dialog;
 import android.Manifest;
+import android.content.ActivityNotFoundException;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
@@ -74,6 +75,8 @@ public class MainActivity extends Activity implements DownloadService.Listener {
     private static final int REQ_PERMS = 1001;
     /** 应用内登录。和权限请求分开编号，否则回调里分不清是谁返回的。 */
     private static final int REQ_LOGIN = 1002;
+    /** 自选下载目录（SAF 的目录选择器）。 */
+    private static final int REQ_PICK_DIR = 1003;
 
     private static final String STATE_URL = "state_url";
     private static final String STATE_HAD_RESULT = "state_had_result";
@@ -93,6 +96,7 @@ public class MainActivity extends Activity implements DownloadService.Listener {
     private Button btnParse;
     private ImageButton btnPaste;
     private ImageButton btnSettings;
+    private ImageButton btnDownloads;
 
     // ---- 四个互斥状态 ----
     private View emptyBox;
@@ -155,6 +159,13 @@ public class MainActivity extends Activity implements DownloadService.Listener {
     private final List<DownloadRow> rows = new ArrayList<>();
     /** 正在下载的那一行，没有任务时为 null。 */
     private DownloadRow activeRow;
+    /**
+     * 首页刚点下、正在跑的那条记录。
+     *
+     * <p>只为了让进度回调能确认「说的就是我这一行」—— 回调带的是任务 id，
+     * 而首页只认得自己启动的那一个。</p>
+     */
+    private DownloadTask activeTask;
 
     /**
      * 预览播放源请求的画质。
@@ -182,6 +193,9 @@ public class MainActivity extends Activity implements DownloadService.Listener {
          */
         final Model.Stream stream;
 
+        /** 这一行当前代表哪条下载记录（空串表示还没开始下）。 */
+        String boundId = "";
+
         DownloadRow(int qn, boolean audioOnly, Model.Stream stream, View main, TextView label,
                     TextView meta, ImageView icon, TextView percent, ProgressBar bar,
                     String metaIdle) {
@@ -205,6 +219,22 @@ public class MainActivity extends Activity implements DownloadService.Listener {
                 meta.setText(metaIdle);
                 bar.setProgress(0);
             }
+        }
+
+        /**
+         * 这条进度回调说的是不是我这一行。
+         *
+         * <p>服务是按任务 id 推送的，而首页只关心自己刚点的那一个。
+         * 不比对的话，用户在下载管理页操控的**别的**任务会把首页这一行也刷掉
+         * —— 看起来就像首页那个下载串了。</p>
+         */
+        boolean matches(DownloadTask t) {
+            return t != null && boundId.equals(t.id);
+        }
+
+        /** 记下这一行现在代表谁。 */
+        void bind(DownloadTask t) {
+            boundId = t.id;
         }
     }
 
@@ -422,6 +452,7 @@ public class MainActivity extends Activity implements DownloadService.Listener {
         btnParse = findViewById(R.id.btnParse);
         btnPaste = findViewById(R.id.btnPaste);
         btnSettings = findViewById(R.id.btnSettings);
+        btnDownloads = findViewById(R.id.btnDownloads);
 
         emptyBox = findViewById(R.id.emptyBox);
         loadingBox = findViewById(R.id.loadingBox);
@@ -496,6 +527,8 @@ public class MainActivity extends Activity implements DownloadService.Listener {
         btnRetry.setOnClickListener(v -> doParse());
         btnSettings.setOnClickListener(v -> showSettings());
         btnQualityHintAction.setOnClickListener(v -> showSettings());
+        btnDownloads.setOnClickListener(v ->
+                startActivity(new Intent(this, DownloadsActivity.class)));
 
         // 尾部按钮一钮两用：空的时候是「粘贴」，有内容时是「清空」
         btnPaste.setOnClickListener(v -> {
@@ -1375,38 +1408,117 @@ public class MainActivity extends Activity implements DownloadService.Listener {
         setRowsEnabled(false);
         tvSavedTo.setVisibility(View.GONE);
 
-        DownloadService.enqueue(this, task);
+        // Model.Task 是给下载引擎用的扁平结构；DownloadTask 是**记录**，
+        // 有 id、状态与持久化。两者内容重合，但职责不同 —— 前者跑完就丢，
+        // 后者要留在下载管理页里，并且重启后还在。
+        DownloadTask dt = new DownloadTask();
+        dt.title = task.title;
+        dt.partTitle = task.partTitle;
+        dt.youtube = task.youtube;
+        dt.qn = task.qn;
+        dt.audioOnly = task.audioOnly;
+        dt.bvid = task.bvid;
+        dt.cid = task.cid;
+        dt.pageUrl = task.pageUrl;
+        dt.videoUrl = task.videoUrl;
+        dt.videoSize = task.videoSize;
+        dt.videoWidth = task.videoWidth;
+        dt.videoHeight = task.videoHeight;
+        dt.audioUrl = task.audioUrl;
+        dt.audioSize = task.audioSize;
+        dt.webm = task.webm;
+        dt.proxy = task.proxy;
+        dt.youtubeClientProfile = task.youtubeClientProfile;
+        dt.videoHeaders.putAll(task.videoHeaders);
+        dt.audioHeaders.putAll(task.audioHeaders);
+        dt.subtitle = describeTask(dt, row);
+
+        activeTask = dt;
+        row.bind(dt);
+        // 开始前先确认自选目录还能写。等到下载跑完才发现授权失效，
+        // 用户白等一场。
+        if (StorageDir.hasCustom(this)) {
+            StorageDir.verifyCustom(this);
+        }
+
+        DownloadService.start(this, dt);
+    }
+
+    /** 给下载记录写一句副标题：来源 + 画质/编码，用于在管理页一眼分辨。 */
+    private String describeTask(DownloadTask t, DownloadRow row) {
+        StringBuilder sb = new StringBuilder();
+        if (t.youtube) {
+            sb.append(YouTubeEngine.describeHeight(t.videoHeight));
+            if (t.webm) {
+                sb.append(" · WebM");
+            }
+        } else {
+            // 直接复用那一行上已经算好的画质名（接口描述优先，退回本地表），
+            // 免得两处各写一份、早晚对不上
+            sb.append(row.label.getText());
+            if (!t.audioOnly && prefs.preferAvc()) {
+                // 只在用户开了「优先 AVC」时标出来：那时拿到的一定是 H.264，
+                // 是用户主动选的结果，值得确认一下
+                sb.append(" · ").append(getString(R.string.codec_avc));
+            }
+        }
+        return sb.toString();
     }
 
     // ---- DownloadService.Listener：回调来自子线程 ----
 
+    /**
+     * 进度。真正细致的进度（速度、剩余时间、每条任务的状态）由
+     * {@link DownloadsActivity} 呈现；首页这里只保留「这一行在下」的粗粒度反馈，
+     * 因为首页看到的始终只是用户刚点的那一个。
+     */
     @Override
-    public void onProgress(String stage, int percent) {
+    public void onTaskProgress(DownloadTask task) {
         ui.post(() -> {
-            downloading = true;
-            if (activeRow == null) {
+            downloading = task.isActive();
+            if (activeRow == null || !activeRow.matches(task)) {
                 return;
             }
-            activeRow.meta.setText(stage);
-            activeRow.percent.setText(getString(R.string.progress_percent, percent));
-            activeRow.bar.setProgress(Math.max(0, Math.min(100, percent)));
+            String stage = task.stage();
+            if (!stage.isEmpty()) {
+                activeRow.meta.setText(stage);
+            }
+            int pct = task.percent();
+            if (pct < 0) {
+                // 总量未知：显示已下载的字节数而不是一个假的百分比
+                activeRow.percent.setText(Fmt.bytes(task.doneBytes()));
+                activeRow.bar.setProgress(0);
+            } else {
+                activeRow.percent.setText(getString(R.string.progress_percent, pct));
+                activeRow.bar.setProgress(Math.max(0, Math.min(100, pct)));
+            }
+
+            // 速度也顺手显示在首页：用户盯着这一行等的时候，
+            // 「2.9 MB/s」比一个百分比更能说明「它在动」
+            long bps = task.speedBps();
+            if (task.status() == DownloadTask.STATUS_RUNNING && bps > 0 && pct >= 0) {
+                activeRow.meta.setText(task.stage() + " · " + Fmt.speed(bps));
+            }
         });
     }
 
     @Override
-    public void onFinished(boolean ok, String message, String location) {
+    public void onTaskFinished(DownloadTask task, boolean ok, String message) {
         ui.post(() -> {
             downloading = false;
-            if (activeRow != null) {
+            if (activeRow != null && activeRow.matches(task)) {
                 // setRunning(false) 会把副标题还原成画质信息
                 activeRow.setRunning(false);
                 activeRow = null;
             }
             setRowsEnabled(true);
 
-            if (ok && location != null && !location.isEmpty()) {
-                tvSavedTo.setText(getString(R.string.saved_to, location));
-                tvSavedTo.setVisibility(View.VISIBLE);
+            if (ok) {
+                String loc = task.location();
+                if (!loc.isEmpty()) {
+                    tvSavedTo.setText(getString(R.string.saved_to, loc));
+                    tvSavedTo.setVisibility(View.VISIBLE);
+                }
             }
 
             Snackbar.show(findViewById(R.id.root), message,
@@ -1440,6 +1552,12 @@ public class MainActivity extends Activity implements DownloadService.Listener {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
+
+        if (requestCode == REQ_PICK_DIR) {
+            onDirPicked(resultCode, data);
+            return;
+        }
+
         if (requestCode != REQ_LOGIN) {
             return;
         }
@@ -1459,6 +1577,59 @@ public class MainActivity extends Activity implements DownloadService.Listener {
         if (!inputUrl.getText().toString().trim().isEmpty()) {
             doParse();
         }
+    }
+
+    /**
+     * 用户从系统的目录选择器回来了。
+     *
+     * <p>拿到 tree URI 之后必须立刻 {@code takePersistableUriPermission}：
+     * 不申请持久化的话，这次授权只在本进程有效，用户下次启动应用就写不进去了
+     * —— 而那会在下载的最后一步才失败。</p>
+     */
+    private void onDirPicked(int resultCode, Intent data) {
+        if (resultCode != RESULT_OK || data == null || data.getData() == null) {
+            // 用户按了返回。静默即可，他本来就可能是在看一眼。
+            return;
+        }
+        android.net.Uri tree = data.getData();
+        try {
+            getContentResolver().takePersistableUriPermission(tree,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+        } catch (SecurityException e) {
+            // 个别 provider 不支持持久授权。仍然记下来，只是重启后可能失效；
+            // StorageDir.verifyCustom 会在下载开始时发现并退回默认目录。
+            Log.w(TAG, "无法取得持久目录授权：" + e.getMessage());
+        }
+        StorageDir.setCustom(this, tree.toString(), labelOfTree(tree));
+        Snackbar.show(findViewById(R.id.root),
+                getString(R.string.snack_dir_set, StorageDir.customLabel(this)));
+    }
+
+    /** 把 tree URI 变成给人看的路径。 */
+    private static String labelOfTree(android.net.Uri tree) {
+        try {
+            String docId = android.provider.DocumentsContract.getTreeDocumentId(tree);
+            if (docId != null && !docId.isEmpty()) {
+                int colon = docId.indexOf(':');
+                String after = colon >= 0 ? docId.substring(colon + 1) : docId;
+                return after.isEmpty() ? docId : after;
+            }
+        } catch (RuntimeException ignored) {
+            // 取不到就退回整个 URI
+        }
+        return tree.toString();
+    }
+
+    /** 刷新设置面板里那一行「当前：…」。 */
+    private void refreshDirLabel(TextView tv) {
+        if (tv == null) {
+            return;
+        }
+        boolean custom = StorageDir.hasCustom(this);
+        String path = StorageDir.describe(this, false);
+        tv.setText(custom
+                ? getString(R.string.settings_dir_using_custom, path)
+                : getString(R.string.settings_dir_using_default, path));
     }
 
     private void showSettings() {
@@ -1523,6 +1694,33 @@ public class MainActivity extends Activity implements DownloadService.Listener {
         // CompoundButton 带着 checkedChange 与可访问性语义，重写一遍不划算 ——
         // 只换 drawable 就能拿到完整的浮雕效果。
         NeumorphicControls.dressSwitch(swAvc);
+
+        // ---- 下载位置 ----
+        // 目录做成「选 / 恢复默认」两个按钮，而不是让用户手打路径。
+        // 从 Android 10 起应用不能随便往任意路径写，必须拿到系统授权的
+        // tree URI；让用户输入路径字符串，一半的情况下会得到一个写不进去的目录，
+        // 而失败要等到下载的最后一步才暴露出来。
+        final TextView tvDir = content.findViewById(R.id.tvDirValue);
+        refreshDirLabel(tvDir);
+
+        final Button btnPickDir = content.findViewById(R.id.btnPickDir);
+        btnPickDir.setOnClickListener(v -> {
+            try {
+                startActivityForResult(new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE), REQ_PICK_DIR);
+            } catch (ActivityNotFoundException e) {
+                // 极少数精简 ROM 抽掉了文件选择器
+                Log.w(TAG, "没有可用的目录选择器", e);
+                Snackbar.show(findViewById(R.id.root), getString(R.string.snack_dir_invalid),
+                        null, null, R.drawable.ic_error);
+            }
+        });
+
+        final Button btnResetDir = content.findViewById(R.id.btnResetDir);
+        btnResetDir.setOnClickListener(v -> {
+            StorageDir.clearCustom(this);
+            refreshDirLabel(tvDir);
+            Snackbar.show(findViewById(R.id.root), getString(R.string.snack_dir_reset));
+        });
 
         // ---- YouTube ----
         final EditText etProxy = content.findViewById(R.id.etProxy);
