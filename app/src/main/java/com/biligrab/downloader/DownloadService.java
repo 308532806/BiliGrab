@@ -650,6 +650,33 @@ public class DownloadService extends Service {
         // 扩展名必须和实际容器一致，而且要和 StorageDir 的 MIME 对得上。
         String ext = task.audioOnly ? "m4a" : (task.webm ? "webm" : "mp4");
         File outFile = new File(work, "output." + ext);
+
+        if (task.audioOnly) {
+            // **仅音频不重新封装，直接落盘。**
+            //
+            // B 站与 YouTube 给的音频流本身就是一条完整的、独立的 m4a：
+            // 有 ftyp、有 moov、有样本表，播放器直接能播。把它拆成样本
+            // 再用 MediaMuxer 写一遍，唯一的收益是「走同一条代码路径」，
+            // 代价是凭空多一次可能失败的操作 —— 而这台 OPPO 上它真的会失败。
+            //
+            // 实测：34 分钟的音频，源文件完全正确（89,223 个样本、时长
+            // 2055 秒，用 MediaExtractor 逐样本验过，零处时间戳回退），
+            // 但 OplusMPEG4Writer 在写到第 77,513 帧时判了整条轨死刑：
+            //     do not support out of order frames
+            //     (timestamp: 1783529297 < last: 1783529319) for Audio track
+            // 于是产物只有 77,513 帧、时长缩到 29:43，moov 里甚至连样本表
+            // 都没有（提取器读出来 0 条轨），而它被标成了「已完成」。
+            //
+            // 复制一个正确的文件不可能出错，重写一个正确的文件却可以。
+            // 所以这条路径上不做无谓的重写。
+            copyFile(aFile, outFile);
+            if (!MuxUtil.hasPlayableAudio(outFile)) {
+                throw new IOException(getString(R.string.err_audio_incomplete));
+            }
+            reportStage(dt, getString(R.string.stage_save_library));
+            return StorageDir.save(this, outFile, task.displayName(), true, ext);
+        }
+
         reportStage(dt, getString(R.string.stage_mux));
         try {
             // 把停止标志交给封装器：合成也要能被「暂停 / 取消」打断。
@@ -660,29 +687,59 @@ public class DownloadService extends Service {
         } catch (Http.AbortedException e) {
             throw e;
         } catch (Exception e) {
-            if (!task.audioOnly) {
-                // 这里报「哪一档」必须用这条任务自己记下来的标签。
-                // 以前调的是 YouTubeEngine.describeHeight(task.videoHeight)，
-                // 对哔哩哔哩是错的：它的 videoHeight 可能为 0，于是 480P 的
-                // 视频会显示成「（MP4 容器 / 未知画质 画质）」—— 用户拿着一句
-                // 既认不出自己下的是哪档、又重复了「画质」二字的话，没法办。
-                // dt.subtitle 是解析时就写好的「来源 · 画质 · 编码」，直接可用。
-                String label = dt.subtitle;
-                if (label == null || label.isEmpty()) {
-                    label = YouTubeEngine.describeHeight(task.videoHeight);
-                }
-                throw new IOException(getString(R.string.err_mux_failed,
-                        ext.toUpperCase(java.util.Locale.US), label), e);
+            // 这里报「哪一档」必须用这条任务自己记下来的标签。
+            // 以前调的是 YouTubeEngine.describeHeight(task.videoHeight)，
+            // 对哔哩哔哩是错的：它的 videoHeight 可能为 0，于是 480P 的
+            // 视频会显示成「（MP4 容器 / 未知画质 画质）」—— 用户拿着一句
+            // 既认不出自己下的是哪档、又重复了「画质」二字的话，没法办。
+            // dt.subtitle 是解析时就写好的「来源 · 画质 · 编码」，直接可用。
+            String label = dt.subtitle;
+            if (label == null || label.isEmpty()) {
+                label = YouTubeEngine.describeHeight(task.videoHeight);
             }
-            throw e;
+            throw new IOException(getString(R.string.err_mux_failed,
+                    ext.toUpperCase(java.util.Locale.US), label), e);
         }
 
-        if (!task.audioOnly && !MuxUtil.hasVideoTrack(outFile)) {
+        if (!MuxUtil.hasVideoTrack(outFile)) {
             throw new IOException(getString(R.string.err_no_video_track));
         }
 
         reportStage(dt, getString(R.string.stage_save_library));
-        return StorageDir.save(this, outFile, task.displayName(), task.audioOnly, ext);
+        return StorageDir.save(this, outFile, task.displayName(), false, ext);
+    }
+
+    /**
+     * 把下载好的音频文件复制成最终产物。
+     *
+     * <p>用流式复制而不是 {@code renameTo}：工作目录和目标可能不在同一个
+     * 文件系统上（工作目录在应用私有区、目标是 SAF 那边或公共目录），
+     * 跨设备的重命名在 Java 层会直接返回 false，而且它失败时不抛异常、
+     * 只给一个布尔值，很容易被忽略成一件事都没发生。</p>
+     */
+    private static void copyFile(File src, File dst) throws IOException {
+        if (src == null || !src.exists() || src.length() <= 0) {
+            throw new IOException("音频文件不存在或为空");
+        }
+        java.io.InputStream in = new java.io.BufferedInputStream(
+                new java.io.FileInputStream(src), 256 * 1024);
+        java.io.OutputStream out = new java.io.BufferedOutputStream(
+                new java.io.FileOutputStream(dst), 256 * 1024);
+        try {
+            byte[] buf = new byte[256 * 1024];
+            int n;
+            while ((n = in.read(buf)) > 0) {
+                out.write(buf, 0, n);
+            }
+            out.flush();
+        } finally {
+            Http.closeQuietly(in);
+            Http.closeQuietly(out);
+        }
+        if (dst.length() != src.length()) {
+            throw new IOException("复制不完整：源 " + src.length() + " 字节，结果 "
+                    + dst.length() + " 字节");
+        }
     }
 
     // ------------------------------------------------------------------

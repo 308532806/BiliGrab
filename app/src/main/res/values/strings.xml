@@ -203,6 +203,7 @@
     <string name="err_no_video_stream">该稿件没有可用的视频流。可能是付费或区域限制内容</string>
     <string name="err_no_audio_stream">该稿件没有可用的音频流。换一个画质再试，或改选视频下载</string>
     <string name="err_no_video_track">合成结果缺少视频轨。某些 HEVC / AV1 流在旧设备上无法封装，改用 H.264 画质后重试</string>
+    <string name="err_audio_incomplete">下到的音频文件不完整，没法播放。请重试；若一直这样，换一个音质或改用「下载视频」保存</string>
     <string name="err_mux_failed">合成失败：系统封装器没能为「%2$s」生成可播放的 %1$s 文件。换一档画质重试，或改用「仅音频」保存</string>
     <string name="err_no_webm_audio">这个视频没有 Opus 音轨，无法与 VP9 画面合成 WebM。换 1080P 及以下重试</string>
     <string name="err_no_url">接口没有返回下载地址。稍后重试，或换一个画质</string>
