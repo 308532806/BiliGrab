@@ -45,8 +45,23 @@ if not PAT:
 REPO = "308532806/BiliGrab"
 BRANCH = "main"
 REPO_DIR = r"E:\Deepseek工作目录\BiliGrab"
-TAG = "v1.5.1"
-TAG_MSG = "v1.5.1：4K 权限提示、YouTube 直链沿用 yt-dlp 请求头"
+
+# Tag 从命令行取，别再写死在源码里 —— 上一版就是忘了改，
+# 结果新提交推上去了、tag 却还建在旧版本号上，还静默地"已存在"就跳过了。
+TAG = sys.argv[1] if len(sys.argv) > 1 else ""
+TAG_MSG = sys.argv[2] if len(sys.argv) > 2 else TAG
+# 第三个参数：从哪个本地提交开始算「这次要推的改动」。
+#
+# 默认只推 HEAD 这一个提交（HEAD~1..HEAD）。本地一次做了**多个**提交时，
+# 那样会静默地只把最后一个推上去 —— 剩下的留在本地，远端看起来是好的，
+# 直到有人去 clone 才发现少文件。所以允许显式指定基线，
+# 并且在结尾核对远端树里确实有这次改的文件。
+BASE = sys.argv[3] if len(sys.argv) > 3 else "HEAD~1"
+if not TAG:
+    print("用法: push-via-api.py <tag> [tag说明] [基线提交]")
+    print("  例如: push-via-api.py v1.5.2 \"v1.5.2：...\"")
+    print("  多个提交一起推: push-via-api.py v1.7.0 \"...\" 025b6c1")
+    sys.exit(1)
 
 
 def api(path, method="GET", payload=None):
@@ -79,18 +94,31 @@ def git(*args):
 
 print("=== 本地提交信息 ===")
 head = git("rev-parse", "HEAD")
-local_parent = git("rev-parse", "HEAD~1")
+local_parent = git("rev-parse", BASE)
 message = git("show", "--no-patch", "--format=%B", "HEAD")
 author_name = git("show", "--no-patch", "--format=%an", "HEAD")
 author_email = git("show", "--no-patch", "--format=%ae", "HEAD")
 author_date = git("show", "--no-patch", "--format=%aI", "HEAD")
-changed = [l.split("\t", 1)[1] for l in git("diff", "--name-status", "HEAD~1", "HEAD").splitlines() if l.strip()]
+# 逐条列改动，并带上状态码 —— 新增文件是 A，删除是 D。
+# 只取文件名会把「删了一个文件」当成「这个文件还在原来的位置」，
+# 于是远端永远删不掉它。
+status_lines = [l for l in git("diff", "--name-status", BASE, "HEAD").splitlines() if l.strip()]
+changed = []
+deleted = []
+for line in status_lines:
+    parts = line.split("\t")
+    st = parts[0]
+    rel = parts[-1]
+    if st.startswith("D"):
+        deleted.append(rel)
+    else:
+        changed.append(rel)
 
 print("  HEAD   %s" % head)
-print("  本地父 %s" % local_parent)
+print("  基线   %s (%s)" % (local_parent, BASE))
 print("  作者   %s <%s>" % (author_name, author_email))
 print("  日期   %s" % author_date)
-print("  文件   %d 个" % len(changed))
+print("  新增/修改 %d 个，删除 %d 个（累计自 %s）" % (len(changed), len(deleted), BASE))
 
 # 父提交要取**远端**的 main HEAD，不能直接用本地的 HEAD~1。
 #
@@ -134,6 +162,11 @@ for rel in changed:
         sys.exit(1)
     entries.append({"path": rel, "mode": "100644", "type": "blob", "sha": blob["sha"]})
     print("  %-58s %s (%s, %d 字节)" % (rel, blob["sha"][:10], kind, len(raw)))
+
+# 被删掉的文件要在新 tree 里显式标成 sha=null，否则 base_tree 里那份会留着
+for rel in deleted:
+    entries.append({"path": rel, "mode": "100644", "type": "blob", "sha": None})
+    print("  %-58s 删除" % rel)
 
 print()
 print("=== 建 tree ===")
@@ -192,6 +225,33 @@ else:
     if status not in (200, 201) or not tagref:
         sys.exit(1)
     print("  refs/tags/%s -> %s" % (TAG, tagobj["sha"]))
+
+print()
+print("=== 核对远端树 ===")
+# 这一步是这次加的。之前只打印「推送完成」就算过，结果一次推两个提交时
+# 只推上去了后一个，源文件全没上去，而输出看起来完全正常。
+# 现在真的把远端 tree 拉回来，逐个核对这次改的文件在不在。
+status, remote_commit = api("/repos/%s/git/commits/%s" % (REPO, commit["sha"]))
+if status != 200 or not remote_commit:
+    sys.exit(1)
+status, remote_tree = api("/repos/%s/git/trees/%s?recursive=1" % (
+    REPO, remote_commit["tree"]["sha"]))
+if status != 200 or not remote_tree:
+    sys.exit(1)
+present = {e["path"]: e.get("sha") for e in remote_tree["tree"]}
+missing = []
+for rel in changed:
+    if rel not in present or present[rel] is None:
+        missing.append(rel)
+for rel in deleted:
+    if rel in present:
+        missing.append(rel + "（应已删除但仍存在）")
+if missing:
+    print("  远端树核对失败，以下文件没到位：")
+    for rel in missing:
+        print("    %s" % rel)
+    sys.exit(1)
+print("  远端树核对通过：%d 个改动、%d 个删除全部到位" % (len(changed), len(deleted)))
 
 print()
 print("推送完成：%s" % commit["sha"])
