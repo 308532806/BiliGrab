@@ -4,6 +4,7 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.io.IOException;
+import java.net.HttpURLConnection;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -23,19 +24,85 @@ public final class BiliApi {
     private static final String PLAYURL_URL = "https://api.bilibili.com/x/player/wbi/playurl";
 
     /**
+     * 旧版 playurl 端点。**不需要 WBI 签名**，也是未登录时唯一能拿到 1080P 的入口。
+     *
+     * <p>这是实测出来的，不是猜的。同一个稿件、同一组参数、空 Cookie，
+     * 只改端点和 {@code try_look}：</p>
+     *
+     * <pre>
+     *   /x/player/wbi/playurl  无 try_look  →  最高 480P
+     *   /x/player/wbi/playurl  try_look=1   →  最高 480P
+     *   /x/player/playurl      无 try_look  →  最高 480P
+     *   /x/player/playurl      try_look=1   →  最高 1080P   ← 只有这个组合行
+     * </pre>
+     *
+     * <p><b>两个条件是「与」的关系，缺一不可。</b>顺便排除了几个想当然的猜测：
+     * 把 {@code qn} 从 127 改到 32 或干脆不传，结果一模一样；
+     * 带上 {@code platform=pc}、{@code high_quality=1} 也没有影响。
+     * 所以真正的开关只有「端点 + try_look」。</p>
+     *
+     * <p>{@code try_look}（试看）本来就是原项目 bilibilias 的意图 —— 它算好了
+     * {@code try_look = if (未登录) "1" else null}，却忘了塞进请求参数，
+     * 成了一段死代码。这里把它补上。</p>
+     *
+     * <p>风险：{@code try_look} 字面意思是「试看」，对大会员专享内容有返回
+     * <b>截断片段</b>的可能。免费视频实测是完整长度。</p>
+     */
+    private static final String PLAYURL_URL_PLAIN = "https://api.bilibili.com/x/player/playurl";
+
+    /** 从 Cookie 里取 SESSDATA。 */
+    private static final Pattern P_SESSDATA = Pattern.compile("SESSDATA=([^;\\s]+)");
+
+    /**
      * fnval 位掩码：
      * 16=DASH, 64=HDR, 128=4K, 256=杜比音频, 512=杜比视界, 1024=8K, 2048=AV1。
      */
     private static final int FNVAL = 16 | 64 | 128 | 256 | 512 | 1024 | 2048;
 
+    /**
+     * 请示的最高档位：8K。
+     *
+     * <p>这不是「我要 8K」，而是「按你能给的最高来」。服务端按账号权限降级，
+     * 见 {@link #PLAYURL_URL_PLAIN} 里那张实测表 —— 决定能拿多高的是
+     * 端点和 try_look，不是这里发的数字。发低了反而可能只回低码率。</p>
+     */
+    private static final int QN_MAX = 127;
+
     private static final Pattern P_BV = Pattern.compile("BV[0-9A-Za-z]{10}");
     private static final Pattern P_AV = Pattern.compile("(?i)av(\\d+)");
+
+    /**
+     * b23.tv / bili2233.cn 短链。
+     *
+     * <p>这两个域名只做 302 跳转，**地址里没有 BV 号** —— 光靠正则扫 BV
+     * 是扫不出来的，必须真的发一次请求跟到最终地址。B 站 App 的「分享」
+     * 和「复制口令」产出的几乎全是这种短链，这是过去只能用 BV 号解析的原因。</p>
+     */
+    private static final Pattern P_SHORT = Pattern.compile(
+            "https?://(?:b23\\.tv|bili2233\\.cn)/[A-Za-z0-9]+");
+
+    /**
+     * 任意受支持站点的链接，用于从口令文本里挑出真正要用的一段。
+     *
+     * <p>末尾的字符类排除中文标点与空白：口令形如
+     * {@code 【【官方MV】标题-UP主-哔哩哔哩】 https://b23.tv/AbCdEf}，
+     * 直接按空白切会把后面的中文当成 URL 的一部分。</p>
+     */
+    private static final Pattern P_LINK = Pattern.compile(
+            "https?://[A-Za-z0-9.\\-]*(?:bilibili\\.com|b23\\.tv|bili2233\\.cn"
+                    + "|youtu\\.be|youtube\\.com)[^\\s\u4e00-\u9fff，。！？、；：（）【】]*");
 
     private BiliApi() {
     }
 
-    /** 从任意文本（分享链接、口令、纯 ID）中提取视频标识。 */
-    public static String extractId(String raw) {        if (raw == null) {
+    /**
+     * 从任意文本（分享链接、口令、纯 ID）中提取视频标识。
+     *
+     * <p>纯函数，不联网。短链在这里提取不出来 —— 它的地址里没有 BV 号。
+     * 需要联网跟短链请用 {@link #resolveId}。</p>
+     */
+    public static String extractId(String raw) {
+        if (raw == null) {
             return "";
         }
         String s = raw.trim();
@@ -51,6 +118,108 @@ public final class BiliApi {
             return s;
         }
         return s;
+    }
+
+    /** 提取到的东西是否已经是可以直接请求的标识。 */
+    private static boolean isResolved(String id) {
+        if (id == null || id.isEmpty()) {
+            return false;
+        }
+        return id.regionMatches(true, 0, "BV", 0, 2)
+                || id.regionMatches(true, 0, "av", 0, 2)
+                || id.matches("\\d+");
+    }
+
+    /**
+     * 从口令文本里挑出链接；没有链接时返回空串。
+     *
+     * <p>给输入框的「粘贴」用：口令是一整段中文加一个链接，
+     * 直接把整段填进输入框既难看也不好确认，只留链接更清楚。</p>
+     */
+    public static String extractLink(String raw) {
+        if (raw == null) {
+            return "";
+        }
+        Matcher m = P_LINK.matcher(raw);
+        return m.find() ? m.group() : "";
+    }
+
+    /**
+     * 提取标识；遇到短链时跟随重定向后再提取一次。
+     *
+     * <p>与 {@link #extractId} 的分工：那个是纯函数，这个是会联网的那一步。
+     * 只有确认提取不出标识、且文本里有短链时才发请求，正常输入不多走一次网络。</p>
+     *
+     * @throws ApiException {@link #CODE_BAD_INPUT} 文本里根本没有可用的视频地址
+     */
+    public static String resolveId(String raw, String cookie) throws IOException {
+        String s = raw == null ? "" : raw.trim();
+        String id = extractId(s);
+        if (isResolved(id)) {
+            return id;
+        }
+
+        // 短链：跟一次跳转，最终地址里才有 BV 号
+        Matcher shortLink = P_SHORT.matcher(s);
+        if (shortLink.find()) {
+            String link = shortLink.group();
+            String resolved = followShortLink(link, cookie);
+            if (resolved.isEmpty()) {
+                throw new ApiException(CODE_BAD_INPUT, "解析短链",
+                        "短链 " + link + " 没能打开。检查网络后重试，"
+                                + "或直接在 B 站里复制 BV 号");
+            }
+            return resolved;
+        }
+
+        // 普通 bilibili 链接（或 YouTube 链接误入）。抽出来再试一次，
+        // 万一它其实是个短链或带跳转的地址，就跟一下
+        Matcher anyLink = P_LINK.matcher(s);
+        if (anyLink.find()) {
+            String link = anyLink.group();
+            String fromLink = extractId(link);
+            if (isResolved(fromLink)) {
+                return fromLink;
+            }
+            String resolved = followShortLink(link, cookie);
+            if (!resolved.isEmpty()) {
+                return resolved;
+            }
+        }
+
+        throw new ApiException(CODE_BAD_INPUT, "解析链接",
+                "没能从这段内容里找到视频地址。可以粘贴分享链接、"
+                        + "b23.tv 短链、BV 号或 av 号");
+    }
+
+    /**
+     * 跟随一次短链跳转，返回从最终地址里提取到的标识；失败返回空串。
+     *
+     * <p>依赖 {@link HttpURLConnection} 自身的重定向跟随（{@code Http.open}
+     * 已经开了 {@code setInstanceFollowRedirects}），不手动读 {@code Location} ——
+     * b23.tv 有时要跳两次，自己跟就得写循环，而系统已经会跟。</p>
+     *
+     * <p>注意必须先碰一次响应：重定向链是在读取响应时走完的，
+     * 没读之前 {@code getURL()} 返回的还是原地址。</p>
+     */
+    private static String followShortLink(String url, String cookie) {
+        HttpURLConnection c = null;
+        try {
+            // withReferer=true：b23.tv 在缺 Referer 时可能返回一个 HTML 中转页
+            // 而不是 302，那样就跟不到真实地址了
+            c = Http.open(url, cookie, true);
+            c.getResponseCode();
+            Http.closeQuietly(c.getInputStream());
+            String real = c.getURL().toString();
+            String id = extractId(real);
+            return isResolved(id) ? id : "";
+        } catch (IOException e) {
+            return "";
+        } finally {
+            if (c != null) {
+                c.disconnect();
+            }
+        }
     }
 
     /**
@@ -86,7 +255,7 @@ public final class BiliApi {
 
     /** 获取稿件基本信息与分 P 列表。 */
     public static Model.Video view(String rawId, String cookie) throws IOException {
-        String id = extractId(rawId);
+        String id = resolveId(rawId, cookie);
         String query;
         if (id.regionMatches(true, 0, "BV", 0, 2)) {
             query = "bvid=" + WbiSigner.encode(id);
@@ -143,27 +312,115 @@ public final class BiliApi {
         return v;
     }
 
-    /** 获取 DASH 播放地址。 */
+    /** Cookie 里是否带着非空的 SESSDATA。 */
+    public static boolean loggedIn(String cookie) {
+        if (cookie == null) {
+            return false;
+        }
+        Matcher m = P_SESSDATA.matcher(cookie);
+        return m.find() && !m.group(1).isEmpty();
+    }
+
+    /**
+     * 走旧端点取播放地址。参数形状与实测时完全一致 —— 不加
+     * {@code platform} / {@code high_quality}，因为实测中没有它们也能出 1080P，
+     * 而加了之后的效果没有验证过。
+     */
+    private static JSONObject requestPlain(Map<String, Object> params, String cookie)
+            throws IOException {
+        Map<String, Object> p = new LinkedHashMap<>(params);
+        p.put("try_look", 1);
+        return Json.parse(Http.get(PLAYURL_URL_PLAIN + "?" + encodeQuery(p), cookie));
+    }
+
+    /** 走 WBI 端点取播放地址，保留原有的参数与 -403 重试逻辑。 */
+    private static JSONObject requestWbi(Map<String, Object> params, String cookie)
+            throws IOException {
+        Map<String, Object> p = new LinkedHashMap<>(params);
+        p.put("platform", "pc");
+        p.put("high_quality", 1);
+
+        String query = WbiSigner.get().sign(p, cookie);
+        JSONObject root = Json.parse(Http.get(PLAYURL_URL + "?" + query, cookie));
+        if (root.optInt("code") == -403) {
+            // 密钥过期会导致 -403，刷新后重试一次
+            WbiSigner.get().invalidate();
+            query = WbiSigner.get().sign(p, cookie);
+            root = Json.parse(Http.get(PLAYURL_URL + "?" + query, cookie));
+        }
+        return root;
+    }
+
+    /** 响应里是否有可用的 DASH 视频轨。用于决定要不要回落到 WBI 端点。 */
+    private static boolean hasStreams(JSONObject root) {
+        if (root == null || root.optInt("code") != 0) {
+            return false;
+        }
+        JSONObject d = root.optJSONObject("data");
+        if (d == null) {
+            return false;
+        }
+        JSONObject dash = d.optJSONObject("dash");
+        if (dash == null) {
+            return false;
+        }
+        JSONArray videos = dash.optJSONArray("video");
+        return videos != null && videos.length() > 0;
+    }
+
+    /** 拼查询串。当前用到的值都是纯数字或 ID，编码只是为了不留坑。 */
+    private static String encodeQuery(Map<String, Object> params) {
+        StringBuilder sb = new StringBuilder();
+        for (Map.Entry<String, Object> e : params.entrySet()) {
+            if (sb.length() > 0) {
+                sb.append('&');
+            }
+            sb.append(e.getKey()).append('=').append(urlEncode(String.valueOf(e.getValue())));
+        }
+        return sb.toString();
+    }
+
+    private static String urlEncode(String s) {
+        try {
+            return java.net.URLEncoder.encode(s, "UTF-8");
+        } catch (java.io.UnsupportedEncodingException e) {
+            return s;   // UTF-8 一定存在，走不到这里
+        }
+    }
+
+    /**
+     * 获取 DASH 播放地址。
+     *
+     * <p>{@code qn} 这里传的是**用户选中的那一档**，但它只影响
+     * 非 DASH 的老接口行为。开了 {@code fnval} 的 DASH 请求，
+     * 服务端返回的是账号能拿到的**全部**档位（{@code dash.video} 是一个数组），
+     * 具体用哪一档由调用方在返回结果里挑。</p>
+     */
     public static Model.PlayInfo playurl(String bvid, long cid, int qn, String cookie)
             throws IOException {
         Map<String, Object> params = new LinkedHashMap<>();
         params.put("bvid", bvid);
         params.put("cid", cid);
-        params.put("qn", qn);
+        // 一律按最高档请示。原项目（bilibilias）也是固定发 127。
+        // 用户真正选的那一档在拿到 dash.video 之后再挑。
+        params.put("qn", QN_MAX);
         params.put("fnver", 0);
         params.put("fnval", FNVAL);
         params.put("fourk", 1);
-        params.put("platform", "pc");
-        params.put("high_quality", 1);
 
-        String query = WbiSigner.get().sign(params, cookie);
-        JSONObject root = Json.parse(Http.get(PLAYURL_URL + "?" + query, cookie));
-
-        if (root.optInt("code") == -403) {
-            // 密钥过期会导致 -403，刷新后重试一次
-            WbiSigner.get().invalidate();
-            query = WbiSigner.get().sign(params, cookie);
-            root = Json.parse(Http.get(PLAYURL_URL + "?" + query, cookie));
+        JSONObject root;
+        if (loggedIn(cookie)) {
+            // 已登录：保持原样走 WBI 端点。这条路径没法在桌面复现（需要真 Cookies），
+            // 所以一行都不改，免得出新问题。
+            root = requestWbi(params, cookie);
+        } else {
+            // 未登录：旧端点 + try_look=1，这是唯一能拿到 1080P 的组合。
+            root = requestPlain(params, cookie);
+            if (!hasStreams(root)) {
+                // 旧端点被下线或临时抽风时回落到 WBI。宁可退回 480P，
+                // 也不能让「画质优化」反而变成新的打不开。
+                root = requestWbi(params, cookie);
+            }
         }
         checkCode(root, "获取播放地址");
 
@@ -189,6 +446,18 @@ public final class BiliApi {
         info.videos.sort(Comparator
                 .comparingInt((Model.Stream s) -> s.quality).reversed()
                 .thenComparing(Comparator.comparingLong((Model.Stream s) -> s.bandwidth).reversed()));
+
+        // 把「报了但没有流」的档位从列表里剔掉。
+        //
+        // support_formats 列的是账号有权「看到」的档位，dash 列的才是真正「给的」。
+        // 两者不一致是常态 —— 未登录时 support_formats 照样报 112(1080P 高码率)，
+        // 但 dash 里最高只有 80。留着它，用户会选到一个下不到的档位，
+        // 再被 Model.videoByQuality 的兜底逻辑静默换成 1080P，等于界面在骗人。
+        java.util.Set<Integer> available = new java.util.HashSet<>();
+        for (Model.Stream s : info.videos) {
+            available.add(s.quality);
+        }
+        info.qualities.keySet().retainAll(available);
 
         JSONArray audios = dash.optJSONArray("audio");
         if (audios != null) {

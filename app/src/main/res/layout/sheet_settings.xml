@@ -211,11 +211,18 @@
                     <!-- 这里保留系统 Switch：MainActivity 把 swPreferAvc 取成
                          android.widget.Switch，换成别的类会在运行期抛
                          ClassCastException；而 ui 包下没有对应的 Neu* 开关。
-                         配色走主题的 colorControlActivated（= 运行时主色）。 -->
+                         配色走主题的 colorControlActivated（= 运行时主色）。
+
+                         开关本体（轨道 + 滑块）实测只有 28dp 高，低于 48dp
+                         的触控下限 —— 手指点不准，尤其它右边就是空白。
+                         minHeight 把**可点区域**撑到 48dp，而轨道与滑块的
+                         尺寸由 NeumorphicControls.dressSwitch 里的字面量决定，
+                         不受影响，所以视觉上仍是那个 28dp 的小开关。 -->
                     <Switch
                         android:id="@+id/swPreferAvc"
                         android:layout_width="wrap_content"
-                        android:layout_height="wrap_content" />
+                        android:layout_height="wrap_content"
+                        android:minHeight="@dimen/touch_min" />
                 </com.biligrab.downloader.ui.NeuLayout>
             </com.biligrab.downloader.ui.NeuLayout>
 

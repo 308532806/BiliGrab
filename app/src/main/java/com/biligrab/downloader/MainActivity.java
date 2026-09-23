@@ -451,6 +451,13 @@ public class MainActivity extends Activity implements DownloadService.Listener {
         final int baseBottom =
                 getResources().getDimensionPixelSize(R.dimen.content_gap);
 
+        // 顶栏自己的横向与底部内边距是布局里定的，这里只接管顶部，
+        // 所以先把原值记下来 —— 每次 inset 回调都基于它们重算，
+        // 而不是在已经加过 padding 的值上再叠加（那样转屏或分屏会越加越多）。
+        final int barPadLeft = topBar.getPaddingLeft();
+        final int barPadRight = topBar.getPaddingRight();
+        final int barPadBottom = topBar.getPaddingBottom();
+
         findViewById(R.id.root).setOnApplyWindowInsetsListener((v, insets) -> {
             int top = insets.getSystemWindowInsetTop();
             int bottom = insets.getSystemWindowInsetBottom();
@@ -460,6 +467,18 @@ public class MainActivity extends Activity implements DownloadService.Listener {
             ViewGroup.LayoutParams barLp = topBar.getLayoutParams();
             barLp.height = baseBarHeight + top;
             topBar.setLayoutParams(barLp);
+
+            // 关键：内容靠 paddingTop 让开状态栏，而不是随着被撑高的顶栏一起居中。
+            //
+            // 只抬高高度是不够的 —— 顶栏的 gravity 是 center_vertical，高度变成
+            // 「64dp + 状态栏高度」之后，标题会在这整条高带的**中点**落位，
+            // 也就是比正确位置高出半个状态栏，同时顶部留出一条空白死带。
+            // 实机表现就是「标题贴着状态栏、上面还空一块」，看着像两截。
+            //
+            // 加 paddingTop 之后，标题与齿轮被压到状态栏下方那条**恰好 64dp**
+            // 的带子里居中；顶栏背景仍然从屏幕最顶端开始画，所以状态栏区域
+            // 是应用自己的底色 —— 沉浸式，且状态栏不额外占用布局空间。
+            topBar.setPadding(barPadLeft, top, barPadRight, barPadBottom);
 
             // 没有悬浮按钮了，内容要自己避开手势区，否则最后一行贴在导航条上
             scroll.setPadding(left, scroll.getPaddingTop(), right, baseBottom + bottom);
@@ -726,7 +745,10 @@ public class MainActivity extends Activity implements DownloadService.Listener {
         if (text == null || text.trim().isEmpty()) {
             return;
         }
-        inputUrl.setText(text.trim());
+        // 从 B 站 App「分享」过来的同样是整段口令，只取链接
+        String raw = text.trim();
+        String link = BiliApi.extractLink(raw);
+        inputUrl.setText(link.isEmpty() ? raw : link);
         inputUrl.setSelection(inputUrl.getText().length());
         btnParse.post(this::doParse);
     }
@@ -760,7 +782,14 @@ public class MainActivity extends Activity implements DownloadService.Listener {
             Snackbar.show(findViewById(R.id.root), getString(R.string.snack_clipboard_empty));
             return;
         }
-        inputUrl.setText(text.toString().trim());
+
+        // 从 B 站 App 复制的「口令」是一整段中文加一个链接，形如：
+        //   【【官方MV】Never Gonna Give You Up- Rick Astley-哔哩哔哩】 https://b23.tv/AbCdEf
+        // 把整段填进输入框，用户看不出到底要解析什么，也没法确认粘贴对不对。
+        // 只留链接。挑不出链接（用户复制的是纯 BV 号或别的什么）时原样填入。
+        String raw = text.toString().trim();
+        String link = BiliApi.extractLink(raw);
+        inputUrl.setText(link.isEmpty() ? raw : link);
         inputUrl.setSelection(inputUrl.getText().length());
         Snackbar.show(findViewById(R.id.root), getString(R.string.snack_copied));
     }

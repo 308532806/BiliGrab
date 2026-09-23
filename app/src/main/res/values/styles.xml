@@ -157,13 +157,49 @@
         <item name="android:letterSpacing">0.01</item>
         <item name="android:background">@null</item>
         <item name="android:minWidth">0dp</item>
-        <item name="android:minHeight">0dp</item>
+        <!--
+          这里必须是 minHeight 而不是只靠上面的 layout_height。
+
+          布局里对按钮写 wrap_content 是很自然的事（内容多长就多宽），
+          但 layout_height 会被 wrap_content 直接覆盖 —— 实测同一条
+          Widget.Button，设置面板里的「清除登录态」渲染成 52dp，
+          主界面的「解析」只剩 33.7dp，因为它那边写了 wrap_content。
+          同一个样式出现两个高度，界面看着就是"乱"。
+
+          minHeight 不会被 wrap_content 覆盖：wrap_content 只允许视图
+          长到内容 + 内边距那么大，而 minHeight 是下限。两者同时存在时
+          取较大者。所以这条是"无论怎么写都不会走样"的保险。
+        -->
+        <item name="android:minHeight">@dimen/button_height</item>
+        <!--
+          横向内边距。
+
+          全宽按钮（「解析」）文字居中，看不出有没有内边距；但 wrap_content
+          的按钮会缩到刚好包住文字，而新拟态的浮雕把可见面左右各缩进
+          1.5 × elev_button（4dp 时是 6dp）。结果是文字正好压在药丸边缘、
+          看着像溢出来了 —— 设置面板里的「清除登录态」就是这样。
+
+          内边距要大于浮雕的内缩量，所以取 space_lg（16dp）。
+        -->
+        <item name="android:paddingStart">@dimen/space_lg</item>
+        <item name="android:paddingEnd">@dimen/space_lg</item>
         <item name="android:stateListAnimator">@null</item>
         <item name="android:textAllCaps">false</item>
         <item name="neuStyle">convex</item>
         <item name="neuRadius">@dimen/radius_button</item>
         <item name="neuElevation">@dimen/elev_button</item>
         <item name="neuPress">true</item>
+    </style>
+
+    <!--
+      紧凑按钮：内联在文字行或卡片里的那一档。
+
+      和标准按钮共用视觉，只是高度小一档 —— 主按钮 60dp 的可点区
+      会把「画质提示」那一行整个撑高，那是它不该有的视觉权重。
+    -->
+    <style name="Widget.Button.Compact">
+        <item name="android:layout_height">@dimen/button_height_compact</item>
+        <item name="android:minHeight">@dimen/button_height_compact</item>
     </style>
 
     <!-- 主按钮的文字用主色（运行时由 MainActivity 再确认一次，覆盖默认值） -->
@@ -180,6 +216,12 @@
         <item name="android:textColor">@color/hyper_text_primary</item>
     </style>
 
+    <!-- 色调按钮的紧凑档：色调色 + 紧凑高度，供内联使用 -->
+    <style name="Widget.Button.Tonal.Compact">
+        <item name="android:layout_height">@dimen/button_height_compact</item>
+        <item name="android:minHeight">@dimen/button_height_compact</item>
+    </style>
+
     <!-- 输入框：凹槽 16dp / 2dp，高 56dp -->
     <style name="Widget.TextField" parent="">
         <item name="android:layout_height">@dimen/field_height</item>
@@ -191,6 +233,13 @@
         <item name="android:paddingStart">@dimen/space_lg</item>
         <item name="android:paddingEnd">@dimen/space_lg</item>
         <item name="android:singleLine">true</item>
+        <!--
+          和按钮同一个道理：布局里写 wrap_content 就会把上面的
+          layout_height 盖掉。实测主界面的输入框因此只有 33.7dp，
+          而设置面板里那两个写着 field_height 的有 56dp —— 同一个
+          Widget.TextField 出现两种高度。minHeight 是覆盖不掉的下限。
+        -->
+        <item name="android:minHeight">@dimen/field_height</item>
         <item name="neuStyle">concave</item>
         <item name="neuRadius">@dimen/radius_field</item>
         <item name="neuElevation">@dimen/elev_field</item>

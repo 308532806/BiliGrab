@@ -65,7 +65,14 @@
 
     <dimen name="elev_card">6dp</dimen>
     <dimen name="elev_dialog">8dp</dimen>
-    <dimen name="elev_button">6dp</dimen>
+    <!--
+      按钮浮雕从 6dp 降到 4dp。
+
+      新拟态的浮雕会在四边各内缩 1.5 × elev 给阴影让位，所以浮雕越高、
+      可见的药丸面越小。6dp 时一条 52dp 的按钮只剩 34dp 的可见面 ——
+      16sp 的字塞进去就显得字大得撑出来了。降到 4dp 后可见面回到 48dp。
+    -->
+    <dimen name="elev_button">4dp</dimen>
     <dimen name="elev_button_pressed">4dp</dimen>
     <dimen name="elev_button_disabled">1.5dp</dimen>
     <dimen name="elev_chip">3dp</dimen>
@@ -90,7 +97,13 @@
 
     <!-- 按钮 52dp，比 touch_min 高一档：新拟态按钮靠厚度成立，
          压到 48dp 会显得扁 -->
-    <dimen name="button_height">52dp</dimen>
+    <dimen name="button_height">60dp</dimen>
+
+    <!--
+      紧凑按钮：内联在文字行里的那一档（例如画质提示里的「去设置」）。
+      48dp 的可点区满足触控下限，可见面约 36dp，不至于把所在那一行撑高。
+    -->
+    <dimen name="button_height_compact">48dp</dimen>
     <dimen name="field_height">56dp</dimen>
     <dimen name="chip_height">32dp</dimen>
     <dimen name="fab_size">48dp</dimen>

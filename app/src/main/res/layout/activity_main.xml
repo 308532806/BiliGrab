@@ -561,10 +561,11 @@
                             android:layout_weight="1"
                             android:textAppearance="@style/Text.BodySmall" />
 
-                        <!-- 这是「建议」而不是「恢复」动作，用色调按钮表达中等强调度 -->
+                        <!-- 这是「建议」而不是「恢复」动作，用色调按钮表达中等强调度。
+                             用 Compact 档：标准按钮 60dp 的可点区会把这一行整个撑高 -->
                         <com.biligrab.downloader.ui.NeuButton
                             android:id="@+id/btnQualityHintAction"
-                            style="@style/Widget.Button.Tonal"
+                            style="@style/Widget.Button.Tonal.Compact"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:layout_marginStart="@dimen/space_sm"

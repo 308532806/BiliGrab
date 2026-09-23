@@ -254,7 +254,8 @@ public class DownloadService extends Service {
             String label = getString(R.string.stage_video,
                     v.width + "x" + v.height, Model.codecName(v.codecId));
             emitProgress(label, 5);
-            downloadStream(v.candidates(), vFile, cookie, true, null, 5, 50, label, task.title);
+            downloadStream(v.candidates(), vFile, cookie, true, null, false, 5, 50,
+                    label, task.title);
         }
 
         Model.Stream a = info.bestAudio();
@@ -263,7 +264,7 @@ public class DownloadService extends Service {
             int lo = task.audioOnly ? 5 : 50;
             String stageAudio = getString(R.string.stage_audio);
             emitProgress(stageAudio, lo);
-            downloadStream(a.candidates(), aFile, cookie, true, null, lo, 85,
+            downloadStream(a.candidates(), aFile, cookie, true, null, false, lo, 85,
                     stageAudio, task.title);
         } else if (task.audioOnly) {
             throw new IOException(getString(R.string.err_no_audio_stream));
@@ -303,7 +304,7 @@ public class DownloadService extends Service {
             // 不传 Cookie、不带 B 站 Referer：googlevideo 的直链自带签名，
             // 多送一个 B 站 Referer 反而会被 CDN 当成异常请求。
             downloadStream(java.util.Collections.singletonList(task.videoUrl), vFile,
-                    null, false, proxy, 5, 50, label, task.title);
+                    null, false, proxy, true, 5, 50, label, task.title);
         }
 
         if (task.audioOnly || !task.audioUrl.isEmpty()) {
@@ -315,7 +316,7 @@ public class DownloadService extends Service {
             String stageAudio = getString(R.string.stage_audio);
             emitProgress(stageAudio, lo);
             downloadStream(java.util.Collections.singletonList(task.audioUrl), aFile,
-                    null, false, proxy, lo, 85, stageAudio, task.title);
+                    null, false, proxy, true, lo, 85, stageAudio, task.title);
         }
 
         return muxAndSave(task, work, vFile, aFile);
@@ -363,9 +364,11 @@ public class DownloadService extends Service {
      *
      * @param withReferer 是否附带 B 站 Referer 与 Cookie。YouTube 直链必须为 false
      * @param proxy       {@code null} 表示直连
+     * @param youtube     失败文案要按来源分开。两边的 CDN 失败原因不同，
+     *                    用同一句话会给出错误的恢复建议（见 strings.xml 的说明）
      */
     private void downloadStream(List<String> urls, File dst, String cookie, boolean withReferer,
-                                java.net.Proxy proxy, int lo, int hi,
+                                java.net.Proxy proxy, boolean youtube, int lo, int hi,
                                 String stage, String title) throws IOException {
         if (urls.isEmpty()) {
             throw new IOException(getString(R.string.err_no_url));
@@ -376,7 +379,8 @@ public class DownloadService extends Service {
                 if (i > 0) {
                     Log.i(TAG, "fallback to backup url #" + i);
                 }
-                downloadUrl(urls.get(i), dst, cookie, withReferer, proxy, lo, hi, stage, title);
+                downloadUrl(urls.get(i), dst, cookie, withReferer, proxy, youtube, lo, hi,
+                        stage, title);
                 return;
             } catch (IOException e) {
                 last = e;
@@ -387,18 +391,20 @@ public class DownloadService extends Service {
                 }
             }
         }
-        throw last != null ? last : new IOException(getString(R.string.err_all_urls_failed));
+        throw last != null ? last : new IOException(getString(
+                youtube ? R.string.err_all_urls_failed_youtube : R.string.err_all_urls_failed));
     }
 
     private void downloadUrl(String url, File dst, String cookie, boolean withReferer,
-                             java.net.Proxy proxy, int lo, int hi,
+                             java.net.Proxy proxy, boolean youtube, int lo, int hi,
                              String stage, String title) throws IOException {
         HttpURLConnection c = Http.open(url, cookie, withReferer, proxy);
         c.setRequestProperty("Range", "bytes=0-");
         try {
             int code = c.getResponseCode();
             if (code >= 400) {
-                throw new IOException(getString(R.string.err_cdn_http, code));
+                throw new IOException(getString(
+                        youtube ? R.string.err_cdn_http_youtube : R.string.err_cdn_http, code));
             }
             long total = c.getContentLengthLong();
             if (total <= 0) {
