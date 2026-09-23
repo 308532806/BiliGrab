@@ -254,7 +254,7 @@ public class DownloadService extends Service {
             String label = getString(R.string.stage_video,
                     v.width + "x" + v.height, Model.codecName(v.codecId));
             emitProgress(label, 5);
-            downloadStream(v.candidates(), vFile, cookie, true, null, false, 5, 50,
+            downloadStream(v.candidates(), vFile, cookie, true, null, false, null, 5, 50,
                     label, task.title);
         }
 
@@ -264,7 +264,7 @@ public class DownloadService extends Service {
             int lo = task.audioOnly ? 5 : 50;
             String stageAudio = getString(R.string.stage_audio);
             emitProgress(stageAudio, lo);
-            downloadStream(a.candidates(), aFile, cookie, true, null, false, lo, 85,
+            downloadStream(a.candidates(), aFile, cookie, true, null, false, null, lo, 85,
                     stageAudio, task.title);
         } else if (task.audioOnly) {
             throw new IOException(getString(R.string.err_no_audio_stream));
@@ -304,7 +304,7 @@ public class DownloadService extends Service {
             // 不传 Cookie、不带 B 站 Referer：googlevideo 的直链自带签名，
             // 多送一个 B 站 Referer 反而会被 CDN 当成异常请求。
             downloadStream(java.util.Collections.singletonList(task.videoUrl), vFile,
-                    null, false, proxy, true, 5, 50, label, task.title);
+                    null, false, proxy, true, task.videoHeaders, 5, 50, label, task.title);
         }
 
         if (task.audioOnly || !task.audioUrl.isEmpty()) {
@@ -316,7 +316,7 @@ public class DownloadService extends Service {
             String stageAudio = getString(R.string.stage_audio);
             emitProgress(stageAudio, lo);
             downloadStream(java.util.Collections.singletonList(task.audioUrl), aFile,
-                    null, false, proxy, true, lo, 85, stageAudio, task.title);
+                    null, false, proxy, true, task.audioHeaders, lo, 85, stageAudio, task.title);
         }
 
         return muxAndSave(task, work, vFile, aFile);
@@ -366,9 +366,15 @@ public class DownloadService extends Service {
      * @param proxy       {@code null} 表示直连
      * @param youtube     失败文案要按来源分开。两边的 CDN 失败原因不同，
      *                    用同一句话会给出错误的恢复建议（见 strings.xml 的说明）
+     * @param headers     必须随请求发出的额外头。YouTube 直链的签名和解析时的
+     *                    客户端绑定，这里要用 yt-dlp 声明的 User-Agent，
+     *                    换了别的 UA 会被 CDN 判定成另一个客户端并返回 403。
+     *                    B 站那条路传 {@code null}
      */
     private void downloadStream(List<String> urls, File dst, String cookie, boolean withReferer,
-                                java.net.Proxy proxy, boolean youtube, int lo, int hi,
+                                java.net.Proxy proxy, boolean youtube,
+                                java.util.Map<String, String> headers,
+                                int lo, int hi,
                                 String stage, String title) throws IOException {
         if (urls.isEmpty()) {
             throw new IOException(getString(R.string.err_no_url));
@@ -379,8 +385,8 @@ public class DownloadService extends Service {
                 if (i > 0) {
                     Log.i(TAG, "fallback to backup url #" + i);
                 }
-                downloadUrl(urls.get(i), dst, cookie, withReferer, proxy, youtube, lo, hi,
-                        stage, title);
+                downloadUrl(urls.get(i), dst, cookie, withReferer, proxy, youtube, headers,
+                        lo, hi, stage, title);
                 return;
             } catch (IOException e) {
                 last = e;
@@ -395,14 +401,65 @@ public class DownloadService extends Service {
                 youtube ? R.string.err_all_urls_failed_youtube : R.string.err_all_urls_failed));
     }
 
+    /**
+     * 地址的查询串里是否自带 {@code range} 参数。
+     *
+     * <p>只看查询串，不看路径 —— 路径里出现 range 字样（比如某个 CDN 的目录名）
+     * 不代表签名覆盖了区间。</p>
+     */
+    private static boolean hasRangeParam(String url) {
+        if (url == null) {
+            return false;
+        }
+        int q = url.indexOf('?');
+        if (q < 0) {
+            return false;
+        }
+        String query = url.substring(q + 1);
+        for (String part : query.split("&")) {
+            int eq = part.indexOf('=');
+            String k = eq < 0 ? part : part.substring(0, eq);
+            if ("range".equalsIgnoreCase(k.trim())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private void downloadUrl(String url, File dst, String cookie, boolean withReferer,
-                             java.net.Proxy proxy, boolean youtube, int lo, int hi,
+                             java.net.Proxy proxy, boolean youtube,
+                             java.util.Map<String, String> headers,
+                             int lo, int hi,
                              String stage, String title) throws IOException {
-        HttpURLConnection c = Http.open(url, cookie, withReferer, proxy);
-        c.setRequestProperty("Range", "bytes=0-");
+        HttpURLConnection c = Http.open(url, cookie, withReferer, proxy, headers);
+        // 只有当地址本身没带 range 参数时才自己加 Range。
+        //
+        // googlevideo 有一部分直链把区间写进了签名（查询串里的 &range=），
+        // 这种地址是「签名只覆盖那一段」的。再叠一个 bytes=0- 过去，
+        // 请求的区间就和签名不符，CDN 会直接 403 —— 而且报的还是
+        // 「签名失效」，让人以为是地址过期，其实是我们多送了一个头。
+        // B 站地址从不带 range 参数，所以这条对 B 站没有任何影响。
+        if (!hasRangeParam(url)) {
+            c.setRequestProperty("Range", "bytes=0-");
+        }
+        if (youtube) {
+            // 出 403 时最需要知道的两件事：用的是哪个 User-Agent、CDN 说了什么。
+            // 少了这条日志，用户和排查的人都只能看到一句「签名失效」。
+            Log.i(TAG, "YouTube 直链 host=" + Http.hostOf(url)
+                    + "  头=" + (headers == null ? 0 : headers.size())
+                    + "  自带range=" + hasRangeParam(url)
+                    + "  UA=" + (headers == null ? "(未设置)"
+                            : headers.getOrDefault("User-Agent", "(无)")));
+        }
         try {
             int code = c.getResponseCode();
             if (code >= 400) {
+                if (youtube) {
+                    // 403 的响应体里通常写着是签名过期、IP 不符还是客户端不匹配，
+                    // 这是唯一能区分三者的证据
+                    Log.w(TAG, "YouTube 直链返回 " + code + "，响应体："
+                            + Http.errorSnippet(c));
+                }
                 throw new IOException(getString(
                         youtube ? R.string.err_cdn_http_youtube : R.string.err_cdn_http, code));
             }

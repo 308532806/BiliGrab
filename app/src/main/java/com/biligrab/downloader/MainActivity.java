@@ -1018,12 +1018,64 @@ public class MainActivity extends Activity implements DownloadService.Listener {
 
         // 「登录解锁画质」只对 B 站成立。YouTube 的档位限制来自服务端，
         // 与登录状态无关，在那边显示这句会纯粹误导用户。
-        if (!youtube && !prefs.hasLogin() && best < QN_1080P && best > 0) {
-            tvQualityHint.setText(getString(R.string.hint_login_for_quality, qnLabel(probe, best)));
+        String hint = null;
+        if (!youtube) {
+            // 优先说大会员档位：稿件宣称有 4K / 真彩，当前账号却拿不到。
+            // 这比笼统的「登录能解锁」具体得多 —— 用户一眼就知道差在哪、
+            // 以及要升到哪个等级的账号。缺了这句，4K 会被安静地藏起来，
+            // 看的人只会以为这个应用不支持高画质。
+            String locked = lockedQualityLabel(probe);
+            if (!locked.isEmpty()) {
+                hint = getString(R.string.hint_vip_for_quality, locked, qnLabel(probe, best));
+            } else if (!prefs.hasLogin() && best < QN_1080P && best > 0) {
+                hint = getString(R.string.hint_login_for_quality, qnLabel(probe, best));
+            }
+        }
+        if (hint != null) {
+            tvQualityHint.setText(hint);
             qualityHintBox.setVisibility(View.VISIBLE);
         } else {
             qualityHintBox.setVisibility(View.GONE);
         }
+    }
+
+    /**
+     * 把「稿件支持但当前账号拿不到」的档位拼成一句枚举，如「4K 超高清、HDR 真彩」。
+     *
+     * <p>只列比实际拿到的最高档**更高**的。{@code lockedQualities} 里也会混进比它低的
+     * （例如已经拿到 80，列表里还有个需要更高权限的 112 变体），把低的也念出来，
+     * 用户会以为「连现在这一档我都没有」。</p>
+     *
+     * @return 没有任何更高档位时返回空串
+     */
+    private static String lockedQualityLabel(Model.PlayInfo probe) {
+        if (probe == null || probe.lockedQualities.isEmpty()) {
+            return "";
+        }
+        int best = 0;
+        for (Model.Stream s : probe.videos) {
+            if (s.quality > best) {
+                best = s.quality;
+            }
+        }
+        java.util.List<Integer> keys = new java.util.ArrayList<>(probe.lockedQualities.keySet());
+        // 从高到低，读起来才是「4K 超高清、HDR 真彩」而不是乱序
+        java.util.Collections.sort(keys, java.util.Collections.reverseOrder());
+        StringBuilder sb = new StringBuilder();
+        for (Integer q : keys) {
+            if (q == null || q <= best) {
+                continue;
+            }
+            String name = probe.lockedQualities.get(q);
+            if (name == null || name.isEmpty()) {
+                continue;
+            }
+            if (sb.length() > 0) {
+                sb.append("、");
+            }
+            sb.append(name);
+        }
+        return sb.toString();
     }
 
     /** 人类可读的体积。0 表示未知，此时返回空串而不是 "0 B"。 */
@@ -1269,6 +1321,9 @@ public class MainActivity extends Activity implements DownloadService.Listener {
             }
             task.videoUrl = row.stream.url;
             task.videoSize = row.stream.size;
+            // yt-dlp 为这条流声明的头必须原样带下去。丢掉它们就等于换了个
+            // 客户端去请求同一条签名直链，googlevideo 会回 403。
+            task.videoHeaders.putAll(row.stream.headers);
 
             // 容器跟着视频编码走，这不是偏好问题：MediaMuxer 不接受
             // VP9 进 MP4（实测抛 IllegalStateException），而 AAC 进不了 WebM。
@@ -1287,6 +1342,7 @@ public class MainActivity extends Activity implements DownloadService.Listener {
             if (a != null) {
                 task.audioUrl = a.url;
                 task.audioSize = a.size;
+                task.audioHeaders.putAll(a.headers);
             }
         } else {
             Model.Part part = current.pages.get(clampPartIndex());

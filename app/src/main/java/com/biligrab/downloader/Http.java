@@ -8,6 +8,7 @@ import java.net.HttpURLConnection;
 import java.net.InetSocketAddress;
 import java.net.Proxy;
 import java.net.URL;
+import java.util.Map;
 
 /**
  * 极简 HTTP 客户端。
@@ -132,6 +133,21 @@ public final class Http {
      */
     public static HttpURLConnection open(String url, String cookie, boolean withReferer, Proxy proxy)
             throws IOException {
+        return open(url, cookie, withReferer, proxy, null);
+    }
+
+    /**
+     * 带额外请求头的版本。
+     *
+     * <p>{@code extra} 在默认头之后写入，因此可以覆盖它们 —— YouTube 那条路
+     * 必须用 yt-dlp 声明的 User-Agent，而不是这里为 B 站准备的桌面 Chrome。
+     * 用别的 UA 打 googlevideo 会被判定成另一个客户端并返回 403。</p>
+     *
+     * @param extra 为 {@code null} 或空时行为与四参版本完全一致
+     */
+    public static HttpURLConnection open(String url, String cookie, boolean withReferer,
+                                         Proxy proxy, Map<String, String> extra)
+            throws IOException {
         URL u = new URL(url);
         HttpURLConnection c = (HttpURLConnection) (proxy == null
                 ? u.openConnection()
@@ -148,6 +164,13 @@ public final class Http {
         }
         if (cookie != null && !cookie.isEmpty()) {
             c.setRequestProperty("Cookie", cookie);
+        }
+        if (extra != null) {
+            for (Map.Entry<String, String> e : extra.entrySet()) {
+                if (e.getKey() != null && e.getValue() != null && !e.getValue().isEmpty()) {
+                    c.setRequestProperty(e.getKey(), e.getValue());
+                }
+            }
         }
         return c;
     }
@@ -209,6 +232,31 @@ public final class Http {
             } catch (Exception ignored) {
                 // 忽略关闭异常
             }
+        }
+    }
+
+    /**
+     * 读取失败响应的正文，截断成一行，用于日志。
+     *
+     * <p>CDN 的 4xx 正文里往往写着真正的原因（签名过期、IP 不符、客户端不匹配），
+     * 这是区分它们的唯一证据。读不到就返回空串，绝不因此抛异常 ——
+     * 它只会被用在「已经出错」的分支里。</p>
+     */
+    public static String errorSnippet(HttpURLConnection c) {
+        if (c == null) {
+            return "";
+        }
+        InputStream in = null;
+        try {
+            in = c.getErrorStream();
+            if (in == null) {
+                return "";
+            }
+            return snippet(new String(readAll(in), "UTF-8"));
+        } catch (Exception e) {
+            return "";
+        } finally {
+            closeQuietly(in);
         }
     }
 

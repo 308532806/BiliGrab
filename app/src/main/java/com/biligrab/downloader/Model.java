@@ -1,7 +1,9 @@
 package com.biligrab.downloader;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /** 视频信息与数据模型。 */
 public final class Model {
@@ -50,6 +52,19 @@ public final class Model {
         public String mimeType = "";
         /** 字节数。B 站接口会给，YouTube 走 yt-dlp 的 filesize(_approx)，都可能为 0。 */
         public long size;
+        /**
+         * 请求这条流时必须额外带的头。
+         *
+         * <p>B 站流是空的 —— 它的 CDN 只认 {@link Http#open} 里那套固定头。
+         * YouTube 流会填上 yt-dlp 为这个 format 声明的 {@code http_headers}。</p>
+         *
+         * <p>为什么必须原样带上：googlevideo 的直链签名是和**解析时用的客户端**
+         * 绑定的。yt-dlp 之所以在每个 format 里回传 {@code http_headers}，
+         * 就是因为拿别的 User-Agent 去请求会被判定成另一个客户端而拒掉。
+         * 之前这里直接丢了这些头、改用为 B 站准备的桌面 Chrome UA，
+         * 结果就是下载恒 403。</p>
+         */
+        public final Map<String, String> headers = new LinkedHashMap<>();
 
         /** 带兜底地址的候选列表，主地址失败时按序重试。 */
         public List<String> candidates() {
@@ -71,6 +86,20 @@ public final class Model {
         public boolean audioOnlySupported;
         /** 画质档位 qn → 中文描述，来源为 support_formats。 */
         public final java.util.LinkedHashMap<Integer, String> qualities = new java.util.LinkedHashMap<>();
+
+        /**
+         * 稿件**宣称支持**、但当前账号**拿不到**的档位（qn → 描述）。
+         *
+         * <p>{@code support_formats} 列的是账号有权看到的档位，{@code dash} 列的才是
+         * 真正给的。两者不一致时，这些档位会从 {@link #qualities} 里剔掉 ——
+         * 留着它们等于让用户选一个下不到的档位。</p>
+         *
+         * <p>但剔掉之后必须**说清楚**。典型场景：稿件有 4K，未登录时服务端照样
+         * 在 support_formats 里报 `120=4K 超高清`，dash 却只给到 1080P。
+         * 界面上如果只是安静地少一行，用户会以为这个应用不支持 4K，
+         * 而真实原因是 4K 需要大会员账号。这里存下来就是为了给出那句话。</p>
+         */
+        public final java.util.LinkedHashMap<Integer, String> lockedQualities = new java.util.LinkedHashMap<>();
 
         /**
          * 已经合体的音视频流。B 站走 {@code fnval=1} 的 durl 拿到，
@@ -198,6 +227,14 @@ public final class Model {
         public int videoHeight;
         public String audioUrl = "";
         public long audioSize;
+        /**
+         * 两条流各自的请求头，原样取自 {@link Stream#headers}。
+         *
+         * <p>分开存是因为视频和音频常常来自不同的 itag，签名绑定的客户端
+         * 未必相同 —— 合成一份共用的头在个别格式上仍然会 403。</p>
+         */
+        public final Map<String, String> videoHeaders = new LinkedHashMap<>();
+        public final Map<String, String> audioHeaders = new LinkedHashMap<>();
         /**
          * 输出 WebM 而不是 MP4。
          *

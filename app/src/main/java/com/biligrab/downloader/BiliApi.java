@@ -450,14 +450,25 @@ public final class BiliApi {
         // 把「报了但没有流」的档位从列表里剔掉。
         //
         // support_formats 列的是账号有权「看到」的档位，dash 列的才是真正「给的」。
-        // 两者不一致是常态 —— 未登录时 support_formats 照样报 112(1080P 高码率)，
-        // 但 dash 里最高只有 80。留着它，用户会选到一个下不到的档位，
-        // 再被 Model.videoByQuality 的兜底逻辑静默换成 1080P，等于界面在骗人。
+        // 两者不一致是常态 —— 未登录时 support_formats 照样报 112(1080P 高码率)
+        // 和 120(4K 超高清)，但 dash 里最高只有 80。留着它，用户会选到一个下不到的
+        // 档位，再被 Model.videoByQuality 的兜底逻辑静默换成 1080P，等于界面在骗人。
+        //
+        // 但剔掉不等于当没发生过：被剔掉的档位记进 lockedQualities，
+        // 界面据此说明「还有 4K，但要大会员」。否则用户只会看到列表里少了几档，
+        // 以为这个应用不支持高画质。
         java.util.Set<Integer> available = new java.util.HashSet<>();
         for (Model.Stream s : info.videos) {
             available.add(s.quality);
         }
-        info.qualities.keySet().retainAll(available);
+        for (java.util.Iterator<java.util.Map.Entry<Integer, String>> it =
+                info.qualities.entrySet().iterator(); it.hasNext(); ) {
+            java.util.Map.Entry<Integer, String> e = it.next();
+            if (!available.contains(e.getKey())) {
+                info.lockedQualities.put(e.getKey(), e.getValue());
+                it.remove();
+            }
+        }
 
         JSONArray audios = dash.optJSONArray("audio");
         if (audios != null) {
@@ -613,7 +624,7 @@ public final class BiliApi {
                 String desc = firstNonEmpty(f.optString("new_description"),
                         firstNonEmpty(f.optString("display_desc"), f.optString("description")));
                 if (q > 0) {
-                    info.qualities.put(q, desc.isEmpty() ? ("qn" + q) : desc);
+                    info.qualities.put(q, desc.isEmpty() ? qnName(q) : desc);
                 }
             }
         }
@@ -623,10 +634,39 @@ public final class BiliApi {
             if (aq != null) {
                 for (int i = 0; i < aq.length(); i++) {
                     int q = aq.optInt(i);
-                    String desc = ad != null && i < ad.length() ? ad.optString(i) : ("qn" + q);
-                    info.qualities.put(q, desc);
+                    String desc = ad != null && i < ad.length() ? ad.optString(i) : "";
+                    info.qualities.put(q, desc.isEmpty() ? qnName(q) : desc);
                 }
             }
+        }
+    }
+
+    /**
+     * 档位号 → 中文名。
+     *
+     * <p>只在服务端没给描述时兜底。服务端通常会给（`new_description` 形如
+     * 「4K 超高清」「杜比视界」），但个别稿件只回 `accept_quality` 这个纯数字
+     * 数组，那时贴着 `qn120` 这种内部编号给用户看是没有意义的。</p>
+     *
+     * <p>这些档位里的 120/125/126/127 都需要大会员，未登录时不会出现在
+     * 可下载列表里，但它们会出现在 {@link Model.PlayInfo#lockedQualities}，
+     * 也就是那句「需要大会员」的提示里 —— 所以名字得对。</p>
+     */
+    private static String qnName(int qn) {
+        switch (qn) {
+            case 127: return "8K 超高清";
+            case 126: return "杜比视界";
+            case 125: return "HDR 真彩";
+            case 120: return "4K 超高清";
+            case 116: return "1080P 60帧";
+            case 112: return "1080P 高码率";
+            case 80:  return "1080P 高清";
+            case 74:  return "720P 60帧";
+            case 64:  return "720P 准高清";
+            case 32:  return "480P 标清";
+            case 16:  return "360P 流畅";
+            case 6:   return "240P 极速";
+            default:  return "qn" + qn;
         }
     }
 

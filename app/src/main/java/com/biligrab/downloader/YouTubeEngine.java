@@ -467,6 +467,7 @@ public final class YouTubeEngine {
 
             Model.Stream s = new Model.Stream();
             s.url = fileUrl;
+            readHeaders(f, s);
             s.mimeType = f.optString("ext", "");
             s.height = f.optInt("height", 0);
             s.width = f.optInt("width", 0);
@@ -564,6 +565,44 @@ public final class YouTubeEngine {
                 + " / Opus " + (bestAudioWebm != null ? "有" : "无")
                 + "  渐进式预览 " + (progressive != null ? "有" : "无"));
         return result;
+    }
+
+    /**
+     * 把 yt-dlp 为这个 format 声明的 {@code http_headers} 抄进流对象。
+     *
+     * <p>这些头不是可有可无的装饰。googlevideo 的直链签名和解析时的客户端绑定，
+     * yt-dlp 回传 {@code http_headers} 正是为了让下载端原样复现那个客户端。
+     * 换成别的 User-Agent 会被 CDN 当成另一个客户端，直接 403 ——
+     * 这正是「YouTube 能解析但一下载就 403」的成因。</p>
+     *
+     * <p>只收文本头。{@code Cookie} 之类带状态的、以及 {@code Range}
+     * （由下载管线自己控制）都跳过，避免把解析阶段的一次性凭据带到下载流量里。</p>
+     */
+    private static void readHeaders(JSONObject format, Model.Stream s) {
+        JSONObject h = format.optJSONObject("http_headers");
+        if (h == null) {
+            return;
+        }
+        java.util.Iterator<String> keys = h.keys();
+        while (keys.hasNext()) {
+            String k = keys.next();
+            if (k == null || k.isEmpty()) {
+                continue;
+            }
+            String lower = k.toLowerCase(java.util.Locale.US);
+            if ("cookie".equals(lower) || "range".equals(lower)
+                    || "content-length".equals(lower) || "host".equals(lower)) {
+                continue;
+            }
+            Object v = h.opt(k);
+            if (v == null) {
+                continue;
+            }
+            String sv = String.valueOf(v);
+            if (!sv.isEmpty()) {
+                s.headers.put(k, sv);
+            }
+        }
     }
 
     /** 编码族 → 本应用内部使用的 codecid。 */
