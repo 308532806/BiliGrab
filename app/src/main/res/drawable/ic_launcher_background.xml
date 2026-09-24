@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  启动图标底色
+  =============
+  单独放一个文件，避免被 tools/gen_palette.py 重新生成 colors.xml 时覆盖掉。
+
+  从「一块纯色」升级成「一层斜向渐变 + 一层柔光」：
+  纯色块在 HyperOS 的圆角遮罩下看起来是扁的，而自适应图标本身
+  已经占了整块画布，没有阴影可用，体积感只能靠明暗自己做出来。
+  渐变方向取左上 → 右下，柔光压在左上角 —— 与 n 光线从上往下打一致。
+  色相仍是品牌樱花粉（#FB7299 同族），只把明度拉开，保证缩到 48dp
+  仍有层次、又不至于在深色桌面上糊掉。
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- 底层：斜向品牌渐变 -->
+    <path android:pathData="M0,0 h108 v108 h-108 z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="10" android:startY="6"
+                android:endX="98" android:endY="102">
+                <item android:offset="0" android:color="#FFFF7FA8" />
+                <item android:offset="0.52" android:color="#FFF4527F" />
+                <item android:offset="1" android:color="#FFC9255F" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- 柔光：左上角一大团极淡的白，模拟新拟态的顶光 -->
+    <path android:pathData="M0,0 h108 v108 h-108 z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="radial"
+                android:centerX="30" android:centerY="24"
+                android:gradientRadius="76">
+                <item android:offset="0" android:color="#59FFFFFF" />
+                <item android:offset="0.55" android:color="#14FFFFFF" />
+                <item android:offset="1" android:color="#00FFFFFF" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- 压角：右下角一层极淡的黑，把渐变收住，避免右下角发灰 -->
+    <path android:pathData="M0,0 h108 v108 h-108 z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="radial"
+                android:centerX="88" android:centerY="92"
+                android:gradientRadius="62">
+                <item android:offset="0" android:color="#2E000000" />
+                <item android:offset="1" android:color="#00000000" />
+            </gradient>
+        </aapt:attr>
+    </path>
+</vector>

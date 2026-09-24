@@ -4,31 +4,78 @@
   =============
   一个符号，不是三个符号拼在一起。
 
-  自适应图标画布 108×108，其中 18..90 是会被遮罩裁剪的区域，
-  真正保证可见的是中心约 66×66。这里所有图形都收在 23..85 之内。
+  【几何约束】自适应图标画布 108×108，但**只有中心 72×72 一定可见**
+  （18..90），其余部分取决于厂商遮罩：圆形、圆角方、水滴都可能。
+  上一版把托盘铺到 x=28..80 / y=77..85，两个下角离中心 40.5，
+  在圆形遮罩下会被切掉一截 —— 这次所有顶点都收在离中心 35 以内。
 
-  造型取自「下载」这个动作本身：箭头落进托盘。
-  全填充、等宽笔画，缩到 48dp 依然读得出来 —— 描边在这么小的尺寸下会显得发虚。
+  【造型】下箭头 + 落点横线，即「下载」在全平台最通用的符号。
+  全填充、无描边：描边缩到 48dp 会发虚，填充块仍然清楚。
+
+  【为什么有阴影】自适应图标本身没有系统投影，纯平面图形在
+  渐变底上会显得「贴纸一样浮着」。这里在图形正下方压一份
+  半透明黑（偏移 2 个单位、22% 不透明度），缩小时读作一点点立体感。
+  阴影**只在前景里**，monochrome 层用的是不含阴影的独立文件。
 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
 
-    <!-- 箭杆：宽 12 -->
-    <path
-        android:fillColor="#FFFFFFFF"
-        android:pathData="M48,23 h12 v24 h-12 z" />
+    <!-- ============ 阴影：整体下移 2，纯黑 22% ============ -->
 
-    <!-- 箭头：宽 40，顶点 54,69 -->
     <path
-        android:fillColor="#FFFFFFFF"
-        android:pathData="M34,45 L74,45 L54,69 Z" />
+        android:fillColor="#38000000"
+        android:pathData="M48,28 h12 v22 h-12 z" />
 
-    <!-- 托盘：宽 52 -->
     <path
-        android:fillColor="#FFFFFFFF"
-        android:pathData="M28,77 h52 v8 h-52 z" />
+        android:fillColor="#38000000"
+        android:pathData="M36,48 L72,48 L54,72 Z" />
 
+    <path
+        android:fillColor="#38000000"
+        android:pathData="M34,76 h40 v8 h-40 z" />
+
+    <!-- ============ 主体：白 → 极淡粉的竖向渐变 ============ -->
+
+    <path android:pathData="M48,26 h12 v22 h-12 z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="54" android:startY="26"
+                android:endX="54" android:endY="82">
+                <item android:offset="0" android:color="#FFFFFFFF" />
+                <item android:offset="0.62" android:color="#FFFFF7FA" />
+                <item android:offset="1" android:color="#FFFFE4EE" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <path android:pathData="M36,46 L72,46 L54,70 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="54" android:startY="26"
+                android:endX="54" android:endY="82">
+                <item android:offset="0" android:color="#FFFFFFFF" />
+                <item android:offset="0.62" android:color="#FFFFF7FA" />
+                <item android:offset="1" android:color="#FFFFE4EE" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <path android:pathData="M34,74 h40 v8 h-40 z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="54" android:startY="26"
+                android:endX="54" android:endY="82">
+                <item android:offset="0" android:color="#FFFFFFFF" />
+                <item android:offset="0.62" android:color="#FFFFF7FA" />
+                <item android:offset="1" android:color="#FFFFE4EE" />
+            </gradient>
+        </aapt:attr>
+    </path>
 </vector>

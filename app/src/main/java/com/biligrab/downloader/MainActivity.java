@@ -68,7 +68,8 @@ import java.util.concurrent.Executors;
  *       任何时候都只显示其中一个 —— 不会出现空白屏。</li>
  * </ul>
  */
-public class MainActivity extends Activity implements DownloadService.Listener {
+public class MainActivity extends Activity
+        implements DownloadService.Listener, TaskStore.Listener {
 
     private static final String TAG = "BiliGrab";
 
@@ -338,11 +339,21 @@ public class MainActivity extends Activity implements DownloadService.Listener {
     protected void onResume() {
         super.onResume();
         DownloadService.addListener(this);
+        // 记录层也要听：在下载管理页里删掉一条还没下完的任务时，
+        // service 只发 TaskStore 的回调，**不会**发 onTaskFinished
+        //（没有任何线程需要等它结束）。首页原来只听 service，
+        // 于是那一行永远停在被删之前的百分比上，图标也不还原 ——
+        // 用户看到的是一个「卡住的下载」，而任务其实已经没了。
+        TaskStore.get().addListener(this);
+        // 从管理页返回时补刷一次：期间任务可能已经被删，
+        // 光靠回调要在下次通知才有反应，这里直接对齐一次现状。
+        syncRowsWithStore();
     }
 
     @Override
     protected void onPause() {
         DownloadService.removeListener(this);
+        TaskStore.get().removeListener(this);
         // 退到后台就别继续出声了；再回来时用户自己点播放继续
         if (preview != null) {
             preview.pause();
@@ -1465,6 +1476,56 @@ public class MainActivity extends Activity implements DownloadService.Listener {
         return sb.toString();
     }
 
+    // ---- TaskStore.Listener：记录增删改 ----
+
+    /**
+     * 下载记录变了（新增 / 删除 / 状态改动）。
+     *
+     * <p>首页必须听这个，否则「在管理页把一条没下完的任务删掉」这件事
+     * 首页完全不知道：那条任务已经从记录里消失，没有任何 service 回调
+     * 会再提到它，而首页那一行还停在被删之前的百分比、图标也还是隐藏的。
+     * 用户回到首页看到的是一个卡死的下载进度，点它却什么都不会发生。</p>
+     */
+    @Override
+    public void onTasksChanged() {
+        ui.post(this::syncRowsWithStore);
+    }
+
+    /**
+     * 把首页的下载行对齐到记录的真实状态。
+     *
+     * <p>复位条件写成「这条记录没了，或者它已经不在跑」。
+     * 不能只判「记录没了」—— 取消 / 暂停一条**排队中**的任务时，
+     * service 走的是「直接改状态」那条路，只发记录回调、
+     * **不发** onTaskFinished（没有线程需要等它结束）。
+     * 只判记录是否存在的话，那种情况照样会卡住。</p>
+     *
+     * <p>反过来，还在跑的（运行中 / 排队中）一律不碰：那是首页自己要
+     * 显示进度的那一条。</p>
+     */
+    private void syncRowsWithStore() {
+        boolean reset = false;
+        for (DownloadRow r : rows) {
+            if (r.boundId.isEmpty()) {
+                continue;
+            }
+            DownloadTask t = TaskStore.get().byId(r.boundId);
+            if (t == null || !t.isActive()) {
+                // 记录被删掉，或者任务已经不在跑了（取消 / 暂停 / 失败 / 完成）：
+                // 复位成「还没开始下」的样子 —— 图标回来、百分比和进度条收起。
+                r.boundId = "";
+                r.setRunning(false);
+                reset = true;
+            }
+        }
+        if (reset) {
+            // 不跑了就不该再拦住用户点第二次
+            downloading = false;
+            activeRow = null;
+            setRowsEnabled(true);
+        }
+    }
+
     // ---- DownloadService.Listener：回调来自子线程 ----
 
     /**
@@ -1632,6 +1693,67 @@ public class MainActivity extends Activity implements DownloadService.Listener {
                 : getString(R.string.settings_dir_using_default, path));
     }
 
+    /**
+     * 铺一行 1..{@link Prefs#MAX_CONNECTIONS} 的并发数按钮。
+     *
+     * <p>选中态跟首页的画质芯片用同一套语言：凸起 + 主色文字 = 选中，
+     * 凹入 + 次要色 = 未选中。新拟态里状态靠形变表达，不靠色差，
+     * 否则在「卡片与页面同色」的平面里根本看不出哪个被选中。</p>
+     *
+     * <p>点一下直接落盘 —— 这一项没有「保存」按钮。</p>
+     */
+    private void buildConnChips(ViewGroup row, final Prefs prefs) {
+        if (row == null) {
+            return;
+        }
+        row.removeAllViews();
+        final int current = prefs.connections();
+        final TextView[] chips = new TextView[Prefs.MAX_CONNECTIONS];
+
+        for (int i = 1; i <= Prefs.MAX_CONNECTIONS; i++) {
+            final int n = i;
+            TextView b = new TextView(this);
+            b.setText(getString(R.string.conn_value, n));
+            b.setGravity(Gravity.CENTER);
+            b.setTextSize(15f);
+            // 每个按钮等宽铺满整行；用 weight 而不是固定宽，
+            // 免得在窄屏上挤出去
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                    0, (int) getResources().getDimension(R.dimen.touch_min), 1f);
+            if (i > 1) {
+                lp.setMarginStart((int) getResources().getDimension(R.dimen.space_sm));
+            }
+            b.setLayoutParams(lp);
+            paintConnChip(b, n == current);
+            b.setOnClickListener(v -> {
+                prefs.setConnections(n);
+                for (int k = 0; k < chips.length; k++) {
+                    if (chips[k] != null) {
+                        paintConnChip(chips[k], k == n - 1);
+                    }
+                }
+                Snackbar.show(findViewById(R.id.root),
+                        getString(R.string.snack_conn_saved, n));
+            });
+            chips[i - 1] = b;
+            row.addView(b);
+        }
+    }
+
+    /** 给一个并发数按钮上色 + 上凸凹。 */
+    private void paintConnChip(TextView chip, boolean on) {
+        chip.setTextColor(on ? HyperTheme.primary(this) : HyperTheme.textSecondary(this));
+        chip.setTypeface(null, on ? android.graphics.Typeface.BOLD
+                : android.graphics.Typeface.NORMAL);
+        if (HyperTheme.isGlass(this)) {
+            NeumorphicSurface.convex(chip, 14, 3).glass(true);
+        } else if (on) {
+            NeumorphicSurface.convex(chip, 14, 3);
+        } else {
+            NeumorphicSurface.concave(chip, 14, 1.5f);
+        }
+    }
+
     private void showSettings() {
         final Dialog sheet = new Dialog(this, R.style.Theme_BiliGrab_BottomSheet);
         View content = LayoutInflater.from(this).inflate(R.layout.sheet_settings, null, false);
@@ -1694,6 +1816,11 @@ public class MainActivity extends Activity implements DownloadService.Listener {
         // CompoundButton 带着 checkedChange 与可访问性语义，重写一遍不划算 ——
         // 只换 drawable 就能拿到完整的浮雕效果。
         NeumorphicControls.dressSwitch(swAvc);
+
+        // ---- 并发连接数 ----
+        // YouTube 按每条连接限速，这里是唯一能真正提速的开关。
+        // 做成一行数字按钮，点一下即存，不用再点「保存」。
+        buildConnChips(content.findViewById(R.id.rowConn), prefs);
 
         // ---- 下载位置 ----
         // 目录做成「选 / 恢复默认」两个按钮，而不是让用户手打路径。

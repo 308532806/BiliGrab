@@ -32,6 +32,19 @@ public final class Prefs {
     private static final String KEY_TREE_URI = "download_tree_uri";
     private static final String KEY_TREE_LABEL = "download_tree_label";
 
+    /**
+     * 并发连接数（1..{@link #MAX_CONNECTIONS}）。
+     *
+     * <p>存在的原因是 googlevideo 按**每条连接**限速：实测单连接 8.1 Mbps、
+     * 4 连接 35.5 Mbps，换多少个 VPN 都没用，因为瓶颈不在出口带宽上。
+     * 所以「快」和「稳」之间的取舍交给用户，默认取 4。</p>
+     */
+    private static final String KEY_CONNECTIONS = "download_connections";
+
+    /** 并发上限。再多收益就没了（实测 8 连接反而比 4 连接慢）。 */
+    public static final int MAX_CONNECTIONS = 8;
+    public static final int DEFAULT_CONNECTIONS = 4;
+
     public static final int DEFAULT_QN = 80;
 
     /** 外观：跟随系统 / 强制浅色 / 强制深色。 */
@@ -103,6 +116,24 @@ public final class Prefs {
 
     public void setPreferQn(int qn) {
         sp.edit().putInt(KEY_QN, qn).apply();
+    }
+
+    /**
+     * 并发连接数，钳在 1..{@link #MAX_CONNECTIONS}。
+     *
+     * <p>钳位放在这里而不是设置界面：旧版本存下来过什么值、或者
+     * 手改过 prefs 文件，都不该让下载线程池按一个荒唐的数字去开连接。</p>
+     */
+    public int connections() {
+        int n = sp.getInt(KEY_CONNECTIONS, DEFAULT_CONNECTIONS);
+        if (n < 1) {
+            return 1;
+        }
+        return Math.min(n, MAX_CONNECTIONS);
+    }
+
+    public void setConnections(int n) {
+        sp.edit().putInt(KEY_CONNECTIONS, Math.max(1, Math.min(n, MAX_CONNECTIONS))).apply();
     }
 
     public boolean hasLogin() {

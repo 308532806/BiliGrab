@@ -50,6 +50,13 @@ public class DownloadService extends Service {
     public static final String ACTION_PAUSE = "com.biligrab.app.action.PAUSE";
     public static final String ACTION_CANCEL = "com.biligrab.app.action.CANCEL";
     public static final String EXTRA_TASK_ID = "taskId";
+    /**
+     * 「这次是点继续进来的」。
+     *
+     * <p>入队时状态一律会被改成 QUEUED，等真正开跑时已经看不出它原本
+     * 是暂停还是新建；没有这个标记，续传每次都会被判成重下。</p>
+     */
+    public static final String EXTRA_RESUME = "resume";
 
     private static final String CHANNEL_ID = "biligrab_download";
     private static final int NOTIF_ID = 0x2101;
@@ -60,6 +67,12 @@ public class DownloadService extends Service {
     private ExecutorService executor;
     private NotificationManager notifMgr;
     private final ConcurrentLinkedQueue<String> queue = new ConcurrentLinkedQueue<>();
+    /**
+     * 「这条任务是点继续进来的」—— 入队那一刻记下，因为入队会把状态改成
+     * QUEUED，等到真正开跑时已经从状态上看不出它原本是暂停还是新建。
+     */
+    private final java.util.Set<String> resumeIntent =
+            java.util.Collections.newSetFromMap(new java.util.concurrent.ConcurrentHashMap<String, Boolean>());
     private volatile boolean workerRunning;
     private volatile String currentId = "";
 
@@ -122,7 +135,7 @@ public class DownloadService extends Service {
         t.resetStopFlags();
         t.setStatus(DownloadTask.STATUS_QUEUED);
         store.markDirty(ctx);
-        enqueue(ctx, t.id);
+        enqueue(ctx, t.id, false);
     }
 
     /** 继续一条暂停或失败的下载。 */
@@ -134,19 +147,42 @@ public class DownloadService extends Service {
         t.setError("");
         t.setStatus(DownloadTask.STATUS_QUEUED);
         TaskStore.get().markDirty(ctx);
-        enqueue(ctx, t.id);
+        // 明确告诉服务「这是继续」：这条方法已经把状态改成 QUEUED 了，
+        // 服务端起跑时再看状态就分辨不出新建与继续的区别。
+        enqueue(ctx, t.id, true);
     }
 
     private static void enqueue(Context ctx, String id) {
+        enqueue(ctx, id, false);
+    }
+
+    private static void enqueue(Context ctx, String id, boolean resume) {
+        if (resume) {
+            // 进程内传递意图。跨进程用 Intent extra 更通用，但服务和界面
+            // 本来就在同一进程（android:process 没设过），静态集合省掉一次
+            // 序列化，也不会因为 extra 忘了写而静默退化成「重下」。
+            INSTANCE_RESUME.add(id);
+        }
         Intent i = new Intent(ctx, DownloadService.class);
         i.setAction(ACTION_ENQUEUE);
         i.putExtra(EXTRA_TASK_ID, id);
+        i.putExtra(EXTRA_RESUME, resume);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             ctx.startForegroundService(i);
         } else {
             ctx.startService(i);
         }
     }
+
+    /**
+     * 「这次是继续」的进程内标记。
+     *
+     * <p>为什么要两份（这里 + Intent extra）：服务可能还没起来，
+     * {@code INSTANCE} 是 null，静态集合在 onCreate 之前就已经写进去了，
+     * 由 extra 兜底；两个进程同一个进程时它们指的是同一件事。</p>
+     */
+    private static final java.util.Set<String> INSTANCE_RESUME =
+            java.util.Collections.newSetFromMap(new java.util.concurrent.ConcurrentHashMap<String, Boolean>());
 
     /**
      * 暂停一条下载。
@@ -279,7 +315,20 @@ public class DownloadService extends Service {
         // 必须在 5 秒内调用 startForeground，所以放在入队之前
         startForegroundCompat(getString(R.string.stage_preparing), t.title, 0, t);
 
+        // 先把「这是继续」的意图取出来，无论下面走哪个分支都要消费掉它。
+        // 留着不取的话，同一个 id 之后再被正常新建时会误判成续传。
+        boolean fromResume = intent.getBooleanExtra(EXTRA_RESUME, false)
+                || INSTANCE_RESUME.remove(id);
+
         if (!queue.contains(id) && !id.equals(currentId)) {
+            // 记住它是「点继续进来的」还是「第一次下的」。
+            // 状态马上要被改成 QUEUED，而 runOne 是之后才执行的 ——
+            // 到那时再看 status 已经全是 QUEUED，谁都分不出这两种情况。
+            // 实测踩到过：台账明明在磁盘上（18 块已完成），续传却每次都
+            // 判成「重下」，232 MB 白下一遍。
+            if (fromResume) {
+                resumeIntent.add(id);
+            }
             t.setStatus(DownloadTask.STATUS_QUEUED);
             queue.add(id);
             emitProgress(t);
@@ -363,7 +412,13 @@ public class DownloadService extends Service {
      */
     private void runOne(DownloadTask dt) {
         TaskStore store = TaskStore.get();
-        boolean wasPartial = dt.status() == DownloadTask.STATUS_PAUSED
+        // 「点继续进来的」由入队那一刻记下的意图决定，不看当前状态 ——
+        // 状态在入队时已经被改成 QUEUED 了（见 onStartCommand 的 ENQUEUE 分支）。
+        // 另外，进程上次被杀掉时记录里会留下 RUNNING/QUEUED，读盘时统一改成
+        // PAUSED（见 DownloadTask.fromJson），那种情况也算「有过半成品」。
+        boolean intendResume = resumeIntent.remove(dt.id);
+        boolean wasPartial = intendResume
+                || dt.status() == DownloadTask.STATUS_PAUSED
                 || dt.status() == DownloadTask.STATUS_FAILED;
 
         dt.resetStopFlags();
@@ -376,7 +431,12 @@ public class DownloadService extends Service {
         Model.Task task = dt.toModelTask();
         // 只在「确实有过半成品，而且是对同一个流」时才续传。
         // 换了画质或换了链接还接着往旧文件里写，拼出来的东西是坏的。
-        boolean resume = wasPartial && WorkDir.signatureMatches(this, dt.id, signatureOf(dt));
+        boolean sigOk = wasPartial && WorkDir.signatureMatches(this, dt.id, signatureOf(dt));
+        boolean resume = sigOk;
+        Log.i(TAG, "续传判定 status=" + dt.status() + " 半成品=" + wasPartial
+                + " 签名一致=" + sigOk + " → " + (resume ? "续传" : "重下")
+                + "，video.part 台账=" + Parallel.hasJournal(WorkDir.videoFile(this, dt.id))
+                + " 大小=" + WorkDir.lengthOf(WorkDir.videoFile(this, dt.id)));
 
         String message;
         boolean ok = false;
@@ -451,8 +511,18 @@ public class DownloadService extends Service {
             // 续传：把已下载量对齐磁盘上的真实长度。
             // 进程被杀、或上次写入没来得及记盘时，记录里的数字会偏小，
             // 以文件长度为准才是可靠的。
-            dt.setVideoDone(WorkDir.lengthOf(WorkDir.videoFile(this, dt.id)));
-            dt.setAudioDone(WorkDir.lengthOf(WorkDir.audioFile(this, dt.id)));
+            //
+            // 例外：多连接的半成品是**按总长预分配**的，length() 一开始
+            // 就等于总量、中间还带着洞。拿它当已下进度会让进度条一上来
+            // 就是 100%，而真正的进度由 Parallel 从台账里算出来报给我们。
+            File v = WorkDir.videoFile(this, dt.id);
+            File a = WorkDir.audioFile(this, dt.id);
+            if (!Parallel.hasJournal(v)) {
+                dt.setVideoDone(WorkDir.lengthOf(v));
+            }
+            if (!Parallel.hasJournal(a)) {
+                dt.setAudioDone(WorkDir.lengthOf(a));
+            }
         }
         File work = WorkDir.prepare(this, dt.id);
         WorkDir.writeSignature(this, dt.id, signatureOf(dt));
@@ -789,7 +859,13 @@ public class DownloadService extends Service {
         // 视频轨的文件其实是完整的。这时再去请求一次没有意义，而且
         // Range 起点等于文件长度时服务端会回 416（请求区间不可满足），
         // 把它当成错误会让一次本该成功的继续直接失败。
-        if (sizeHint > 0 && dst.exists() && dst.length() >= sizeHint) {
+        //
+        // 但**有台账时这个判断会骗人**：多连接是先按总长预分配再往里面填的，
+        // 一个下到 30% 的文件 length() 也等于总量。少了 hasJournal 这一问，
+        // 暂停一次再继续就会被当成「已经下完了」直接跳过，合流出来的
+        // 是个带洞的文件。
+        if (sizeHint > 0 && dst.exists() && dst.length() >= sizeHint
+                && !Parallel.hasJournal(dst)) {
             Log.i(TAG, (isVideo ? "视频" : "音频") + "轨已完整（"
                     + dst.length() + "/" + sizeHint + "），跳过");
             if (isVideo) {
@@ -851,6 +927,80 @@ public class DownloadService extends Service {
         return false;
     }
 
+    /**
+     * 这次要不要走多连接。
+     *
+     * <p>三种情况不分段：</p>
+     * <ul>
+     *   <li>用户把并发调成了 1（等价于关掉这个功能）；</li>
+     *   <li>这份目标文件上还留着**单连接**的半成品。单连接把
+     *       {@code length()} 当作「下到哪了」，而多连接要预分配，
+     *       两种续传语义混在一起会把带着洞的文件当成完整的；</li>
+     *   <li>上一轮多连接留下的台账还在，但那说明上次没下完 —— 这次仍然
+     *       走多连接（它自己会接着补），所以这条不算排除条件。</li>
+     * </ul>
+     */
+    private boolean useParallel(File dst, long sizeHint) {
+        Prefs p = new Prefs(this);
+        int n = p.connections();
+        if (n <= 1) {
+            return false;
+        }
+        // 有台账说明上次就是多连接下的，接着用多连接才认得出那些块
+        if (Parallel.hasJournal(dst)) {
+            return true;
+        }
+        // 没台账、文件却已经有内容：那是单连接留下的半成品。
+        // 它没有分块信息，多连接接手只会认不出已下的部分；
+        // 交给下面单连接那条路去续传。
+        return !(dst.exists() && dst.length() > 0);
+    }
+
+    /**
+     * 多连接把这一条流下完。
+     *
+     * <p>探不出总量、服务端不给区间时抛 {@link Parallel.Unsupported}，
+     * 由调用方退回单连接。除此之外的错误照常向上抛。</p>
+     */
+    private void downloadParallel(DownloadTask dt, boolean isVideo, String url, File dst,
+                                  String cookie, boolean withReferer,
+                                  java.net.Proxy proxy, boolean youtube,
+                                  java.util.Map<String, String> headers, long sizeHint)
+            throws IOException {
+        // 总量**一定要探**，不能拿 sizeHint 顶上。
+        // B 站接口给的大小是准的，但 yt-dlp 给的常常是 filesize_approx
+        // —— 那是个估算值。多连接要按总长预分配文件，用估算值定长，
+        // 长度本身就是错的：偏小会把尾巴截掉，偏大就会在末尾补一段空洞。
+        // 探测只要一个 1 字节的请求，换来的是这个长度一定可信。
+        Parallel.Probe probe = Parallel.probe(url, cookie, withReferer, proxy, headers);
+        if (!probe.ok) {
+            throw new Parallel.Unsupported("探不出文件总量或服务端不给区间");
+        }
+        final long total = probe.total;
+        if (sizeHint > 0 && sizeHint != total) {
+            Log.i(TAG, "真实总量 " + total + " 与解析估值 " + sizeHint + " 不一致，以实际为准");
+        }
+
+        int n = new Prefs(this).connections();
+        reportStreamStart(dt, isVideo, 0L, total);
+
+        long done = Parallel.fetch(url, cookie, withReferer, proxy, headers, dst, total, n,
+                new Http.Progress() {
+                    @Override
+                    public void onBytes(long d, long exp) {
+                        onStreamBytes(dt, isVideo, d);
+                    }
+                }, () -> dt.shouldStop());
+
+        // 多连接这边是「按块确认」的，收尾时把字节数对齐到总量，
+        // 免得最后一块的进度停在 99.x% 上
+        onStreamBytes(dt, isVideo, Math.max(done, total));
+    }
+
+    // ------------------------------------------------------------------
+    // 单连接下载
+    // ------------------------------------------------------------------
+
     private void downloadUrl(DownloadTask dt, boolean isVideo, String url, File dst,
                              String cookie, boolean withReferer,
                              java.net.Proxy proxy, boolean youtube,
@@ -860,6 +1010,33 @@ public class DownloadService extends Service {
         // 也正因为如此，这类地址没法续传 —— 只能从头下。
         boolean rangeSigned = hasRangeParam(url);
         long startAt = 0L;
+
+        // 多连接分段下载：googlevideo 按每条连接限速，拆成几条并行才跑得满线路。
+        // 只在「地址没自带 range 签名」时走 —— 那种签名只覆盖它写的那一段，
+        // 拆成几段去要会被 CDN 拒掉。
+        if (!rangeSigned && useParallel(dst, sizeHint)) {
+            try {
+                downloadParallel(dt, isVideo, url, dst, cookie, withReferer, proxy, youtube,
+                        headers, sizeHint);
+                return;
+            } catch (Parallel.Unsupported u) {
+                // 服务端不给区间，或总量探不出来。这不是错误，退回单连接就是了。
+                //
+                // 但必须**先把多连接留下的东西清掉**：它按总长预分配过文件，
+                // 那个 length() 是满的、内容却带着洞。单连接把 length() 当
+                // 「下到哪了」，拿着它去续传会从一个虚假的起点往后写，
+                // 合流出来的文件长度正确、中间缺一块 —— 用户要播到一半才发现。
+                // 宁可重下一遍。
+                Log.i(TAG, "不用多连接（" + u.getMessage() + "），改走单连接并重下");
+                Parallel.discard(dst);
+                if (isVideo) {
+                    dt.resetVideo();
+                } else {
+                    dt.resetAudio();
+                }
+            }
+        }
+
         if (!rangeSigned && dst.exists() && dst.length() > 0) {
             startAt = dst.length();
         }

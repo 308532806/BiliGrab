@@ -369,6 +369,11 @@
     <string name="settings_prefer_avc">优先 H.264</string>
     <string name="settings_prefer_avc_desc">兼容性最好。关闭后优先 HEVC，体积更小但部分旧机型不支持</string>
 
+    <string name="settings_conn">同时下载连接数</string>
+    <string name="settings_conn_desc">YouTube 服务器按每条连接单独限速，多开几条并行取才能跑满带宽。实测 4 条约是 1 条的 4.4 倍。设为 1 即关闭多连接。</string>
+    <string name="conn_value">%1$d</string>
+    <string name="snack_conn_saved">已设为 %1$d 条连接</string>
+
     <string name="settings_theme_title">外观</string>
     <string name="settings_theme_system">跟随系统</string>
     <string name="settings_theme_light">浅色</string>

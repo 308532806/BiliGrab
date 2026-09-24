@@ -214,6 +214,41 @@
                 </com.biligrab.downloader.ui.NeuLayout>
             </com.biligrab.downloader.ui.NeuLayout>
 
+            <!-- ==================== 并发连接数 ====================
+                 YouTube 按每条连接限速，这是「换多少 VPN 都慢」的真正原因。
+                 做成一行 1..8 的按钮而不是输入框：取值范围就这几个，
+                 点一下就好；而且 4 是实测最优点（8 条反而退步），
+                 用户不需要理解背后的取舍就能选对。 -->
+            <com.biligrab.downloader.ui.NeuLayout
+                style="@style/Widget.Card"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/card_gap"
+                android:orientation="vertical"
+                android:padding="@dimen/card_padding">
+
+                <com.biligrab.downloader.ui.NeuText
+                    android:id="@+id/tvConnLabel"
+                    style="@style/Widget.SectionTitle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/settings_conn" />
+
+                <com.biligrab.downloader.ui.NeuText
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/space_sm"
+                    android:text="@string/settings_conn_desc"
+                    android:textAppearance="@style/Text.BodySmall" />
+
+                <com.biligrab.downloader.ui.NeuLayout
+                    android:id="@+id/rowConn"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/space_md"
+                    android:orientation="horizontal" />
+            </com.biligrab.downloader.ui.NeuLayout>
+
             <!-- ==================== 下载位置 ==================== -->
 
             <com.biligrab.downloader.ui.NeuLayout
