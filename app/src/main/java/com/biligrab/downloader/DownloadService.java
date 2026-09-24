@@ -61,6 +61,15 @@ public class DownloadService extends Service {
     private static final String CHANNEL_ID = "biligrab_download";
     private static final int NOTIF_ID = 0x2101;
 
+    /**
+     * HTTP 416：请求的区间不可满足。
+     *
+     * <p>{@code HttpURLConnection} 没有为它定义常量（只到 505），字面写数字
+     * 又难认，所以在这里起个名字。续传时它意味着「起点越过了文件末尾」，
+     * 见 {@link #downloadUrl}。</p>
+     */
+    private static final int RANGE_NOT_SATISFIABLE = 416;
+
     /** 同一个进程里只有一个服务实例。静态持有是为了让「暂停」不必拉起服务。 */
     private static volatile DownloadService INSTANCE;
 
@@ -440,6 +449,7 @@ public class DownloadService extends Service {
 
         String message;
         boolean ok = false;
+        long taskStart = System.currentTimeMillis();
         try {
             String ref = runTask(dt, task, resume);
             String name = StorageDir.nameOf(this, ref);
@@ -472,6 +482,13 @@ public class DownloadService extends Service {
             if (ok) {
                 WorkDir.delete(this, dt.id);
             }
+            // 失败和中止也要把阶段耗时打出来 —— 那两种情况恰恰是最需要
+            // 知道「卡在哪一段」的时候。成功路径已经在 runBiliTask /
+            // runYouTubeTask 里 dump 过了，这里再做一次是空操作
+            // （stageDump 会清空累计表）。
+            Log.i(TAG, "[总耗时] " + dt.id + " " + (System.currentTimeMillis() - taskStart)
+                    + "ms  成功=" + ok);
+            stageDump(dt);
             // 停下来就不该再显示速度 —— 留着最后那个数值会让暂停后的界面
             // 看起来还在跑
             dt.setSpeed(0L);
@@ -540,13 +557,18 @@ public class DownloadService extends Service {
 
         reportStage(dt, getString(R.string.stage_resolve));
 
+        stageBegin();
         Model.PlayInfo info = BiliApi.playurl(task.bvid, task.cid, task.qn, cookie);
+        stageEnd("解析接口", 0);
 
         File vFile = null;
         File aFile = null;
 
+        Model.Stream v = null;
+        Model.Stream a = null;
+
         if (!task.audioOnly) {
-            Model.Stream v = info.videoByQuality(task.qn, prefs.preferAvc());
+            v = info.videoByQuality(task.qn, prefs.preferAvc());
             if (v == null) {
                 throw new IOException(getString(R.string.err_no_video_stream));
             }
@@ -558,26 +580,205 @@ public class DownloadService extends Service {
             if (v.size > 0) {
                 dt.setVideoTotal(v.size);
             }
-            reportStage(dt, getString(R.string.stage_video,
-                    v.width + "x" + v.height, Model.codecName(v.codecId)));
-            downloadStream(dt, true, v.candidates(), vFile, cookie, true, null, false, null,
-                    v.size);
         }
 
-        Model.Stream a = info.bestAudio();
+        a = info.bestAudio();
+        if (a == null && task.audioOnly) {
+            throw new IOException(getString(R.string.err_no_audio_stream));
+        }
         if (a != null) {
             aFile = WorkDir.audioFile(this, dt.id);
             if (a.size > 0) {
                 dt.setAudioTotal(a.size);
             }
-            reportStage(dt, getString(R.string.stage_audio));
-            downloadStream(dt, false, a.candidates(), aFile, cookie, true, null, false, null,
-                    a.size);
-        } else if (task.audioOnly) {
-            throw new IOException(getString(R.string.err_no_audio_stream));
         }
 
-        return muxAndSave(dt, task, work, vFile, aFile);
+        // 两条轨同时下，而不是「先视频、下完再音频」。
+        //
+        // 为什么值得这么做：B 站 CDN 对**单条连接**限速很死（实测 1 条约
+        // 0.5 MB/s，4 条能到 4 MB/s 以上）。串行时音频段只能吃自己那几条
+        // 连接的带宽，整条线路是闲着的；并行则把音频整个藏进视频那段里。
+        // 音频一般只有视频的 1/5 到 1/4 大小，这一段本来就要占掉总时长的
+        // 15%~20%，并行之后它几乎不再出现在总耗时里。
+        //
+        // 为什么不干脆合成一条流（例如音频也拆进视频的块队列）：两条轨的
+        // 地址、总量、编码、是否需要 Referer 全都不同，混在一个队列里要
+        // 给每一块记「它属于哪条轨」，复杂度和出错面都比开两条线程大得多。
+        boolean parallelTracks = vFile != null && aFile != null;
+        if (parallelTracks) {
+            downloadTracksConcurrently(dt, task, vFile, v, aFile, a, cookie);
+        } else {
+            // 只有一条轨（仅音频，或对方没给音频）：保持原来的串行写法
+            if (vFile != null) {
+                reportStage(dt, getString(R.string.stage_video,
+                        v.width + "x" + v.height, Model.codecName(v.codecId)));
+                stageBegin();
+                downloadStream(dt, true, v.candidates(), vFile, cookie, true, null, false, null,
+                        v.size);
+                stageEnd("视频流", vFile.length());
+            }
+            if (aFile != null) {
+                reportStage(dt, getString(R.string.stage_audio));
+                stageBegin();
+                downloadStream(dt, false, a.candidates(), aFile, cookie, true, null, false, null,
+                        a.size);
+                stageEnd("音频流", aFile.length());
+            }
+        }
+
+        stageBegin();
+        String out = muxAndSave(dt, task, work, vFile, aFile);
+        stageEnd("合流落盘", 0);
+        stageDump(dt);
+        return out;
+    }
+
+    /**
+     * 视频轨与音频轨同时下载，任一条失败就收掉另一条。
+     *
+     * <h3>为什么失败要连坐</h3>
+     * <p>两条轨合起来才是一个能播的文件。视频拿到了、音频没拿到，用户
+     * 什么都得不到 —— 让另一条把剩下几十 MB 跑完只是白白多等、多耗流量。
+     * 所以第一条失败时立刻置 {@link #siblingAbort}，另一条在下一次检查点
+     * 干净收手。反过来，任何一条**成功**都不影响另一条继续。</p>
+     *
+     * <h3>为什么用两条线程而不是线程池加 Future</h3>
+     * <p>这里就是「两条互不相同的活并行跑完」，没有队列、没有复用，
+     * 两条线程最直白。更重要的是异常语义：哪个异常该往外抛必须一眼看清
+     * —— 用 Future.get() 会把异常裹进 ExecutionException，还得逐层剥回来，
+     * 而 {@link Http.AbortedException} 和普通 IOException 在上层走的是
+     * 完全不同的分支（前者是「用户要停」，后者是「下载失败」），
+     * 裹一层就有把暂停报成失败的风险。</p>
+     */
+    private void downloadTracksConcurrently(final DownloadTask dt, final Model.Task task,
+                                            final File vFile, final Model.Stream v,
+                                            final File aFile, final Model.Stream a,
+                                            final String cookie) throws IOException {
+        // 并行期间**不清测速窗口**：两条轨共用一个窗口，谁中间清一次，
+        // 另一条攒好的采样就没了，界面上速度会莫名其妙掉到 0（见 reportStreamStart）
+        concurrentTracks = true;
+        siblingAbort = false;
+        resetSpeed();
+        reportStage(dt, getString(R.string.stage_both));
+        stageBegin();
+
+        // 异常在这里汇集。用数组而不是两个变量，是为了让下面那条
+        // 「谁失败就抛谁」的规则写在一处，不在两个 try 里各写一遍。
+        final IOException[] vErr = new IOException[1];
+        final IOException[] aErr = new IOException[1];
+        // 两条轨各自的耗时。要在各自的线程里量 —— 在外面量只能得到
+        // 「两条里慢的那条」，看不出并行到底省了多少。
+        final long[] vMs = new long[1];
+        final long[] aMs = new long[1];
+
+        Thread vt = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                long t0 = System.currentTimeMillis();
+                try {
+                    downloadStream(dt, true, v.candidates(), vFile, cookie, true, null, false,
+                            null, v.size);
+                } catch (IOException e) {
+                    vErr[0] = e;
+                    // 视频这条断了，音频也没必要继续 —— 没有视频，
+                    // 音频单独下完也合不出用户要的东西
+                    siblingAbort = true;
+                } catch (Throwable t) {
+                    vErr[0] = new IOException("视频流下载异常：" + t, t);
+                    siblingAbort = true;
+                } finally {
+                    vMs[0] = System.currentTimeMillis() - t0;
+                }
+            }
+        }, "biligrab-video");
+
+        Thread at = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                long t0 = System.currentTimeMillis();
+                try {
+                    downloadStream(dt, false, a.candidates(), aFile, cookie, true, null, false,
+                            null, a.size);
+                } catch (IOException e) {
+                    aErr[0] = e;
+                    siblingAbort = true;
+                } catch (Throwable t) {
+                    aErr[0] = new IOException("音频流下载异常：" + t, t);
+                    siblingAbort = true;
+                } finally {
+                    aMs[0] = System.currentTimeMillis() - t0;
+                }
+            }
+        }, "biligrab-audio");
+
+        long wall0 = System.currentTimeMillis();
+        try {
+            vt.start();
+            at.start();
+            joinQuietly(vt);
+            joinQuietly(at);
+        } finally {
+            concurrentTracks = false;
+            siblingAbort = false;
+        }
+        long wallMs = System.currentTimeMillis() - wall0;
+
+        // 两条轨的耗时分别记。这里的百分比之和会大于 100%（两段重叠），
+        // 这是**刻意**的：正好能看出并行省掉了多少 —— 音频那一段的百分比
+        // 就是它被视频完全藏住的证据。
+        stageRecord("视频流(并行)", vMs[0], vFile.length());
+        stageRecord("音频流(并行)", aMs[0], aFile.length());
+        Log.i(TAG, "音视频并行：墙钟 " + wallMs + "ms，视频 " + vMs[0]
+                + "ms，音频 " + aMs[0] + "ms，省下 "
+                + Math.max(0L, vMs[0] + aMs[0] - wallMs) + "ms");
+        if (stageStart != 0L) {
+            stageStart = System.currentTimeMillis();
+        }
+
+        // 谁真失败了就抛谁。**先看音频**：它是被视频带停的那一方，
+        // 如果音频只是「被兄弟叫停」，真正该报的是视频那个错，
+        // 否则用户会看到「音频下载被中止」这种和他无关的结论。
+        boolean vAborted = vErr[0] instanceof Http.AbortedException;
+        boolean aAborted = aErr[0] instanceof Http.AbortedException;
+
+        // 用户自己按的暂停 / 取消优先，原样抛出去，上层照常报「已暂停」
+        if (dt.shouldStop()) {
+            if (vAborted) {
+                throw vErr[0];
+            }
+            if (aAborted) {
+                throw aErr[0];
+            }
+        }
+        if (vErr[0] != null && !vAborted) {
+            throw vErr[0];
+        }
+        if (aErr[0] != null && !aAborted) {
+            throw aErr[0];
+        }
+        // 两边都是「被中止」，但用户没点过暂停 —— 说明是被兄弟带停的。
+        // 真正的原因在另一条轨的异常里，走到这里只剩中止本身了。
+        if (vAborted) {
+            throw vErr[0];
+        }
+        if (aAborted) {
+            throw aErr[0];
+        }
+    }
+
+    /** 等一条线程结束；被中断就恢复中断位并继续等另一条，不把中断吞掉。 */
+    private static void joinQuietly(Thread t) {
+        boolean interrupted = false;
+        while (t.isAlive()) {
+            try {
+                t.join();
+            } catch (InterruptedException e) {
+                interrupted = true;
+            }
+        }
+        if (interrupted) {
+            Thread.currentThread().interrupt();
+        }
     }
 
     // ------------------------------------------------------------------
@@ -613,7 +814,9 @@ public class DownloadService extends Service {
                     YouTubeEngine.describeHeight(task.videoHeight)));
             // 不传 Cookie、不带 B 站 Referer：googlevideo 的直链自带签名，
             // 多送一个 B 站 Referer 反而会被 CDN 当成异常请求。
+            stageBegin();
             downloadYouTubeStream(dt, task, true, vFile, task.videoSize);
+            stageEnd("视频流", vFile.length());
         }
 
         if (task.audioOnly || !task.audioUrl.isEmpty()) {
@@ -623,10 +826,16 @@ public class DownloadService extends Service {
             aFile = WorkDir.audioFile(this, dt.id);
             dt.setAudioTotal(task.audioSize);
             reportStage(dt, getString(R.string.stage_audio));
+            stageBegin();
             downloadYouTubeStream(dt, task, false, aFile, task.audioSize);
+            stageEnd("音频流", aFile.length());
         }
 
-        return muxAndSave(dt, task, work, vFile, aFile);
+        stageBegin();
+        String out = muxAndSave(dt, task, work, vFile, aFile);
+        stageEnd("合流落盘", 0);
+        stageDump(dt);
+        return out;
     }
 
     /**
@@ -769,6 +978,7 @@ public class DownloadService extends Service {
         }
 
         reportStage(dt, getString(R.string.stage_mux));
+        long tMux0 = System.currentTimeMillis();
         try {
             // 把停止标志交给封装器：合成也要能被「暂停 / 取消」打断。
             // 本方法里对 AbortedException 特意不做包装 —— 它表达的是
@@ -795,9 +1005,16 @@ public class DownloadService extends Service {
         if (!MuxUtil.hasVideoTrack(outFile)) {
             throw new IOException(getString(R.string.err_no_video_track));
         }
+        long tMux1 = System.currentTimeMillis();
 
         reportStage(dt, getString(R.string.stage_save_library));
-        return StorageDir.save(this, outFile, task.displayName(), false, ext);
+        String ref = StorageDir.save(this, outFile, task.displayName(), false, ext);
+        long tSave1 = System.currentTimeMillis();
+        // 合流与落盘要分开看：落盘里包含一次真正的几十 MB 拷贝（写进
+        // SAF 或公共目录），量级常常和合流本身相当甚至更大。不拆开就
+        // 只知道「后半段很慢」，不知道慢在转码还是在搬文件。
+        Log.i(TAG, "[落盘明细] 合流 " + (tMux1 - tMux0) + "ms  落盘 " + (tSave1 - tMux1) + "ms");
+        return ref;
     }
 
     /**
@@ -957,6 +1174,30 @@ public class DownloadService extends Service {
     }
 
     /**
+     * 并行下载两条轨时，**两条加起来**最多用几条连接。
+     *
+     * <p>实测（同一台机器、同一条线路）：单条连接约 0.5 MB/s，4 条能到
+     * 4 MB/s 以上，8 条约 2.1 MB/s 中位，16 条反而掉到 0.99 MB/s。
+     * 所以连接数不是越多越好，8 条是实测的甜点。</p>
+     */
+    private static final int MAX_TOTAL_CONNECTIONS = 8;
+
+    /**
+     * 这条轨该开几条连接。
+     *
+     * <p>串行时就是用户设的那个数。并行时**两条轨各开各的**，这是并行
+     * 真正省时间的地方 —— B 站 CDN 按连接限速，音频拿自己那几条连接，
+     * 比排在上一条轨后面等连接空出来快得多。总条数仍然封在上限内。</p>
+     */
+    private int connectionsFor() {
+        int n = new Prefs(this).connections();
+        if (!concurrentTracks) {
+            return n;
+        }
+        return Math.min(n, Math.max(1, MAX_TOTAL_CONNECTIONS / 2));
+    }
+
+    /**
      * 多连接把这一条流下完。
      *
      * <p>探不出总量、服务端不给区间时抛 {@link Parallel.Unsupported}，
@@ -965,13 +1206,18 @@ public class DownloadService extends Service {
     private void downloadParallel(DownloadTask dt, boolean isVideo, String url, File dst,
                                   String cookie, boolean withReferer,
                                   java.net.Proxy proxy, boolean youtube,
-                                  java.util.Map<String, String> headers, long sizeHint)
+                                  java.util.Map<String, String> headers, long sizeHint,
+                                  int connBudget)
             throws IOException {
         // 总量**一定要探**，不能拿 sizeHint 顶上。
-        // B 站接口给的大小是准的，但 yt-dlp 给的常常是 filesize_approx
-        // —— 那是个估算值。多连接要按总长预分配文件，用估算值定长，
-        // 长度本身就是错的：偏小会把尾巴截掉，偏大就会在末尾补一段空洞。
-        // 探测只要一个 1 字节的请求，换来的是这个长度一定可信。
+        //
+        // 而且这里没有「省掉探测」的余地：B 站 playurl 的 DASH 节点
+        // 压根不返回 size 字段（readStream 里只读 bandwidth / codecId /
+        // 宽高），所以哔哩哔哩这条路上 sizeHint 恒等于 0；yt-dlp 那边给的
+        // 又常常是 filesize_approx —— 估算值。多连接要按总长预分配文件，
+        // 用估算值定长，长度本身就是错的：偏小会把尾巴截掉，偏大就会在
+        // 末尾补一段空洞。探测只要一个 1 字节的请求，换来的是这个长度
+        // 一定可信。
         Parallel.Probe probe = Parallel.probe(url, cookie, withReferer, proxy, headers);
         if (!probe.ok) {
             throw new Parallel.Unsupported("探不出文件总量或服务端不给区间");
@@ -981,7 +1227,7 @@ public class DownloadService extends Service {
             Log.i(TAG, "真实总量 " + total + " 与解析估值 " + sizeHint + " 不一致，以实际为准");
         }
 
-        int n = new Prefs(this).connections();
+        int n = connBudget > 0 ? connBudget : new Prefs(this).connections();
         reportStreamStart(dt, isVideo, 0L, total);
 
         long done = Parallel.fetch(url, cookie, withReferer, proxy, headers, dst, total, n,
@@ -990,7 +1236,7 @@ public class DownloadService extends Service {
                     public void onBytes(long d, long exp) {
                         onStreamBytes(dt, isVideo, d);
                     }
-                }, () -> dt.shouldStop());
+                }, () -> stopRequested(dt));
 
         // 多连接这边是「按块确认」的，收尾时把字节数对齐到总量，
         // 免得最后一块的进度停在 99.x% 上
@@ -1017,7 +1263,7 @@ public class DownloadService extends Service {
         if (!rangeSigned && useParallel(dst, sizeHint)) {
             try {
                 downloadParallel(dt, isVideo, url, dst, cookie, withReferer, proxy, youtube,
-                        headers, sizeHint);
+                        headers, sizeHint, connectionsFor());
                 return;
             } catch (Parallel.Unsupported u) {
                 // 服务端不给区间，或总量探不出来。这不是错误，退回单连接就是了。
@@ -1058,6 +1304,37 @@ public class DownloadService extends Service {
         try {
             int code = c.getResponseCode();
 
+            // 416 = 请求的区间不可满足，也就是**起点已经越过了文件末尾**。
+            // 对续传来说这往往不是错误，而是「你要的那段早就拿完了」：
+            // 起点 5408198、文件也正好 5408198，服务端没有第 5408198 字节可给。
+            //
+            // 这个局面在音视频并行之后变得很常见：音频先下完、视频还在跑时
+            // 用户点了暂停，继续时音频这条轨其实已经完整 —— 但它没有台账
+            // （下完时删了），而 B 站 DASH 又不给 size，所以上面那个
+            // 「sizeHint 已到」的捷径认不出来，只能在这里认。
+            //
+            // 以前 416 会落到下面 code >= 400 那条路抛错，备用地址又都带着
+            // 同一个 Range → 一个一个回 416，最后报「CDN 返回 HTTP 416」。
+            // 用户点继续，得到的是「网络出问题」，但文件其实已经躺在磁盘上了。
+            //
+            // 为什么能直接当成完整：这条路上 startAt 就是 dst.length()，
+            // 而 416 恰恰说明服务端没有这个偏移的字节 → 远端长度 ≤ 本地长度；
+            // 本地字节又全部来自这个远端流 → 本地长度 ≤ 远端长度。
+            // 两者相等，文件是完整的。真出了偏差，合流前的 verify 也会拦下来。
+            if (code == RANGE_NOT_SATISFIABLE && startAt > 0 && startAt == dst.length()) {
+                Log.i(TAG, (isVideo ? "视频" : "音频") + "轨的区间已取完（起点 "
+                        + startAt + " = 文件长度），视为完整");
+                if (isVideo) {
+                    dt.setVideoDone(startAt);
+                    dt.setVideoTotal(startAt);
+                } else {
+                    dt.setAudioDone(startAt);
+                    dt.setAudioTotal(startAt);
+                }
+                reportProgress(dt, true);
+                return;
+            }
+
             // 206 才是「接着给」。服务端回 200 说明它忽略了 Range，
             // 那我们拿到的是整段 —— 必须从零写，否则新旧数据会拼错位。
             if (startAt > 0) {
@@ -1096,7 +1373,7 @@ public class DownloadService extends Service {
                         // 才是这条流真正的进度。
                         onStreamBytes(dt, isVideo, base + done);
                     }
-                }, expected, () -> dt.shouldStop());
+                }, expected, () -> stopRequested(dt));
             } finally {
                 Http.closeQuietly(in);
                 Http.closeQuietly(out);
@@ -1159,8 +1436,160 @@ public class DownloadService extends Service {
     /** 速度平滑窗口：太短会跳，太长会迟钝。3 秒是个手感合适的折中。 */
     private final Speed speed = new Speed(3000L);
 
-    /** 距上次刷新界面的时间，用来节流。 */
+    /**
+     * 进度上报的锁。
+     *
+     * <p>音视频并行下载时，两条轨各自的线程都会调 {@link #reportProgress}。
+     * 那时「喂采样窗口算速度 → 比较节流时间 → 写回上次推送时刻」这一串
+     * 必须整体互斥：只把 {@code lastPushMs} 改成 volatile 是不够的 ——
+     * 两个线程可能同时通过节流判断，把同一次进度推两遍；也可能一个正在
+     * 算速度，另一个已经把采样窗口清空了。</p>
+     *
+     * <p>锁只护住算账这一段。推界面（通知 / 监听器 / 广播）特意放在锁外：
+     * 那是几十毫秒量级的活，握着锁做等于让另一条下载轨干等。</p>
+     */
+    private final Object progressLock = new Object();
+
+    /**
+     * 推界面用的锁，和 {@link #progressLock} 分开。
+     *
+     * <p>分开是为了不把「算账」和「建通知」串成一件事：算账要快（两条下载轨
+     * 每秒各调几十次），建通知要慢（几十毫秒）。合成一把锁的话，音频轨每次
+     * 报进度都得等视频轨把通知栏改完，等于把并行又拉回串行。</p>
+     */
+    private final Object pushLock = new Object();
+
+    /** 距上次刷新界面的时间，用来节流。只在 {@link #progressLock} 里读写。 */
     private long lastPushMs;
+
+    /**
+     * 当前是否正在并行下载两条轨。
+     *
+     * <p>它只影响一件事：{@link #reportStreamStart} 要不要清空测速窗口。
+     * 并行时不能清 —— 后开始的那条会把先开始那条的采样清掉，界面上速度
+     * 会毫无理由地掉到 0。改为在并行开始之前统一清一次。</p>
+     */
+    private volatile boolean concurrentTracks;
+
+    /**
+     * 「另一条轨已经失败，不必再下了」。
+     *
+     * <p>并行下载时两条轨共享同一条网络。一条轨失败（地址过期、CDN 抽风），
+     * 另一条继续把剩下几十 MB 跑完毫无意义 —— 用户最终拿不到文件，
+     * 只白白多等、多耗流量。置上这个标志，另一条轨会在下一次
+     * {@link #stopRequested} 检查时干净地停下来。</p>
+     *
+     * <p>**它和「用户按了暂停」是两回事**，不能混为一谈：用户暂停要报
+     * 「已暂停」并保留半成品，而张冠李戴地把失败报成暂停，会让一次真正
+     * 失败的下载显示成「已暂停」，用户点继续却怎么也下不完。</p>
+     */
+    private volatile boolean siblingAbort;
+
+    /**
+     * 下载链路统一问这里「还要继续吗」。
+     *
+     * <p>原先各处直接传 {@code dt::shouldStop}，只认用户按的暂停 / 取消。
+     * 加上 {@link #siblingAbort} 之后，另一条轨失败也能让这条及时收手。</p>
+     */
+    private boolean stopRequested(DownloadTask dt) {
+        return siblingAbort || dt.shouldStop();
+    }
+
+    /** 清空测速窗口。 */
+    private void resetSpeed() {
+        synchronized (progressLock) {
+            speed.reset();
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // 阶段耗时（只进日志）
+    // ------------------------------------------------------------------
+
+    /**
+     * 各阶段耗时累计，单位毫秒。键是阶段名。
+     *
+     * <p>为什么要专门记这个：一条下载分「解析 → 视频流 → 音频流 → 合流」四段，
+     * 各段量级差很多，但用户看到的只有一个总进度条。<b>不知道该优化哪一段
+     * 就去优化，几乎一定优化错地方</b> —— 从接口耗时的直觉看，音频只有视频的
+     * 五分之一大小，很容易以为「音视频并行」能省掉五分之一的时间，但实测
+     * 音频段只占总时长的百分之几，真正吃时间的是视频流那一段。</p>
+     *
+     * <p>一次只跑一个任务（服务本身就是串行的），所以普通字段就够，
+     * 不需要线程安全。</p>
+     */
+    private final java.util.LinkedHashMap<String, long[]> stageStat = new java.util.LinkedHashMap<>();
+
+    /** 当前阶段的起点；0 表示还没有 stageBegin。 */
+    private long stageStart;
+
+    private void stageBegin() {
+        stageStart = System.currentTimeMillis();
+    }
+
+    /**
+     * 结束当前阶段并记账。
+     *
+     * @param bytes 这一段下到的字节数，用来算平均速率；不确定就传 0
+     */
+    private void stageEnd(String name, long bytes) {
+        if (stageStart == 0L) {
+            return;
+        }
+        long ms = Math.max(1L, System.currentTimeMillis() - stageStart);
+        stageRecord(name, ms, bytes);
+        stageStart = System.currentTimeMillis();
+    }
+
+    /**
+     * 直接记一段耗时，不依赖 {@link #stageStart}。
+     *
+     * <p>并行下载那两段必须走这里：它们是**同一个时间窗口**里同时发生的，
+     * 连着调两次 {@link #stageEnd} 的话，第二次会从第一次刚重置的起点开始算，
+     * 得出「音频只花了 0ms」—— 账面上看像是音频完全不需要时间，
+     * 而真相是它和视频重叠了。</p>
+     */
+    private void stageRecord(String name, long ms, long bytes) {
+        long[] acc = stageStat.get(name);
+        if (acc == null) {
+            acc = new long[3];
+            stageStat.put(name, acc);
+        }
+        acc[0] += Math.max(1L, ms);
+        acc[1] += bytes;
+        acc[2] += 1;
+    }
+
+    /** 把这条任务的阶段耗时打进日志，然后清空，供下一条任务用。 */
+    private void stageDump(DownloadTask dt) {
+        if (stageStat.isEmpty()) {
+            return;
+        }
+        long total = 0L;
+        for (long[] a : stageStat.values()) {
+            total += a[0];
+        }
+        StringBuilder sb = new StringBuilder();
+        sb.append("[阶段耗时] ").append(dt.id).append(" 合计 ").append(total).append("ms");
+        for (java.util.Map.Entry<String, long[]> e : stageStat.entrySet()) {
+            long ms = e.getValue()[0];
+            long bytes = e.getValue()[1];
+            long pct = total > 0 ? ms * 100 / total : 0;
+            sb.append("\n    ").append(e.getKey()).append("  ").append(ms).append("ms (")
+              .append(pct).append("%)");
+            if (bytes > 0) {
+                // 平均速率，用来判断这一段是「被网络卡住」还是「本来就小」
+                double mbps = bytes / 1048576.0 / (ms / 1000.0);
+                sb.append("  ").append(bytes / 1048576.0 > 0.05
+                        ? String.format(java.util.Locale.US, "%.2f MB", bytes / 1048576.0)
+                        : bytes / 1024 + " KB")
+                  .append(String.format(java.util.Locale.US, "  %.2f MB/s", mbps));
+            }
+        }
+        Log.i(TAG, sb.toString());
+        stageStat.clear();
+        stageStart = 0L;
+    }
 
     private void reportStreamStart(DownloadTask dt, boolean isVideo, long startAt, long expected) {
         // 这条流的总量以响应头为准（它比解析阶段的估值更准），
@@ -1180,8 +1609,14 @@ public class DownloadService extends Service {
             }
         }
         // 新的一条流开始，把测速窗口清空 —— 上一段的尾巴会把这一段的
-        // 初始速度拉低，看起来像「刚开始很慢」
-        speed.reset();
+        // 初始速度拉低，看起来像「刚开始很慢」。
+        //
+        // 但**并行时不能清**：两条轨共用一个窗口，后开始的那条会把先开始
+        // 那条已经攒起来的采样清掉，界面上速度会毫无理由地掉到 0 再爬回来。
+        // 并行那一侧在起两条线程之前统一清一次（见 runBiliTask）。
+        if (!concurrentTracks) {
+            resetSpeed();
+        }
         reportProgress(dt, true);
     }
 
@@ -1197,23 +1632,35 @@ public class DownloadService extends Service {
     /**
      * 算总进度并（节流地）推给界面。
      *
+     * <p>done 用的是「两条轨加起来」，所以并行下载时进度条依然是单调上涨的，
+     * 不会出现两条轨各自报数、百分比来回跳的情况。</p>
+     *
      * @param force 状态变化时强制推送，不看节流
      */
     private void reportProgress(DownloadTask dt, boolean force) {
         long done = dt.doneBytes();
-        long total = dt.totalBytes();
-        long bps = speed.update(done);
-
         long now = System.currentTimeMillis();
-        if (!force && now - lastPushMs < 350L) {
-            return;
+        long bps;
+        // 算速度、比节流、记时刻：这一串必须整体互斥，否则两条下载轨
+        // 会互相把对方的采样窗口和节流时刻搅乱（详见 progressLock 的注释）
+        synchronized (progressLock) {
+            bps = speed.update(done);
+            if (!force && now - lastPushMs < 350L) {
+                return;
+            }
+            lastPushMs = now;
         }
-        lastPushMs = now;
 
-        dt.setSpeed(bps);
-        TaskStore.get().notifyProgress();
-        updateNotification(dt);
-        emitProgress(dt);
+        // 推界面之前先排队。节流保证了它最多每秒 3 次，但**两条轨会各自
+        // 通过节流判断**，所以这里仍可能两线程同时进来：同时建两条通知、
+        // 同时回调监听器。用一把独立的锁串起来，而不是复用 progressLock ——
+        // 建通知是几十毫秒的活，握着算账那把锁做，另一条下载轨就得干等。
+        synchronized (pushLock) {
+            dt.setSpeed(bps);
+            TaskStore.get().notifyProgress();
+            updateNotification(dt);
+            emitProgress(dt);
+        }
     }
 
     private void reportStage(DownloadTask dt, String stage) {

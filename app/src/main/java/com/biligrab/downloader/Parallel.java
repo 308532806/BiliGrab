@@ -358,13 +358,31 @@ final class Parallel {
         final File journal = jf;
         final Set<Integer> done = j.done;
 
+        // 连接数不必超过「还没下的块数」。
+        //
+        // 实测音频那条流只有 5.16 MB、分成 2 块，却照样开了 4 条连接 ——
+        // 两条连着 4 MB 的块，另外两条领不到活，建连、握手、发请求全是白花的。
+        // 并行下载视频时这个浪费更要紧：两条轨各开 4 条就是 8 条同时在跑，
+        // 而其中一半可能根本没活干。
+        int pending = 0;
+        for (int i = 0; i < chunks; i++) {
+            if (!done.contains(i)) {
+                pending++;
+            }
+        }
+        final int workers = Math.max(1, Math.min(connections, pending));
+        if (workers < connections) {
+            Log.i(TAG, "待下 " + pending + " 块，用不了 " + connections + " 条连接，改为 "
+                    + workers + " 条");
+        }
+
         long already = 0L;
         for (Integer idx : done) {
             already += chunkEnd(idx, total) - chunkStart(idx) + 1L;
         }
 
         Log.i(TAG, "多连接下载：总量 " + total + " 字节，分 " + chunks + " 块（每块 "
-                + (CHUNK / 1024 / 1024) + " MB），并发 " + connections
+                + (CHUNK / 1024 / 1024) + " MB），并发 " + workers
                 + "，已完成 " + done.size() + " 块 / " + Fmt.bytes(already));
 
         // 预分配：几条连接各自 seek 到自己的区间去写，文件必须先有总长，
@@ -385,10 +403,10 @@ final class Parallel {
         final AtomicReference<IOException> fatal = new AtomicReference<>();
         final AtomicReference<Http.AbortedException> aborted = new AtomicReference<>();
 
-        final CountDownLatch latch = new CountDownLatch(connections);
-        ExecutorService pool = Executors.newFixedThreadPool(connections);
+        final CountDownLatch latch = new CountDownLatch(workers);
+        ExecutorService pool = Executors.newFixedThreadPool(workers);
 
-        for (int i = 0; i < connections; i++) {
+        for (int i = 0; i < workers; i++) {
             pool.execute(new Runnable() {
                 @Override
                 public void run() {
@@ -533,6 +551,21 @@ final class Parallel {
             }
             if (code != HttpURLConnection.HTTP_PARTIAL) {
                 throw new IOException("HTTP " + code);
+            }
+
+            // 顺手拿服务端自己报的总量核对一遍。这**不额外花时间** ——
+            // Content-Range 本来就在这个响应里，只是以前没人看。
+            //
+            // 为什么值得看一眼：块的范围是按探测到的总量算出来的，
+            // 要是某台 CDN 边缘节点报的量和探测时那台不一样（换了节点、
+            // 或者视频刚好在处理中），范围就会算错 —— 每一块都"刚好"取满、
+            // 台账照常删掉、文件落盘，只是内容错位或尾巴少一截。**静默错误**，
+            // 用户播到才发现。这里一比就能当场发现，然后退回单连接
+            // （单连接的总量直接取自响应头，不依赖这次探测）。
+            long real = totalFromContentRange(c.getHeaderField("Content-Range"));
+            if (real > 0L && total > 0L && real != total) {
+                throw new Unsupported("服务端报的总量 " + real + " 与预期的 "
+                        + total + " 不一致");
             }
 
             in = c.getInputStream();

@@ -78,6 +78,13 @@ public final class MuxUtil {
         MediaFormat vFmt = null;
         MediaFormat aFmt = null;
         RuntimeException stopFailure = null;
+        // 合成分段计时。在 try 之外声明：结果要在 try/finally 之后才打日志
+        // （那时才拿得到收尾耗时）。
+        long t0 = 0L;
+        long tVideo = 0L;
+        long tAudio = 0L;
+        long vWritten = 0L;
+        long aWritten = 0L;
         try {
             if (usable(video)) {
                 vEx = new MediaExtractor();
@@ -132,14 +139,18 @@ public final class MuxUtil {
 
             muxer.start();
 
+            // 分段计时。合成是整条链路里最慢的一段（实测 3.3-3.9 秒，
+            // 占总时长的一半以上），但它内部又有四件事：建轨、抄视频样、
+            // 抄音频样、收尾。不知道哪一件占大头就去优化，几乎一定改错地方。
+            t0 = System.currentTimeMillis();
+
             MediaCodec.BufferInfo info = new MediaCodec.BufferInfo();
-            long vWritten = 0;
-            long aWritten = 0;
             if (vFmt != null) {
                 // 视频不强制单调：H.264 带 B 帧时呈现时间本来就可能乱序，
                 // MPEG4Writer 支持这一点（它报错的只有音频轨）。
                 vWritten = copyTrack(vEx, vFmt, muxer, vOut, info, abort, false);
             }
+            tVideo = System.currentTimeMillis();
             if (aFmt != null) {
                 // 音频要丢掉「贴在前一帧身上」的重复帧，见 copyTrack 的注释。
                 //
@@ -150,6 +161,7 @@ public final class MuxUtil {
                 boolean fixedLength = isAac(aFmt);
                 aWritten = copyTrack(aEx, aFmt, muxer, aOut, info, abort, fixedLength);
             }
+            tAudio = System.currentTimeMillis();
 
             // stop() 是这套 API 里最不可靠的一步，而且**它报错不代表失败**。
             //
@@ -204,6 +216,15 @@ public final class MuxUtil {
         if (stopFailure != null) {
             Log.w(TAG, "muxer.stop() 报错，但产物结构完整、可正常播放，按成功处理："
                     + out.getName(), stopFailure);
+        }
+
+        // 内部耗时只在真正跑过合成时有意义（上面几处提前 return 的路径
+        // 不会走到这里）
+        if (tAudio > 0L) {
+            long tStop = System.currentTimeMillis();
+            Log.i(TAG, "[合成明细] 视频 " + (tVideo - t0) + "ms（" + vWritten
+                    + " 样本） 音频 " + (tAudio - tVideo) + "ms（" + aWritten
+                    + " 样本） 收尾 " + (tStop - tAudio) + "ms");
         }
     }
 

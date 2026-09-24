@@ -185,6 +185,9 @@
     <string name="stage_resolve">解析播放地址</string>
     <string name="stage_video">下载视频流 %1$s · %2$s</string>
     <string name="stage_audio">下载音频流</string>
+    <!-- 音视频并行下载时共用的阶段文案。此时进度条涨的是两条轨的总和，
+         文案必须让用户知道「同时在跑两条」，否则会以为进度条跳错了。 -->
+    <string name="stage_both">同时下载视频与音频流</string>
     <string name="stage_mux">合成 MP4</string>
     <string name="stage_save_library">写入媒体库</string>
     <string name="stage_done">下载完成</string>
