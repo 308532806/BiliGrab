@@ -36,6 +36,44 @@ public final class NeumorphicSurface {
     }
 
     /**
+     * 造一个不挂到视图上的独立 drawable，并套好当前皮肤的引擎参数。
+     *
+     * <p>给 {@link NeumorphicControls} 用 —— 开关的轨道、滑块、SeekBar 的槽
+     * 都不是单个视图的背景，而是塞进 StateListDrawable 或拆成好几段画的，
+     * 所以走不了 {@link #apply}。</p>
+     *
+     * <p><b>存在的意义是别再漏配玻璃参数。</b>这些控件原来各自手搓
+     * {@code new NeumorphicDrawable(...)}，只设了 {@code colors()}，
+     * 完全没调 {@code glass()} 与 {@code glassColors()} —— 于是玻璃态下
+     * 开关轨道、滑块、进度槽全都按新拟态的实心色去画，与界面上其他玻璃面
+     * 不是一个质感。这里把引擎相关的四个设置收在一处，
+     * 以后加新的独立 drawable 直接调它就不会漏。</p>
+     *
+     * @param intrinsicW 未指定尺寸时的固有宽度（dp），0 表示不设
+     * @param intrinsicH 未指定尺寸时的固有高度（dp），0 表示不设
+     */
+    public static NeumorphicDrawable create(Context ctx, int style, float radiusDp,
+                                            float elevationDp, int intrinsicW, int intrinsicH) {
+        NeumorphicDrawable d = new NeumorphicDrawable(ctx)
+                .style(style)
+                .radius(radiusDp)
+                .elevation(elevationDp)
+                .glass(HyperTheme.isGlass(ctx))
+                .noInset();
+        if (intrinsicW > 0 && intrinsicH > 0) {
+            d.intrinsic(intrinsicW, intrinsicH);
+        }
+        d.colors(HyperTheme.neumBase(ctx), HyperTheme.neumLight(ctx), HyperTheme.neumDark(ctx));
+        // 凸面白雾、凹面压暗 —— 同 NeumorphicDrawable.drawGlass 里的说明，
+        // 两面用同一个叠加色的话，凹陷在玻璃态下完全看不出来。
+        d.glassColors(style == NeumorphicDrawable.CONCAVE
+                        ? HyperTheme.glassTintConcave(ctx)
+                        : HyperTheme.glassTintConvex(ctx),
+                HyperTheme.glassBorderHi(ctx), HyperTheme.glassBorderLo(ctx));
+        return d;
+    }
+
+    /**
      * 应用浮雕。返回 drawable 以便交互层驱动按下动画，
      * 或调用 {@link #refreshTheme} 在换肤后重新取色。
      */

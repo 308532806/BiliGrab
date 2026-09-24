@@ -202,18 +202,34 @@
         <item name="android:minHeight">@dimen/button_height_compact</item>
     </style>
 
-    <!-- 主按钮的文字用主色（运行时由 MainActivity 再确认一次，覆盖默认值） -->
+    <!--
+      主操作。每屏只应该有一个。
+
+      这里的 textColor 故意留空 —— 由 NeuButton 按 neuRole 在运行期解析。
+      写死成 @color/scheme_0_primary（樱花粉快照）会让换主题色后主按钮
+      仍是粉字，而底色已经变了。详见 NeuButton 的类注释。
+
+      浮雕用满高度：主操作是全界面最强的视觉权重。
+    -->
     <style name="Widget.Button.Filled">
-        <item name="android:textColor">@color/scheme_0_primary</item>
+        <item name="neuRole">filled</item>
     </style>
 
-    <!-- 次要按钮：靠浮雕的强弱区分，不靠描边 -->
-    <style name="Widget.Button.Outlined">
-        <item name="android:textColor">@color/hyper_text_primary</item>
-    </style>
+    <!--
+      次级操作。也是主色文字（由 neuRole 解析），但浮雕降到一半 ——
+      权重靠浮雕强弱区分，不靠文字色深浅。
 
+      与 Outlined 的区别就在这里：原来两者的 textColor 一模一样，
+      渲染出来完全看不出差别，等于同一个角色有两个名字。
+    -->
     <style name="Widget.Button.Tonal">
-        <item name="android:textColor">@color/hyper_text_primary</item>
+        <item name="neuRole">tonal</item>
+        <item name="neuElevation">@dimen/elev_chip</item>
+    </style>
+
+    <!-- 中性操作：取消、删除、重置。正文色，与主题色无关。 -->
+    <style name="Widget.Button.Outlined">
+        <item name="neuRole">outlined</item>
     </style>
 
     <!-- 色调按钮的紧凑档：色调色 + 紧凑高度，供内联使用 -->

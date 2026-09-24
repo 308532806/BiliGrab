@@ -27,6 +27,13 @@
         <item name="android:selectableItemBackground">@null</item>
         <item name="android:selectableItemBackgroundBorderless">@null</item>
 
+        <!-- 滚动条 & 边缘光晕，同浅色版说明 -->
+        <item name="android:scrollbarThumbVertical">@drawable/scrollbar_thumb</item>
+        <item name="android:scrollbarThumbHorizontal">@drawable/scrollbar_thumb</item>
+        <item name="android:scrollbarSize">@dimen/scrollbar_size</item>
+        <item name="android:colorEdgeEffect">@color/hyper_scroll_edge</item>
+        <item name="android:listDivider">@color/hyper_divider</item>
+
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
         <!-- 深色背景 → 系统栏图标必须转浅 -->

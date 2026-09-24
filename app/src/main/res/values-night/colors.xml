@@ -22,7 +22,7 @@
     <!-- ═══ 文字 ═══ -->
     <color name="hyper_text_primary">#F5F5F5</color>
     <color name="hyper_text_secondary">#B3B3B3</color>
-    <color name="hyper_text_tertiary">#808080</color>
+    <color name="hyper_text_tertiary">#8E8E93</color>
 
     <!-- ═══ 语义色 ═══ -->
     <color name="hyper_success">#30D158</color>
@@ -32,6 +32,9 @@
     <!-- ═══ 描边与分隔 ═══ -->
     <color name="hyper_border">#2D2D2D</color>
     <color name="hyper_divider">#262626</color>
+
+    <!-- 深色下用浅色光晕：深色背景上叠黑是看不见的 -->
+    <color name="hyper_scroll_edge">#40FFFFFF</color>
 
     <!-- ═══ 附属面 ═══ -->
     <color name="hyper_icon_bg">#2A2A2A</color>

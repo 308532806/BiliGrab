@@ -40,6 +40,16 @@
         <item name="android:selectableItemBackground">@null</item>
         <item name="android:selectableItemBackgroundBorderless">@null</item>
 
+        <!-- 滚动条 & 列表分隔线。
+             这两样是"没画过但会露出来"的系统表面：滚动条用的是系统灰，
+             跟整套色板无关；Android 12 起列表滚到尽头还会浮出一道系统色的
+             拉伸光晕。都按色板重新指一遍，不然换个主题色就不搭了。 -->
+        <item name="android:scrollbarThumbVertical">@drawable/scrollbar_thumb</item>
+        <item name="android:scrollbarThumbHorizontal">@drawable/scrollbar_thumb</item>
+        <item name="android:scrollbarSize">@dimen/scrollbar_size</item>
+        <item name="android:colorEdgeEffect">@color/hyper_scroll_edge</item>
+        <item name="android:listDivider">@color/hyper_divider</item>
+
         <!-- Edge-to-edge -->
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>

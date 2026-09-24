@@ -57,22 +57,17 @@ public final class NeumorphicControls {
         // 不需要注册 OnCheckedChangeListener（那个回调是调用方的，不能抢）。
         int primary = HyperTheme.primary(ctx);
 
-        NeumorphicDrawable trackOff = new NeumorphicDrawable(ctx)
-                .style(NeumorphicDrawable.CONCAVE)
-                .radius(14)
-                .elevation(1.5f)
-                .intrinsic(52, 28)
-                .noInset();
+        NeumorphicDrawable trackOff = NeumorphicSurface.create(ctx, NeumorphicDrawable.CONCAVE,
+                14, 1.5f, 52, 28);
         trackOff.colors(HyperTheme.divider(ctx), HyperTheme.neumLight(ctx),
                 HyperTheme.neumDark(ctx));
 
-        NeumorphicDrawable trackOn = new NeumorphicDrawable(ctx)
-                .style(NeumorphicDrawable.CONCAVE)
-                .radius(14)
-                .elevation(1.5f)
-                .intrinsic(52, 28)
-                .noInset();
-        trackOn.colors(primary, HyperTheme.neumLight(ctx), HyperTheme.neumDark(ctx));
+        NeumorphicDrawable trackOn = NeumorphicSurface.create(ctx, NeumorphicDrawable.CONCAVE,
+                14, 1.5f, 52, 28);
+        // 轨道开着时整条就是主色，和设置面板的色卡是同一类面：
+        // 必须走 accent() 而不是 colors()，否则玻璃态下开着的轨道会退回成白雾，
+        // 与关着的状态只差一点点色值，用户看不出开关到底开没开。
+        trackOn.accent(primary, HyperTheme.neumLight(ctx), HyperTheme.neumDark(ctx));
 
         android.graphics.drawable.StateListDrawable track = new android.graphics.drawable.StateListDrawable();
         track.addState(new int[]{android.R.attr.state_checked}, trackOn);
@@ -81,12 +76,8 @@ public final class NeumorphicControls {
         // 滑块：凸起圆盘，直径 22dp。
         // 取 22 而不是 20：Switch 把滑块从轨道左缘推到右缘，
         // 直径越小越容易在两端"戳出"轨道 14dp 的圆头之外。
-        NeumorphicDrawable thumb = new NeumorphicDrawable(ctx)
-                .style(NeumorphicDrawable.CONVEX)
-                .radius(999)
-                .elevation(2.5f)
-                .intrinsic(22, 22)
-                .noInset();
+        NeumorphicDrawable thumb = NeumorphicSurface.create(ctx, NeumorphicDrawable.CONVEX,
+                999, 2.5f, 22, 22);
         // 滑块用卡片色而不是页面色：轨道开着时是主色，滑块压在上面必须有区别，
         // 用背景色的话在白底卡片上会和轨道糊成一片。
         thumb.colors(HyperTheme.card(ctx), HyperTheme.neumLight(ctx), HyperTheme.neumDark(ctx));
@@ -141,22 +132,21 @@ public final class NeumorphicControls {
         int sbH = Math.round(sb.getResources().getDimension(R.dimen.touch_min));
 
         // 槽：凹
-        NeumorphicDrawable track = new NeumorphicDrawable(ctx)
-                .style(NeumorphicDrawable.CONCAVE)
-                .radius(7)
-                .elevation(2)
-                .noInset();
+        NeumorphicDrawable track = NeumorphicSurface.create(ctx, NeumorphicDrawable.CONCAVE,
+                7, 2, 0, 0);
         track.colors(HyperTheme.neumBase(ctx), HyperTheme.neumLight(ctx), HyperTheme.neumDark(ctx));
 
         // 已播放段：凸起的实心条，主色 80% —— 规范里的 activeColor.copy(alpha = .8f)
+        //
+        // 这里保留 alpha 0.8 而不是改用 accent()：进度条是细长条，
+        // 铺满实心主色会在深色模式下变成一条发光棒，压过它上面的封面。
+        // 但玻璃态下 colors() 不生效，得走 glassAccent() 让主色真的落下去
+        // —— 否则玻璃态下进度条整条是白的，用户看不出来播到哪了。
         int p = HyperTheme.primary(ctx);
-        NeumorphicDrawable played = new NeumorphicDrawable(ctx)
-                .style(NeumorphicDrawable.CONVEX)
-                .radius(7)
-                .elevation(2)
-                .noInset();
-        played.colors(Color.argb(204, Color.red(p), Color.green(p), Color.blue(p)),
-                HyperTheme.neumLight(ctx), HyperTheme.neumDark(ctx));
+        int playedColor = Color.argb(204, Color.red(p), Color.green(p), Color.blue(p));
+        NeumorphicDrawable played = NeumorphicSurface.create(ctx, NeumorphicDrawable.CONVEX,
+                7, 2, 0, 0);
+        played.accent(playedColor, HyperTheme.neumLight(ctx), HyperTheme.neumDark(ctx));
 
         ClipDrawable clip = new ClipDrawable(played, Gravity.START, ClipDrawable.HORIZONTAL);
 
@@ -186,14 +176,13 @@ public final class NeumorphicControls {
         int size = Math.round(32 * density);
         int dot = Math.round(8 * density);
 
-        NeumorphicDrawable disc = new NeumorphicDrawable(ctx)
-                .style(NeumorphicDrawable.CONVEX)
-                .radius(999)
-                .elevation(2)
-                .noInset();
+        NeumorphicDrawable disc = NeumorphicSurface.create(ctx, NeumorphicDrawable.CONVEX,
+                999, 2, 0, 0);
         disc.colors(HyperTheme.neumBase(ctx), HyperTheme.neumLight(ctx), HyperTheme.neumDark(ctx));
         disc.setBounds(0, 0, size, size);
 
+        // 中心圆点用 GradientDrawable 而不是 NeumorphicDrawable：
+        // 它是一块纯色，没有浮雕，所以不存在玻璃态下 colors() 失效的问题。
         GradientDrawable center = new GradientDrawable();
         center.setShape(GradientDrawable.OVAL);
         center.setColor(HyperTheme.primary(ctx));

@@ -41,10 +41,10 @@
     -->
     <color name="hyper_text_primary">#111111</color>
     <!-- 4.75:1（原先 #6F7280 只有 4.34:1，差 0.16 没到正文门槛） -->
-    <color name="hyper_text_secondary">#696C78</color>
+    <color name="hyper_text_secondary">#505360</color>
     <!-- 3.16:1（原先 #B5B5C0 只有 1.85:1，连提示级的 3:1 都不到；
          深色主题的同项是 4.36:1，浅深原来是不对称的） -->
-    <color name="hyper_text_tertiary">#888899</color>
+    <color name="hyper_text_tertiary">#6A6D7B</color>
 
     <!-- ═══ 语义色 ═══ -->
     <color name="hyper_success">#32BB78</color>
@@ -54,6 +54,10 @@
     <!-- ═══ 描边与分隔 ═══ -->
     <color name="hyper_border">#E5E5E5</color>
     <color name="hyper_divider">#F0F0F0</color>
+
+    <!-- 列表滚到尽头时系统浮出的拉伸光晕。用主色的中性版而不是系统默认的
+         灰色，换主题色时不会突兀。 -->
+    <color name="hyper_scroll_edge">#40000000</color>
 
     <!-- ═══ 附属面 ═══ -->
     <color name="hyper_icon_bg">#F2F4F8</color>

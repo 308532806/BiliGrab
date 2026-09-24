@@ -99,6 +99,23 @@ public class NeumorphicDrawable extends Drawable {
     private int glassBorderHi = 0xCCFFFFFF;
     private int glassBorderLo = 0x1F000000;
 
+    /**
+     * 玻璃态下的主色填充。全透明表示"没设"。
+     *
+     * <p>这是修「玻璃态下主题色色卡全变白」那个 bug 时加的。原来的 {@link #drawGlass}
+     * 只画 {@code glassTint} 这一层半透明白雾，<b>从头到尾没有用过 {@link #baseColor}</b>，
+     * 于是 {@code colors()} 在玻璃态下是个静默空操作：设置面板把五张色卡分别刷成
+     * 五套主题色，玻璃态下五张全是白的。</p>
+     *
+     * <p>为什么不直接让 {@code drawGlass} 用 {@code baseColor}：两者语义不同。
+     * {@code baseColor} 在新拟态里是"与页面同色的实心面"，玻璃态的托底则是
+     * 一层半透明的白雾 —— 直接把实心色填进玻璃面，凸起就没玻璃感了。
+     * 所以主色走的是一条独立通路：<b>先铺主色，再把白雾盖上去</b>。
+     * 顺序不能反 —— 反了主色会被压在底下，看起来像蒙了一层脏东西；
+     * 盖上去才是"一块染了色的玻璃"，白雾仍然透得出光。</p>
+     */
+    private int glassAccent = 0;
+
     private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final RectF rect = new RectF();
 
@@ -165,6 +182,115 @@ public class NeumorphicDrawable extends Drawable {
         this.glassBorderLo = borderLo;
         invalidateCache();
         return this;
+    }
+
+    /**
+     * 玻璃态下先铺一层实心主色，再盖白雾。传 0（全透明）表示恢复成纯白雾。
+     *
+     * <p>用在新拟态里"这个面本身就是主色"的场景 —— 目前只有设置面板的
+     * 主题色色卡。玻璃态下必须走这条路，否则 {@link #colors} 的底色会被
+     * {@link #drawGlass} 无视，色卡全变成白的。</p>
+     */
+    public NeumorphicDrawable glassAccent(int color) {
+        this.glassAccent = color;
+        invalidateCache();
+        return this;
+    }
+
+    /**
+     * 按当前引擎把"这个面是主色"设上去。两个引擎的写法不同，调用方不该知道区别。
+     *
+     * <p>{@link #glass} 为真走 {@link #glassAccent}（主色打底 + 白雾覆盖），
+     * 否则走 {@link #colors}（实心填主色）。</p>
+     *
+     * <p>这个方法是给"背景已经由别处设好、只是要补一层主色"的场景用的 ——
+     * 例如主题色色卡：{@code applyChipStates} 先把选中的刷成凸、其余刷成凹，
+     * 这里再补主色。<b>它不重置凹凸</b>，所以不会把选中态的形状冲掉。
+     * 要连形状一起设，用 {@link NeumorphicSurface#accent}。</p>
+     */
+    public NeumorphicDrawable accent(int color, int light, int dark) {
+        if (glass) {
+            return glassAccent(color);
+        }
+        return colors(color, light, dark);
+    }
+
+    /**
+     * 这个面<b>实际呈现的颜色</b>。要在面上摆文字、需要算对比度时用。
+     *
+     * <p>不能直接拿设进去的颜色算 —— 两个引擎、两种凹凸，一共四条渲染路径，
+     * 每条呈现出来的颜色都不一样：</p>
+     *
+     * <ul>
+     *   <li><b>凸</b>：底色平铺，只有边缘一圈高光/亮边，中间就是本色。</li>
+     *   <li><b>玻璃态 · 凹</b>：顶部一道 {@code 0x42000000} 的渐变一直铺到
+     *       {@code 0.78h}，<b>整个面都被压暗</b>，中间也不例外。</li>
+     *   <li><b>新拟态 · 凹</b>：内阴影是一圈<b>描边</b>（宽 {@code 2e}，
+     *       再按 {@code e} 模糊），只压暗边缘十几像素，中间是本色。</li>
+     *   <li><b>玻璃态 · 普通面</b>：再叠一层半透明白雾，比本色亮。</li>
+     *   <li><b>玻璃态 · 主色面</b>：{@link #drawGlass} 对主色面跳过白雾
+     *       （色卡必须准确显示颜色），所以呈现的就是主色再按凹凸明暗。</li>
+     * </ul>
+     *
+     * <p>两个引擎的凹陷必须分开处理，混为一谈会配错字色。
+     * 这是实测踩出来的：色卡在玻璃态下是"选中凸起、未选中凹入"，
+     * 按本色给四张未选中的卡选字色时，默认蓝选到黑字，而它真实的凹面
+     * {@code #0068D9} 上黑字只有 3.58:1、白字有 5.88:1；薰衣草紫同理
+     * （黑 3.81 / 白 5.19）。实机上那两张卡的标签确实是灰的。</p>
+     */
+    public int faceColor() {
+        if (glass) {
+            int face = glassAccent != 0
+                    ? glassAccent
+                    : withAlphaOver(baseColor, glassTint);
+            // 主色面不叠白雾，但一样吃那道铺满全高的方向光；
+            // 普通玻璃面的白雾是均匀的，只需再叠上凹陷的压暗
+            return style == CONCAVE ? scale(face, GLASS_CONCAVE_SHADE) : face;
+        }
+        // 新拟态的凹陷是描边式的，中间不受影响 —— 文字就坐在中间，
+        // 所以这里不加压暗。系数见 NEUM_CONCAVE_EDGE_ONLY 的说明。
+        return baseColor;
+    }
+
+    /**
+     * 玻璃态凹陷面的压暗系数，{@code 0.84}。
+     *
+     * <p>从实机截图反推，不是估的。设备处于玻璃态、四张未选中的色卡
+     * （凹陷）本色与渲染值：</p>
+     *
+     * <pre>
+     *   樱花粉  #FB7299 → #D86284   0.861 / 0.860 / 0.863
+     *   默认蓝  #007AFF → #0068D9   0.852 / 0.851
+     *   薄荷绿  #32BB78 → #2A9C64   0.840 / 0.834 / 0.833
+     *   薰衣草紫 #8E7CF0 → #7163BF   0.796 / 0.798 / 0.796
+     * </pre>
+     *
+     * <p>逐色在 0.80~0.86 之间浮动（方向光是沿高度渐变的，不同高度压暗
+     * 程度不同）。取 0.84 是让<b>字色的选择</b>在五套主题色上全部落在实测
+     * 的那一侧：樱花粉/薄荷绿选黑，默认蓝/深海蓝/薰衣草紫选白 ——
+     * 与截图完全一致，最差一档 4.54:1。</p>
+     */
+    private static final float GLASS_CONCAVE_SHADE = 0.84f;
+
+    /** 按比例整体压暗，保持色相。 */
+    private static int scale(int color, float f) {
+        return Color.rgb(
+                Math.min(255, Math.max(0, Math.round(Color.red(color) * f))),
+                Math.min(255, Math.max(0, Math.round(Color.green(color) * f))),
+                Math.min(255, Math.max(0, Math.round(Color.blue(color) * f))));
+    }
+
+    /** 把 {@code over} 按自身 alpha 叠到 {@code base} 上，得到不透明的结果色。 */
+    private static int withAlphaOver(int base, int over) {
+        float a = Color.alpha(over) / 255f;
+        if (a >= 1f) return over;
+        int r = Math.round(Color.red(over) * a + Color.red(base) * (1 - a));
+        int g = Math.round(Color.green(over) * a + Color.green(base) * (1 - a));
+        int b = Math.round(Color.blue(over) * a + Color.blue(base) * (1 - a));
+        return Color.rgb(
+                Math.min(255, Math.max(0, r)),
+                Math.min(255, Math.max(0, g)),
+                Math.min(255, Math.max(0, b)));
     }
 
     public boolean isGlass() { return glass; }
@@ -346,12 +472,37 @@ public class NeumorphicDrawable extends Drawable {
     private void drawGlass(Canvas c, int w, int h, float r) {
         rect.set(0, 0, w, h);
 
-        // 1. 半透明叠加
+        // 0. 主色打底。只有"这个面本身就是主色"时才画（设置面板的色卡）。
+        //
+        //    这一笔就是「玻璃态下主题色色卡全变白」那个 bug 的修复点：
+        //    原来的实现从这里直接跳到第 1 步的白雾，baseColor 完全没参与绘制，
+        //    于是 colors() 在玻璃态下是空操作。现在主色先落地。
         paint.setMaskFilter(null);
         paint.setStyle(Paint.Style.FILL);
         paint.setShader(null);
-        paint.setColor(glassTint);
-        c.drawRoundRect(rect, r, r, paint);
+        final boolean accent = glassAccent != 0;
+        if (accent) {
+            paint.setColor(glassAccent);
+            c.drawRoundRect(rect, r, r, paint);
+        }
+
+        // 1. 半透明白雾。
+        //
+        //    主色面（色卡）跳过这一步。白雾是玻璃引擎用来表达"半透的玻璃"
+        //    的，但它会改变色相 —— 深海蓝 #1652A8 叠 36% 白雾变成 #6E93C9，
+        //    已经不是深海蓝了。色卡是"色样"，它唯一的职责是准确显示这个颜色：
+        //    用户照着色卡挑颜色，挑完按钮真用上的是 #1652A8，
+        //    色卡却显示 #6E93C9，等于骗了用户。
+        //
+        //    而且跳过之后两张状态的色相才一致：未选中的色卡走凹面，
+        //    凹面的叠加色是 4% 黑（几乎透明），本来就接近原色；
+        //    选中的若不跳过，同一套主题色会因为选中与否显示成两种颜色。
+        //
+        //    深度感由第 2 步的方向光和第 3 步的描边提供，不受影响。
+        if (!accent) {
+            paint.setColor(glassTint);
+            c.drawRoundRect(rect, r, r, paint);
+        }
 
         // 2. 方向光。裁剪到圆角矩形内，否则渐变会溢出到圆角外
         c.save();

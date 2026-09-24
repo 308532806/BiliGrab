@@ -10,6 +10,7 @@ import android.content.pm.PackageManager;
 import android.content.res.Configuration;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.drawable.GradientDrawable;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
@@ -38,6 +39,7 @@ import android.widget.TextView;
 import com.biligrab.downloader.ui.GlassMeshDrawable;
 import com.biligrab.downloader.ui.HyperTheme;
 import com.biligrab.downloader.ui.HyperosClick;
+import com.biligrab.downloader.ui.NeumAttr;
 import com.biligrab.downloader.ui.NeumorphicControls;
 import com.biligrab.downloader.ui.NeumorphicDrawable;
 import com.biligrab.downloader.ui.NeumorphicSurface;
@@ -415,6 +417,11 @@ public class MainActivity extends Activity
         applyAccent(findViewById(R.id.btnRetry), p);
         applyAccent(findViewById(R.id.btnQualityHintAction), p);
 
+        // 剩下所有吃主色的控件走声明式：布局里标 android:tag="neu:accent"，
+        // 这里一次遍历刷掉。见 NeumAttr.applyAccentTags 关于"为什么逐个覆盖
+        // 一定会漏"的说明 —— 实测漏了六个，其中包括预览区的转圈和暂停键。
+        NeumAttr.applyAccentTags(findViewById(R.id.root));
+
         // 输入框的光标与选中高亮。不改的话换主题色后光标还是默认蓝，
         // 在粉色主题下非常跳。
         applyCaret(inputUrl, p);
@@ -425,15 +432,32 @@ public class MainActivity extends Activity
      *
      * <p>底色必须留透明度：全不透明的主色底配主色文字会糊成一片，
      * 药丸是"标签"而不是"按钮"，不需要那么强的对比。</p>
+     *
+     * <p>文字色不能直接用主色：底色是主色叠在页面上的混合结果，
+     * 对它的对比度要按那个混合色算。这里用 {@link HyperTheme#readableOn}
+     * 现算 —— 浅色页面上樱花粉底 + 樱花粉字原本只有 2.39:1。</p>
      */
     private void applyPill(TextView tv, int primary) {
         if (tv == null) return;
-        android.graphics.drawable.GradientDrawable g = new android.graphics.drawable.GradientDrawable();
-        g.setShape(android.graphics.drawable.GradientDrawable.RECTANGLE);
+        GradientDrawable g = new GradientDrawable();
+        g.setShape(GradientDrawable.RECTANGLE);
         g.setCornerRadius(999);
+        // 15% 的主色盖在页面底色上，就是这个药丸实际呈现的底
+        int face = blendOver(HyperTheme.pageFace(this), primary, 0.15f);
         g.setColor((primary & 0x00FFFFFF) | 0x26000000);
         tv.setBackground(g);
-        tv.setTextColor(primary);
+        tv.setTextColor(HyperTheme.readableOn(primary, face));
+    }
+
+    /** {@code over} 按 alpha 叠在 {@code base} 上得到的不透明结果色。 */
+    private static int blendOver(int base, int over, float alpha) {
+        return android.graphics.Color.rgb(
+                Math.round(android.graphics.Color.red(over) * alpha
+                        + android.graphics.Color.red(base) * (1 - alpha)),
+                Math.round(android.graphics.Color.green(over) * alpha
+                        + android.graphics.Color.green(base) * (1 - alpha)),
+                Math.round(android.graphics.Color.blue(over) * alpha
+                        + android.graphics.Color.blue(base) * (1 - alpha)));
     }
 
     private void applyAccent(View v, int color) {
@@ -443,16 +467,32 @@ public class MainActivity extends Activity
     }
 
     /**
-     * 输入框的选中高亮。
+     * 输入框的光标与选中高亮。
      *
-     * <p>光标颜色本身改不了（平台只提供 {@code android:textCursorDrawable}，
-     * 要在 XML 里指定一个 tint 好的 drawable，而主题色是运行时的），
-     * 所以只处理选中高亮这一半 —— 它面积大，是换色后最明显的残留。</p>
+     * <p>两块都要按主题色走。它们是"没自己画、但换主题色后会露馅"的系统表面：
+     * 光标默认吃 {@code colorAccent}，而那是编译期写死的樱花粉快照；
+     * 选中高亮默认是一层更浅的系统蓝。换了主题色，这两处就是最明显的残留。</p>
+     *
+     * <p>光标以前改不了 —— 平台只提供 {@code android:textCursorDrawable}，
+     * 要在 XML 里指定一个 tint 好的 drawable，而主题色是运行期的。
+     * 但 {@code setTextCursorDrawable} 从 API 29 起可以直接给 Drawable，
+     * 就不必再受这个限制了（minSdk 26，低版本跳过即可）。</p>
      */
     private void applyCaret(EditText et, int color) {
         if (et == null) return;
         // 40% 透明度：高亮是背景，全不透明会盖住底下选中的字
         et.setHighlightColor((color & 0x00FFFFFF) | 0x66000000);
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            // 1.5dp 宽的光标条，跟正文里的一根竖笔差不多粗细
+            float w = 1.5f * getResources().getDisplayMetrics().density;
+            GradientDrawable caret = new GradientDrawable();
+            caret.setShape(GradientDrawable.RECTANGLE);
+            caret.setColor(color);
+            caret.setSize(Math.max(1, Math.round(w)), Math.round(24 * getResources()
+                    .getDisplayMetrics().density));
+            et.setTextCursorDrawable(caret);
+        }
     }
 
     private void bindViews() {
@@ -1162,6 +1202,11 @@ public class MainActivity extends Activity
 
         tvLabel.setText(label);
         tvMeta.setText(meta);
+        // 百分比是落在页面底色上的文字，走 primaryText（4.5:1）。
+        // 它在 XML 里写的是 @color/scheme_0_primary 兜底，
+        // 而这里不刷的话会永远停在樱花粉上 —— 换成深海蓝之后
+        // 这一行就是粉字，和旁边蓝色的进度条不是一套色。
+        percent.setTextColor(HyperTheme.primaryText(this));
         // 音频行用音符图标，和视频行区分开 —— 不用读文字也能一眼分辨
         icon.setImageResource(iconRes);
 
@@ -1213,22 +1258,26 @@ public class MainActivity extends Activity
      * <p>选中 = 凸起 3dp + 主色文字；未选中 = 凹入 1.5dp + 次要色文字。
      * 凹凸同时变化是有意的：只改颜色的话，在"卡片与页面同色"的平面里
      * 选中项几乎看不出来 —— 新拟态表达状态靠形变，不靠色差。</p>
+     *
+     * <p>两个引擎都走同一套凹凸：玻璃态的 {@code drawGlass} 同样画方向光
+     * （凸面顶部亮边、凹面顶部暗影 + 底部亮边），所以形变在玻璃态下照样成立。
+     * 这里曾经对玻璃态特判、把整行都刷成凸面 —— 那等于把唯一的状态通道关掉，
+     * 玻璃态下五张主题色卡看起来一模一样，分不出选的是哪一张。</p>
      */
     private void applyChipStates(FlowLayout row, int selectedIndex) {
-        boolean glass = HyperTheme.isGlass(this);
         for (int i = 0; i < row.getChildCount(); i++) {
             View v = row.getChildAt(i);
             if (!(v instanceof TextView)) continue;
             TextView chip = (TextView) v;
 
             boolean on = (i == selectedIndex);
-            chip.setTextColor(on ? HyperTheme.primary(this) : HyperTheme.textSecondary(this));
+            // primaryText 而不是 primary：选中的芯片文字直接落在页面底色上，
+            // 五套主题色里只有深海蓝天生够 4.5:1，其余四套都要推深才合格。
+            chip.setTextColor(on ? HyperTheme.primaryText(this) : HyperTheme.textSecondary(this));
             chip.setTypeface(null, on ? android.graphics.Typeface.BOLD
                                       : android.graphics.Typeface.NORMAL);
 
-            if (glass) {
-                NeumorphicSurface.convex(chip, 14, 3).glass(true);
-            } else if (on) {
+            if (on) {
                 NeumorphicSurface.convex(chip, 14, 3);
             } else {
                 NeumorphicSurface.concave(chip, 14, 1.5f);
@@ -1239,6 +1288,56 @@ public class MainActivity extends Activity
     /** 芯片被选中时的回调。 */
     public interface ChipPick {
         void onPick(int index);
+    }
+
+    /**
+     * 把主题色那一行刷成色卡：每张的底色就是它代表的那套主题色。
+     *
+     * <p>三个引擎相关的坑都在这里收口：</p>
+     *
+     * <ol>
+     *   <li><b>底色必须走 {@code NeumorphicDrawable.accent()}</b>。玻璃态下
+     *       {@code colors()} 设的底根本不参与绘制（玻璃面画的是半透明白雾），
+     *       五张色卡会全变成白的 —— 这就是「玻璃态 + 深海蓝时按钮变白」那个 bug。</li>
+     *   <li><b>字色要拿实际呈现的面去算</b>，不是原色。玻璃态下真正的面是
+     *       "主色 + 36% 白雾"的混合（深海蓝 {@code #1652A8} → {@code #6A90C7}），
+     *       拿原色算会得出"配白字"，落在混合色上只有 3.4:1。</li>
+     *   <li><b>不碰凹凸</b>。颜色的形状由 {@link #applyChipStates} 决定
+     *       （选中凸起、未选中凹入），这里只补色。要是这里也设一遍形状，
+     *       色卡就会比同一行其它芯片多一种形态，看着像两个不同的控件。</li>
+     * </ol>
+     *
+     * <p>之所以要能被重复调用：{@code applyChipStates} 每次点芯片都会重设背景，
+     * 把主色一起冲掉，所以点击回调里还得再补一次。</p>
+     */
+    private void paintSwatches(FlowLayout row) {
+        for (int i = 0; i < row.getChildCount(); i++) {
+            View v = row.getChildAt(i);
+            if (!(v instanceof TextView)) continue;
+            TextView chip = (TextView) v;
+            int c = HyperTheme.schemePrimary(this, i);
+
+            android.graphics.drawable.Drawable bg = chip.getBackground();
+            if (!(bg instanceof NeumorphicDrawable)) continue;
+            NeumorphicDrawable nd = (NeumorphicDrawable) bg;
+            nd.accent(c, HyperTheme.neumLight(this), HyperTheme.neumDark(this));
+            nd.invalidateSelf();
+
+            chip.setTextColor(HyperTheme.contrastOn(this, nd.faceColor()));
+        }
+    }
+
+    /**
+     * 芯片行的后置修饰。在 {@link #applyChipStates} 之后跑，
+     * 用来叠一层 applyChipStates 不认识的外观 —— 目前是主题色色卡的主色填充。
+     *
+     * <p>为什么需要它：applyChipStates 会重设整行芯片的背景（换凹凸），
+     * 那会把色卡上的主色一起冲掉。所以每次重绘形态之后都得再铺一次主色，
+     * 否则"点一下已经选中的色卡"就会把那张卡变回没有颜色的白芯片
+     * —— 因为点已选中项不会触发 recreate()，界面不会重建。</p>
+     */
+    public interface RowDecorator {
+        void decorate(FlowLayout row);
     }
 
     /**
@@ -1254,6 +1353,17 @@ public class MainActivity extends Activity
      */
     private FlowLayout addChipRow(FlowLayout anchor, String title, String[] labels,
                                   int selected, final ChipPick onPick) {
+        return addChipRow(anchor, title, labels, selected, onPick, null);
+    }
+
+    /**
+     * 同上，另外挂一个后置修饰器，在每次刷新芯片形态之后再叠一层外观。
+     *
+     * @param decorate 可为 null。见 {@link RowDecorator} 关于"为什么需要它"
+     */
+    private FlowLayout addChipRow(FlowLayout anchor, String title, String[] labels,
+                                  int selected, final ChipPick onPick,
+                                  final RowDecorator decorate) {
         ViewGroup parent = (ViewGroup) anchor.getParent();
         int at = parent.indexOfChild(anchor) + 1;
 
@@ -1279,6 +1389,7 @@ public class MainActivity extends Activity
             c.setOnClickListener(v -> {
                 HyperosClick.haptic(v);
                 applyChipStates(row, index);
+                if (decorate != null) decorate.decorate(row);
                 onPick.onPick(index);
             });
             row.addView(c);
@@ -1288,6 +1399,7 @@ public class MainActivity extends Activity
         parent.addView(row, at + 1);
 
         applyChipStates(row, selected);
+        if (decorate != null) decorate.decorate(row);
         return row;
     }
 
@@ -1742,12 +1854,12 @@ public class MainActivity extends Activity
 
     /** 给一个并发数按钮上色 + 上凸凹。 */
     private void paintConnChip(TextView chip, boolean on) {
-        chip.setTextColor(on ? HyperTheme.primary(this) : HyperTheme.textSecondary(this));
+        chip.setTextColor(on ? HyperTheme.primaryText(this) : HyperTheme.textSecondary(this));
         chip.setTypeface(null, on ? android.graphics.Typeface.BOLD
                 : android.graphics.Typeface.NORMAL);
-        if (HyperTheme.isGlass(this)) {
-            NeumorphicSurface.convex(chip, 14, 3).glass(true);
-        } else if (on) {
+        // 与 applyChipStates 同一套：凹凸都要跟着选中态走。
+        // 这里曾经对玻璃态特判成全凸起，玻璃态下就分不出选了哪个连接数。
+        if (on) {
             NeumorphicSurface.convex(chip, 14, 3);
         } else {
             NeumorphicSurface.concave(chip, 14, 1.5f);
@@ -1982,22 +2094,14 @@ public class MainActivity extends Activity
                         sheet.dismiss();
                         recreate();
                     }
-                });
+                }, row -> paintSwatches(row));
 
         // 主题色那一行做成色卡：直接把芯片底色刷成对应的颜色，
         // 比"写着颜色的名字但整行都是同一个色"直观得多。
-        for (int i = 0; i < chipColor.getChildCount(); i++) {
-            View v = chipColor.getChildAt(i);
-            if (!(v instanceof TextView)) continue;
-            int c = HyperTheme.schemePrimary(this, i);
-            ((TextView) v).setTextColor(HyperTheme.contrastOn(this, c));
-            android.graphics.drawable.Drawable bg = v.getBackground();
-            if (bg instanceof NeumorphicDrawable) {
-                NeumorphicDrawable nd = (NeumorphicDrawable) bg;
-                nd.colors(c, HyperTheme.neumLight(this), HyperTheme.neumDark(this));
-                nd.invalidateSelf();
-            }
-        }
+        //
+        // 注意这里只是首帧的补画 —— 点击时 addChipRow 内部会再调一次
+        // RowDecorator，因为 applyChipStates 会把背景整个换掉。
+        paintSwatches(chipColor);
 
         // ---- 关于 ----
         TextView tvVersion = content.findViewById(R.id.tvVersion);
@@ -2191,8 +2295,14 @@ public class MainActivity extends Activity
 
             boolean isSelected = position == selectedPart;
             // 选中状态用「对勾 + 底色 + 标题色」三重编码，不只靠颜色
-            v.findViewById(R.id.ivSelected)
-                    .setVisibility(isSelected ? View.VISIBLE : View.INVISIBLE);
+            //
+            // 对勾的 tint 也要在这里跟着主题走：XML 里的
+            // @color/scheme_0_primary 只是编译期兜底，列表行又是复用的，
+            // 不刷的话换主题色后对勾还是樱花粉。
+            android.widget.ImageView check = v.findViewById(R.id.ivSelected);
+            check.setImageTintList(android.content.res.ColorStateList.valueOf(
+                    HyperTheme.primaryIcon(MainActivity.this)));
+            check.setVisibility(isSelected ? View.VISIBLE : View.INVISIBLE);
             v.setSelected(isSelected);
             return v;
         }

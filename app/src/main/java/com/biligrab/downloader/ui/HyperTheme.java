@@ -91,8 +91,94 @@ public final class HyperTheme {
         return schemeColor(c, R.array.hyper_primary, new Prefs(c).primary());
     }
 
-    public static int primaryVariant(Context c) {
-        return schemeColor(c, R.array.hyper_primary_variant, new Prefs(c).primary());
+    /**
+     * 主色<b>当作页面上的文字</b>时的颜色：在原色基础上朝可读方向推，
+     * 直到对当前页面底色达到 4.5:1 为止。
+     *
+     * <p>为什么不能直接用 {@link #primary}：五套主题色里只有深海蓝天生够深，
+     * 其余四套当文字都不合格。实测量值（浅色页面 {@code #F2F4F8}）：</p>
+     *
+     * <pre>
+     *   樱花粉 #FB7299  2.39:1  →  #AE526C  4.50:1
+     *   默认蓝 #007AFF  3.65:1  →  #026BDE  4.58:1
+     *   深海蓝 #1652A8  6.80:1  →  不变
+     *   薄荷绿 #32BB78  2.24:1  →  #267E53  4.55:1
+     *   薰衣草紫 #8E7CF0 3.03:1 →  #7163BC  4.54:1
+     * </pre>
+     *
+     * <p>深色模式方向相反，深海蓝要<b>提亮</b>（{@code #1652A8} 在
+     * {@code #1A1B1E} 上只有 2.30:1），樱花粉和薄荷绿则不用动。
+     * 两个方向由 {@link #contrastOn} 自动选，不写死。</p>
+     *
+     * <p>推进方式是朝目标色线性插值并按 1/64 步进，第一个达标的点就返回 ——
+     * 不是取一个固定偏移量。固定偏移在浅色上够、换到深色就不够了，
+     * 而这里要的是"满足阈值的最接近原色的那个值"。</p>
+     */
+    public static int primaryText(Context c) {
+        return readableOn(primary(c), pageFace(c));
+    }
+
+    /**
+     * 主色<b>当作图标</b>时的颜色：推进到 3:1 即可。
+     *
+     * <p>为什么比 {@link #primaryText} 松：WCAG 对非文字内容（图标、
+     * 图形、界面轮廓）的阈值是 3:1，正文才是 4.5:1。图标通常是个简笔画，
+     * 用它表达"这是可点的"或"这个选中了"，不需要正文那样的可读性储备。</p>
+     *
+     * <p>把图标也推到 4.5:1 的代价是实际可见的：樱花粉在浅色页面上要压到
+     * {@code #AE526C} 才够 4.5，那个颜色已经明显偏褐，不再像品牌粉。
+     * 3:1 只需要到 {@code #C4647F} 左右，还认得出是同一套色。</p>
+     */
+    public static int primaryIcon(Context c) {
+        return readableOn(primary(c), pageFace(c), 3f);
+    }
+
+    /**
+     * 页面底色。文字对比度全部以它为基准。
+     *
+     * <p>玻璃态的页面不是纯色 —— 根容器铺了一层 {@code GlassMeshDrawable}
+     * 的暖色光斑，色相偏暖偏亮，与纯 {@code background} 有可见差别。
+     * 这里取 mesh 的基色而不是 {@code background}，否则玻璃态下的对比度
+     * 会按一个屏幕上并不存在的颜色去算。</p>
+     */
+    public static int pageFace(Context c) {
+        return isGlass(c) ? col(c, R.color.glass_mesh_base) : background(c);
+    }
+
+    /** 禁用态文字。刻意压在 3:1 下方 —— 它必须"看起来不能用"，但还能读出来。 */
+    public static int textDisabled(Context c) {
+        return isDark(c) ? 0xFF6A6C74 : 0xFF9DA0AA;
+    }
+
+    /**
+     * 在一个已知表面上取文字色，并保证达到 {@code floor}。
+     *
+     * @param floor 正文 4.5f；大号文字（≥18sp 或 ≥14sp 粗体）可以传 3f
+     */
+    public static int readableOn(int color, int bg, float floor) {
+        if (contrastRatio(color, bg) >= floor) return color;
+        return blendToReach(color, contrastOn(null, bg), bg, floor);
+    }
+
+    /** 同上，正文阈值 4.5:1。 */
+    public static int readableOn(int color, int bg) {
+        return readableOn(color, bg, 4.5f);
+    }
+
+    /** 朝黑或朝白线性推进，返回第一个达到 {@code floor} 的颜色。 */
+    private static int blendToReach(int from, int to, int bg, float floor) {
+        for (int i = 1; i <= 64; i++) {
+            int mixed = blend(from, to, i / 64f);
+            if (contrastRatio(mixed, bg) >= floor) return mixed;
+        }
+        return to;
+    }
+
+    private static int blend(int a, int b, float t) {
+        return Color.rgb(
+                Math.round(Color.red(a) + (Color.red(b) - Color.red(a)) * t),
+                Math.round(Color.green(a) + (Color.green(b) - Color.green(a)) * t),
+                Math.round(Color.blue(a) + (Color.blue(b) - Color.blue(a)) * t));
     }
 
     /** 带透明度的主色，用于「激活段」这类半透明填充。 */
@@ -150,6 +236,11 @@ public final class HyperTheme {
      * 加权完全是两套公式，不要互相替代。</p>
      */
     public static int contrastOn(Context c, int bg) {
+        return contrastOn(bg);
+    }
+
+    /** 同上，不需要 Context —— 结果只与背景色有关。 */
+    public static int contrastOn(int bg) {
         final int INK = 0xFF111111;
         final int PAPER = 0xFFFFFFFF;
         return contrastRatio(bg, INK) >= contrastRatio(bg, PAPER) ? INK : PAPER;

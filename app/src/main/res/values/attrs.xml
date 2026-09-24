@@ -42,6 +42,26 @@
         <attr name="neuPress" format="boolean" />
 
         <!--
+          按钮在界面里的分量。决定文字色，以及（配合 neuElevation）浮雕的强弱。
+
+              filled    主操作。每屏只应该有一个 —— 用主色文字。
+              tonal     次级主色操作。也是主色文字，但浮雕更浅，视觉权重低于 filled。
+              outlined  中性操作。用正文色，与主色无关。取消、删除这类都属于它。
+
+          为什么必须在 Java 里解析而不是写死在 style 的 textColor 里：
+          主题色是运行期设置，XML 只能取编译期的静态值。原来
+          Widget.Button.Filled 写死 @color/scheme_0_primary（樱花粉，
+          第一套主题色的快照），用户换成深海蓝之后所有主按钮仍是粉字，
+          而按钮底色已经跟着变了 —— 粉字压在蓝底上。
+        -->
+        <attr name="neuRole" format="enum">
+            <enum name="none" value="0" />
+            <enum name="filled" value="1" />
+            <enum name="tonal" value="2" />
+            <enum name="outlined" value="3" />
+        </attr>
+
+        <!--
           这里曾经还声明过 neuStroke（主色描边）与 neuGlassFlat（玻璃面描边开关），
           已删除：在 attrs 里声明不等于生效，而 NeumAttr 从头到尾没有读过这两个 ——
           在布局或 style 里写了它们不会有任何效果。

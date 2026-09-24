@@ -15,7 +15,10 @@
     3. 没有涟漪。主题已把 colorControlHighlight / selectableItemBackground 压成
        透明，这里也不再引用任何状态背景。
     4. 主色不写死。使用主色的地方统一写 @color/scheme_0_primary 兜底，
-       运行时由 MainActivity / HyperTheme 覆盖。
+       并在同一控件上标 android:tag="neu:accent" —— 运行时由
+       NeumAttr.applyAccentTags 遍历整棵树覆盖成当前主题色。
+       只写兜底色而不标 tag，那个控件就会停在樱花粉上；这种漏检不报错，
+       只有换到别的主题色才看得出来，实测漏过六个。
 
   四种状态互斥显示，全部在同一棵视图树里，靠可见性切换：
     空        emptyBox    —— 引导用户完成第一步
@@ -249,6 +252,7 @@
                             android:layout_gravity="center"
                             android:contentDescription="@null"
                             android:src="@drawable/ic_search"
+                            android:tag="neu:accent"
                             android:tint="@color/scheme_0_primary" />
                     </com.biligrab.downloader.ui.NeuFrame>
 
@@ -366,6 +370,7 @@
                         <ProgressBar
                             android:layout_width="@dimen/icon_size_sm"
                             android:layout_height="@dimen/icon_size_sm"
+                            android:tag="neu:accent"
                             android:indeterminateTint="@color/scheme_0_primary" />
 
                         <com.biligrab.downloader.ui.NeuText
@@ -451,6 +456,7 @@
                             android:layout_width="@dimen/icon_size"
                             android:layout_height="@dimen/icon_size"
                             android:layout_gravity="center"
+                            android:tag="neu:accent"
                             android:indeterminateTint="@color/scheme_0_primary"
                             android:visibility="gone" />
 
@@ -480,6 +486,7 @@
                                 android:layout_marginTop="@dimen/space_sm"
                                 android:gravity="center"
                                 android:textAppearance="@style/Text.BodySmall"
+                                android:tag="neu:accent"
                                 android:textColor="@color/scheme_0_primary"
                                 tools:text="预览加载失败，仍可直接下载" />
                         </com.biligrab.downloader.ui.NeuLayout>
@@ -506,6 +513,7 @@
                             style="@style/Widget.IconButton"
                             android:contentDescription="@string/cd_pause"
                             android:src="@drawable/ic_pause"
+                            android:tag="neu:accent"
                             android:tint="@color/scheme_0_primary" />
 
                         <SeekBar
@@ -559,6 +567,7 @@
                             android:layout_height="@dimen/icon_size_sm"
                             android:contentDescription="@null"
                             android:src="@drawable/ic_info"
+                            android:tag="neu:accent"
                             android:tint="@color/scheme_0_primary" />
 
                         <com.biligrab.downloader.ui.NeuText

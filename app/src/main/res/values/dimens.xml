@@ -140,6 +140,10 @@
     <dimen name="cover_height">180dp</dimen>
     <dimen name="parts_list_max_height">240dp</dimen>
 
+    <!-- 滚动条粗细。4dp 是"看得见但不抢戏"的一档：再细在 1080p 上
+         会因为抗锯齿显得时隐时现，再粗就变成一条独立的视觉元素了。 -->
+    <dimen name="scrollbar_size">4dp</dimen>
+
     <!-- 声明的 elevation 与实际绘制所需的外扩量：
          阴影会画到控件边界之外，父容器必须留出这么多，否则会被裁掉 -->
     <dimen name="neum_bleed">10dp</dimen>

@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  滚动条滑块 —— 圆头细条
+  ======================
+  系统默认的滚动条是一根直角灰条，颜色和整套色板无关，在圆角、浮雕构成的
+  界面里很扎眼。这里换成圆头细条并降透明度：滚动条应该"滚的时候才注意到"，
+  静止时它只是右侧一道很淡的痕迹。
+
+  用半透明黑/白（#40000000 / #40FFFFFF，见 values/colors.xml 的
+  hyper_scroll_edge 说明）而不是实色：实色会在卡片边缘突然断开，
+  半透明则能压在任何底色上都不违和。
+
+  左右各留 1dp 内边距，让滑块不贴死屏幕边缘 —— 贴边时圆角会被屏幕
+  圆角切掉一半，看着像画错了。
+
+  粗细不在这里写：交给主题的 android:scrollbarSize（4dp）。两处都写
+  的话，框架以 scrollbarSize 为准拉伸滑块，这里再写一遍只是重复。
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="@color/hyper_scroll_edge" />
+    <corners android:radius="2dp" />
+</shape>

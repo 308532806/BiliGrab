@@ -20,6 +20,7 @@ import android.widget.TextView;
 
 import com.biligrab.downloader.ui.GlassMeshDrawable;
 import com.biligrab.downloader.ui.HyperTheme;
+import com.biligrab.downloader.ui.NeumAttr;
 import com.biligrab.downloader.ui.NeuButton;
 import com.biligrab.downloader.ui.NeuText;
 
@@ -88,7 +89,14 @@ public class DownloadsActivity extends Activity
     /** id → 已建好的卡片。用来复用，避免重建导致按钮跳动。 */
     private final List<Row> rows = new ArrayList<>();
 
+    /** 原始主色。用于填充（进度条、药丸底），不是文字色。 */
     private int primaryColor;
+
+    /** 主色当文字用时的颜色（已推进到正文 4.5:1）。 */
+    private int accentTextColor;
+
+    /** 主色当图标用时的颜色（已推进到 3:1）。 */
+    private int accentIconColor;
 
     // ==================================================================
     // 生命周期
@@ -165,9 +173,21 @@ public class DownloadsActivity extends Activity
             }
         }
         primaryColor = HyperTheme.primary(this);
+        accentTextColor = HyperTheme.primaryText(this);
+        accentIconColor = HyperTheme.primaryIcon(this);
         if (btnClearDone instanceof TextView) {
-            ((TextView) btnClearDone).setTextColor(primaryColor);
+            // 「清除已完成」是一段落在页面底色上的文字，不是图标，
+            // 所以用 primaryText（4.5:1）而不是 primaryIcon（3:1）。
+            ((TextView) btnClearDone).setTextColor(accentTextColor);
         }
+        // 布局里标了 neu:accent 的控件要在这里统一刷一遍主色。
+        //
+        // 这一步漏过一次：activity_downloads.xml 的空状态图标标了 tag，
+        // 但这个 Activity 没有调 applyAccentTags，tag 就成了死标记 ——
+        // 编译通过、运行不报错，图标安静地停在 @color/scheme_0_primary
+        // （第一套主题色的编译期快照），只有换到深海蓝这类非默认色才看得
+        // 出来。实机上确实是樱花粉色的下载图标配着一套蓝界面。
+        NeumAttr.applyAccentTags(findViewById(R.id.root));
     }
 
     /** 与首页同一套 edge-to-edge 处理：顶栏抬高，标题压在状态栏下方那条带子里。 */
@@ -418,6 +438,11 @@ public class DownloadsActivity extends Activity
             btnPrimary = v.findViewById(R.id.btnPrimary);
             btnDelete = v.findViewById(R.id.btnDelete);
 
+            // 实时速度是页面上最显眼的一行动态文字（项目当初就是为它才加的
+            // 下载管理页），XML 里的 @color/scheme_0_primary 只是编译期兜底，
+            // 不在这里跟着主题走的话会永远停在樱花粉上。
+            tvSpeed.setTextColor(accentTextColor);
+
             btnPrimary.setOnClickListener(x -> onPrimary(task));
             btnCancel.setOnClickListener(x -> onCancel(task));
             btnDelete.setOnClickListener(x -> confirmDelete(task));
@@ -592,7 +617,7 @@ public class DownloadsActivity extends Activity
         switch (st) {
             case DownloadTask.STATUS_DONE:      return HyperTheme.success(this);
             case DownloadTask.STATUS_FAILED:    return HyperTheme.error(this);
-            case DownloadTask.STATUS_RUNNING:   return primaryColor;
+            case DownloadTask.STATUS_RUNNING:   return accentTextColor;
             case DownloadTask.STATUS_CANCELLED: return HyperTheme.textTertiary(this);
             default:                            return HyperTheme.textSecondary(this);
         }
