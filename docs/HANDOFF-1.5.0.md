@@ -1,6 +1,129 @@
-# BiliGrab 1.7.1 状态
+# BiliGrab 1.8.0 状态
 
 > 本文件记录 1.5.0 起的进展，最新的在最前。
+
+## 1.8.0 —— 多连接并发、主页行不复位、图标
+
+已发布：tag `v1.8.0`，远端 main `2b9b6c4`，Release 带 `BiliGrab-1.8.0.apk`
+（19,485,162 字节，versionCode 10800）。
+
+### 一句话
+
+首页那一行删掉未完成任务后不复位；YouTube 慢的原因**不在 VPN 而在连接数**；
+顺带换掉下载入口图标与应用图标。
+
+### 1. 主页行卡在百分比
+
+**现象**：下载中点进管理页，删掉未完成任务，返回主页 —— 那一行不会变回
+「下载」按钮，而是永久停在某个百分比，只能杀进程。
+
+**根因**：主页只实现了 `DownloadService.Listener`。而删除走的是**另一条路**：
+`TaskStore.remove()` → `notifyProgress()` → `TaskStore.Listener.onTasksChanged()`。
+服务端的 `onTaskFinished` 在这条路径上**永远不会触发**，主页于是不知道自己
+绑定的任务已经没了。
+
+**修法**（`MainActivity`）：同时实现 `TaskStore.Listener`，`onResume` 注册、
+`onPause` 注销，记录变化时 `syncRowsWithStore()` 逐个核对绑定关系并复位。
+
+判定用 `!t.isActive()` 而**不是** `t == null` —— 取消一个**排队中**的任务同样
+只发记录回调、不发服务回调，只看「记录还在不在」会漏掉这一类。
+
+### 2. YouTube 慢：不是 VPN 的问题
+
+**关键测量**（同一条 71 MB 直链，PC 侧）：
+
+| 连接数 | 速度 | 相对 |
+|---|---|---|
+| 1 | 8.14 Mbps | 1× |
+| **4** | **35.50 Mbps** | **4.36×** |
+| 8 | 27.39 Mbps | 反而更慢 |
+
+googlevideo **按单条连接限速**，所以出口带宽根本不是瓶颈 —— 这正是换多少个
+VPN 都没用的原因。默认 4，设置里可改 1~8，设为 1 即完全退回单连接。
+
+真机实测（1080P / 246 MB）：34.8 秒，`分 62 块（每块 4 MB），并发 4`；
+产物视频轨 38,074 样本、音频轨 27,331 样本，双轨均 10:34。
+
+**设计要点（别改坏了）**：
+
+- **4 MB 分块 + 共享工作队列**，不是 N 份静态切分。静态切分下快连接做完就
+  闲着，整体取决于最慢的那条。
+- 台账 `.journal` **只追加不重写**，断电最多丢一行。
+- **总量必须探测**（`Range: bytes=0-0`，要求 206）。不能用 yt-dlp 的
+  `filesize_approx`：多连接按总长预分配，估算值偏小会截尾、偏大补空洞。
+  用 Range 而不是 HEAD —— CDN 常常不在 HEAD 响应里给 `Content-Length`。
+- 退回单连接时**必须 `discard()`**：预分配的文件长度等于总量、中间全是洞，
+  单连接会把 `length()` 当成「已下完」。
+
+### 3. 顺带修掉一个自己引入的缺陷：台账续传被无视
+
+**现象**：续传日志显示 `已完成 0 块`，232 MB 从头下一遍。
+
+**根因**：`ACTION_ENQUEUE` 分支在真正开跑之前就把状态改成了 `QUEUED`，
+`runOne()` 执行时已经分不清「用户点了继续」和「这是新建任务」。
+
+**修法**：入队那一刻单独记下意图（进程内 `INSTANCE_RESUME` 集合 + `EXTRA_RESUME`
+extra 双重兜底），`runOne()` 读意图而不是读状态。
+
+**验证方法（可复现）**：下载中途 `am force-stop` 强杀进程，再点「继续」。
+日志应出现：
+
+```
+续传判定 status=1 半成品=true 签名一致=true → 续传，video.part 台账=true 大小=232257104
+多连接下载：总量 232257104 字节，分 56 块（每块 4 MB），并发 4，已完成 12 块 / 48 MB
+```
+
+`已完成 12 块` 就是接上了被杀前的进度。产物与单连接产物逐字节一致
+（249,464,797 字节）。
+
+### 4. 图标
+
+- 右上角入口：列表图标 → **向下箭头**（它通向的是下载管理）。
+- 应用图标按自适应规范重做。**旧版有实际缺陷**：托盘角在半径 40.5 处，
+  圆形遮罩下会被切掉。新版前景全部顶点收在**中心半径 35 以内**；
+  另配纯黑 `ic_launcher_monochrome.xml` 供 Android 13+ 主题图标。
+
+### 没做完 / 未验证
+
+- **删除「进行中」任务**的严格复现没覆盖到：测试素材太快（22 MB/s，11 秒
+  下完），删除窗口只有几秒。**合成阶段**的删除已验证通过。
+- **YouTube 多连接的 A/B 对照只测了 4 条这一侧**：1 条那次因设备反复重启
+  没跑成。4.36× 的结论来自 PC 侧独立测量，不是手机上的对照。
+- 8 条连接实测更慢，别指望线性叠加。
+
+### 环境坑（这轮踩到的）
+
+- **`adb reverse` 隧道随 USB 重连失效**，且必须重建。
+- 本轮设备出现**反复重启**，已定位为 `netd` 崩溃（见下），与 BiliGrab 无关。
+- 发版顺序：`release-apk.py` **必须在** `move-tag.py` 之前。
+- 用 `git commit -F` 时，PowerShell 的 `Out-File -Encoding UTF8` **会写 BOM**，
+  提交信息首字符会变成 `\uFEFF`。改用
+  `[System.IO.File]::WriteAllText($p, $txt, (New-Object System.Text.UTF8Encoding($false)))`。
+
+### 设备稳定性：netd 崩溃导致系统重启（非本应用）
+
+设备（OPPO Reno4 5G / PDPM00 / Android 12）出现多次自动重启。根因已定位：
+
+```
+persist.sys.system.abnormalboot = 2026-09-24 18:14:24:zygote reboot by netd
+```
+
+```
+# /system/etc/init/netd.rc
+service netd /system/bin/netd
+    onrestart restart zygote            ← netd 一挂，zygote 一起重启
+```
+
+已排除过热（全 80 个热区 33~45 °C）、电池故障（`health: 2`）、内核崩溃
+（pstore 空）、存储损坏、定时开关机、本应用崩溃（tombstones 空）。
+
+**未证明触发者**：netd 是 root 原生进程，普通应用无法直接杀它；但密集的
+`pm install` / `settings put global http_proxy` / `adb reverse` 操作会频繁戳它。
+时间上相关 ≠ 因果，如实记录，不下断言。
+
+顺带发现 ROM 缺陷：`system_server` 每 12 秒记一次 `TerribleFailure`
+（`ScoringParams$Values.validateRange` → `IllegalArgumentException`，
+`config_wifi_framework_*` 资源自相矛盾），说明该机网络栈本就处于异常状态。
 
 ## 1.7.1 —— 音频轨被判死：MP4 无声 / 仅音频文件损坏
 
