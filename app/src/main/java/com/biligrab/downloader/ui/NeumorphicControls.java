@@ -48,9 +48,21 @@ public final class NeumorphicControls {
 
         float trackRadius = dp(ctx, R.dimen.radius_switch_track);
         float trackElevation = dp(ctx, R.dimen.elev_switch);
+        // 三个尺寸必须分开算，不能只留 px：
+        //
+        // NeumorphicSurface.create() 的两个 intrinsic 参数契约是 **dp**
+        // （内部走 NeumorphicDrawable.intrinsic(wDp, hDp) 再乘一次 density）。
+        // 原来传 px，等于乘了两遍 density —— 轨道被算成 468x252px
+        // （应为 156x84），滑块 198x198px（应为 66x66）。
+        // Switch.onMeasure 又取 max(trackHeight, thumbHeight) 当自己的高度，
+        // 于是整个控件被撑成 252px 的色块，XML 里写 48dp 也压不住。
+        //
+        // setSwitchMinWidth 是另一条契约：它按 **px** 收尺寸
+        // （内部直接与 2*mThumbWidth 比大小），所以 trackWidth 保持 px。
         int trackWidth = px(ctx, R.dimen.switch_width);
-        int trackHeight = px(ctx, R.dimen.switch_height);
-        int thumbSize = px(ctx, R.dimen.switch_thumb);
+        int trackWidthDp = Math.round(dp(ctx, R.dimen.switch_width));
+        int trackHeightDp = Math.round(dp(ctx, R.dimen.switch_height));
+        int thumbSizeDp = Math.round(dp(ctx, R.dimen.switch_thumb));
         float thumbElevation = dp(ctx, R.dimen.elev_switch_thumb);
 
         // 轨道：凹槽，高 28dp，圆角 14dp。
@@ -65,12 +77,12 @@ public final class NeumorphicControls {
         int primary = HyperTheme.primary(ctx);
 
         NeumorphicDrawable trackOff = NeumorphicSurface.create(ctx, NeumorphicDrawable.CONCAVE,
-                trackRadius, trackElevation, trackWidth, trackHeight);
+                trackRadius, trackElevation, trackWidthDp, trackHeightDp);
         trackOff.colors(HyperTheme.divider(ctx), HyperTheme.neumLight(ctx),
                 HyperTheme.neumDark(ctx));
 
         NeumorphicDrawable trackOn = NeumorphicSurface.create(ctx, NeumorphicDrawable.CONCAVE,
-                trackRadius, trackElevation, trackWidth, trackHeight);
+                trackRadius, trackElevation, trackWidthDp, trackHeightDp);
         // 轨道开着时整条就是主色，和设置面板的色卡是同一类面：
         // 必须走 accent() 而不是 colors()，否则玻璃态下开着的轨道会退回成白雾，
         // 与关着的状态只差一点点色值，用户看不出开关到底开没开。
@@ -80,17 +92,48 @@ public final class NeumorphicControls {
         track.addState(new int[]{android.R.attr.state_checked}, trackOn);
         track.addState(new int[]{}, trackOff);
 
+        // 轨道外包一层 LayerDrawable，只为了让 Switch 的"行程"留出端部空隙。
+        //
+        // Switch 的几何里，滑块的可移动范围是 mSwitchWidth - mThumbWidth
+        // - trackPadding.left - trackPadding.right，而滑块绘制位置又从
+        // trackPadding.left 起算 —— 于是给轨道一个左右 padding，等价于让
+        // 滑块在两端各让出同样宽的空隙。设计里这条是 4dp（switch_thumb_margin）。
+        // 单层 LayerDrawable 的 padding 只影响 getPadding() 读回值，
+        // 不会缩小子项的绘制区域，所以轨道本体仍是完整的 52x28dp。
+        LayerDrawable trackWrap = new LayerDrawable(new Drawable[]{track});
+        int trackPad = px(ctx, R.dimen.switch_thumb_margin);
+        trackWrap.setPadding(trackPad, 0, trackPad, 0);
+
         // 滑块：凸起圆盘，直径 22dp。
         // 取 22 而不是 20：Switch 把滑块从轨道左缘推到右缘，
         // 直径越小越容易在两端"戳出"轨道 14dp 的圆头之外。
         NeumorphicDrawable thumb = NeumorphicSurface.create(ctx, NeumorphicDrawable.CONVEX,
-                dp(ctx, R.dimen.radius_pill), thumbElevation, thumbSize, thumbSize);
+                dp(ctx, R.dimen.radius_pill), thumbElevation, thumbSizeDp, thumbSizeDp);
         // 滑块用卡片色而不是页面色：轨道开着时是主色，滑块压在上面必须有区别，
         // 用背景色的话在白底卡片上会和轨道糊成一片。
         thumb.colors(HyperTheme.card(ctx), HyperTheme.neumLight(ctx), HyperTheme.neumDark(ctx));
 
-        sw.setTrackDrawable(track);
-        sw.setThumbDrawable(thumb);
+        // 外面再包一层 LayerDrawable，把绘制区域从"整个 switch 高度"收回来。
+        //
+        // Switch.onDraw 给滑块设的 bounds 是 (thumbLeft, switchTop, thumbRight, switchBottom)，
+        // 也就是纵向直接拉满整个控件高度；只改 dp 的话滑块会被画成 66x84 的竖椭圆，
+        // 不是设计里的 22dp 圆盘。LayerDrawable 的 intrinsic 取子项（66x66），
+        // 不影响上面那套 2*thumbWidth 的量算；inset 只挪绘制位置：
+        // 66 宽的滑块在 switch 高 84px 的框里上下各留 3dp，
+        // 换算成行内空白就是 (28-22)/2 = 3dp。
+        int thumbPad = Math.round((trackHeightDp - thumbSizeDp) / 2f * density);
+        LayerDrawable thumbWrap = new LayerDrawable(new Drawable[]{thumb});
+        thumbWrap.setLayerInset(0, 0, thumbPad, 0, thumbPad);
+        // 显式把外层 padding 归零，把 Switch 的两套量算钉死：
+        // 1) onMeasure 用 thumb.getIntrinsicWidth() - getPadding.left/right 得滑块宽，
+        //    LayerDrawable 在 NEST 模式下会把子项的 padding 也加进 intrinsic，
+        //    子项（NeumorphicDrawable）没实现 getPadding，读到的可能是未初始化的 Rect；
+        // 2) onDraw 里 thumbLeft/thumbRight 同样按 padding.left/right 修正，
+        //    不归零就等于把滑块位置交给一个未定义值。
+        thumbWrap.setPadding(0, 0, 0, 0);
+
+        sw.setTrackDrawable(trackWrap);
+        sw.setThumbDrawable(thumbWrap);
         // 注意：这里没有 setThumbOffset —— 那是 SeekBar 的 API，Switch 没有。
         // Switch 的滑块位置完全由轨道和滑块自身的尺寸推出来。
         // Keep the native Switch contract, but remove platform-dependent sizing.
