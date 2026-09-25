@@ -93,7 +93,14 @@ public final class NeumorphicControls {
         sw.setThumbDrawable(thumb);
         // 注意：这里没有 setThumbOffset —— 那是 SeekBar 的 API，Switch 没有。
         // Switch 的滑块位置完全由轨道和滑块自身的尺寸推出来。
-        sw.setSwitchPadding(px(ctx, R.dimen.space_sm));
+        // Keep the native Switch contract, but remove platform-dependent sizing.
+        // The custom track/thumb already define the visual bounds; native padding
+        // otherwise shifts or clips the thumb differently across Android skins.
+        sw.setSwitchMinWidth(trackWidth);
+        sw.setThumbTextPadding(0);
+        sw.setSwitchPadding(0);
+        sw.setGravity(Gravity.CENTER_VERTICAL);
+        sw.setPadding(0, 0, 0, 0);
 
         sw.setShowText(false);
         sw.setButtonDrawable(null);
