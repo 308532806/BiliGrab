@@ -716,7 +716,7 @@ public class DownloadsActivity extends Activity
             android.graphics.drawable.Drawable bg =
                     ld.findDrawableByLayerId(android.R.id.background);
             if (bg != null) {
-                bg.setTint(HyperTheme.divider(this));
+                bg.setTint(HyperTheme.progressTrack(this));
             }
             android.graphics.drawable.Drawable fg =
                     ld.findDrawableByLayerId(android.R.id.progress);

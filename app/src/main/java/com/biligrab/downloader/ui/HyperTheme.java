@@ -51,6 +51,14 @@ public final class HyperTheme {
     public static int error(Context c)        { return col(c, R.color.hyper_error); }
     public static int border(Context c)       { return col(c, R.color.hyper_border); }
     public static int divider(Context c)      { return col(c, R.color.hyper_divider); }
+    /**
+     * 进度条槽底色。玻璃态下改用中性叠色（浅色 10% 黑 / 深色 12% 白）：
+     * divider 的冷灰是配新拟态浅色页面的，叠在暖白网格上只有 1.1:1，
+     * 槽会直接消失。
+     */
+    public static int progressTrack(Context c) {
+        return isGlass(c) ? (isDark(c) ? 0x1FFFFFFF : 0x1A000000) : divider(c);
+    }
     public static int iconBg(Context c)       { return col(c, R.color.hyper_icon_bg); }
     public static int badgeBg(Context c)      { return col(c, R.color.hyper_badge_bg); }
     public static int badgeText(Context c)    { return primary(c); }

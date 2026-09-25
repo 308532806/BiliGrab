@@ -5,6 +5,7 @@ import android.graphics.Bitmap;
 import android.graphics.BlurMaskFilter;
 import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.Outline;
 import android.graphics.Paint;
 import android.graphics.Rect;
 import android.graphics.RectF;
@@ -560,6 +561,23 @@ public class NeumorphicDrawable extends Drawable {
     @SuppressWarnings("deprecation")
     public int getOpacity() {
         return android.graphics.PixelFormat.TRANSLUCENT;
+    }
+
+    /**
+     * 把圆角轮廓交给系统的 outline 裁剪。
+     *
+     * <p>登录页的 WebView 靠 {@code clipToOutline} 把方角网页裁进圆角外框，
+     * 平台只有拿到背景 drawable 的 outline 才裁得对。圆角的 clamp 与
+     * {@link #drawInto} 保持一致，保证裁剪轮廓和画出来的形状重合。</p>
+     */
+    @Override
+    public void getOutline(Outline outline) {
+        Rect b = getBounds();
+        if (b.width() <= 0 || b.height() <= 0) {
+            return;
+        }
+        float r = Math.min(cornerRadiusPx, Math.min(b.width(), b.height()) / 2f);
+        outline.setRoundRect(b, r);
     }
 
     @Override

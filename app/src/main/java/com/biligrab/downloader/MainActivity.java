@@ -403,6 +403,7 @@ public class MainActivity extends Activity
         if (root != null) {
             if (HyperTheme.isGlass(this)) {
                 root.setBackground(new GlassMeshDrawable(HyperTheme.isDark(this)));
+                applySkeletonGlass();
             } else {
                 root.setBackgroundColor(HyperTheme.background(this));
             }
@@ -428,6 +429,29 @@ public class MainActivity extends Activity
     }
 
     /**
+     * 玻璃态下的骨架屏占位块。
+     *
+     * <p>XML 里的 {@code bg_skeleton} 用的是 divider 实色，那是给新拟态的
+     * 浅色页面配的冷灰；玻璃态的卡片面是暖白玻璃，冷灰叠上去会发脏。
+     * 这里换成凹面玻璃色（浅色 4% 黑 / 深色 12% 白），与卡片里其它内容
+     * 同一体系，同时保持骨架屏该有的低对比。</p>
+     */
+    private void applySkeletonGlass() {
+        int fill = HyperTheme.glassTintConcave(this);
+        int radius = (int) getResources().getDimension(R.dimen.radius_field);
+        int[] ids = new int[] { R.id.skelCover, R.id.skelLine1, R.id.skelLine2 };
+        for (int id : ids) {
+            View v = findViewById(id);
+            if (v == null) continue;
+            GradientDrawable g = new GradientDrawable();
+            g.setShape(GradientDrawable.RECTANGLE);
+            g.setCornerRadius(radius);
+            g.setColor(fill);
+            v.setBackground(g);
+        }
+    }
+
+    /**
      * 把一块药丸刷成主色系：15% 透明度的主色底 + 主色文字。
      *
      * <p>底色必须留透明度：全不透明的主色底配主色文字会糊成一片，
@@ -439,13 +463,22 @@ public class MainActivity extends Activity
      */
     private void applyPill(TextView tv, int primary) {
         if (tv == null) return;
-        GradientDrawable g = new GradientDrawable();
-        g.setShape(GradientDrawable.RECTANGLE);
-        g.setCornerRadius(999);
         // 15% 的主色盖在页面底色上，就是这个药丸实际呈现的底
         int face = blendOver(HyperTheme.pageFace(this), primary, 0.15f);
-        g.setColor((primary & 0x00FFFFFF) | 0x26000000);
-        tv.setBackground(g);
+        if (HyperTheme.isGlass(this)) {
+            // 玻璃态：走引擎的「主色面」通路（主色打底 + 玻璃描边），
+            // 与设置面板的色卡同一个画法 —— 药丸要像"玻璃上的一块色片"，
+            // 而不是叠在旧页面底色上的一层半透明色。
+            tv.setBackground(NeumorphicSurface.create(
+                    this, NeumorphicDrawable.CONVEX, 999f, 0f, 0, 0)
+                    .accent(face, HyperTheme.neumLight(this), HyperTheme.neumDark(this)));
+        } else {
+            GradientDrawable g = new GradientDrawable();
+            g.setShape(GradientDrawable.RECTANGLE);
+            g.setCornerRadius(999);
+            g.setColor((primary & 0x00FFFFFF) | 0x26000000);
+            tv.setBackground(g);
+        }
         tv.setTextColor(HyperTheme.readableOn(primary, face));
     }
 
@@ -1198,7 +1231,7 @@ public class MainActivity extends Activity
         bar.setProgressTintList(android.content.res.ColorStateList.valueOf(
                 HyperTheme.primary(this)));
         bar.setProgressBackgroundTintList(android.content.res.ColorStateList.valueOf(
-                HyperTheme.divider(this)));
+                HyperTheme.progressTrack(this)));
 
         tvLabel.setText(label);
         tvMeta.setText(meta);

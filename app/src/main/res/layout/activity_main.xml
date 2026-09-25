@@ -344,17 +344,20 @@
                     android:visibility="gone">
 
                     <com.biligrab.downloader.ui.NeuLayout
+                        android:id="@+id/skelCover"
                         android:layout_width="match_parent"
                         android:layout_height="@dimen/cover_height"
                         android:background="@drawable/bg_skeleton" />
 
                     <com.biligrab.downloader.ui.NeuLayout
+                        android:id="@+id/skelLine1"
                         android:layout_width="match_parent"
                         android:layout_height="22dp"
                         android:layout_marginTop="@dimen/space_lg"
                         android:background="@drawable/bg_skeleton" />
 
                     <com.biligrab.downloader.ui.NeuLayout
+                        android:id="@+id/skelLine2"
                         android:layout_width="180dp"
                         android:layout_height="16dp"
                         android:layout_marginTop="@dimen/space_md"

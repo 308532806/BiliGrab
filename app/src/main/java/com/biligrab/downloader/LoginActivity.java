@@ -20,6 +20,8 @@ import android.widget.TextView;
 
 import com.biligrab.downloader.ui.GlassMeshDrawable;
 import com.biligrab.downloader.ui.HyperTheme;
+import com.biligrab.downloader.ui.NeumorphicDrawable;
+import com.biligrab.downloader.ui.NeumorphicSurface;
 
 import org.json.JSONObject;
 
@@ -130,6 +132,8 @@ public class LoginActivity extends Activity {
 
         // 圆角。WebView 自己不会裁背景，得让父级按 outline 裁。
         web.setClipToOutline(true);
+        // applyLoginTheme 在 web 就绪之前跑过一趟，这里补一次玻璃外框。
+        applyGlassWebFrame();
 
         // 登录页要写 localStorage / sessionStorage 存放流程状态，
         // 关掉 DOM storage 会让它在半路上卡住。
@@ -174,7 +178,11 @@ public class LoginActivity extends Activity {
                     return;
                 }
                 tvHint.setText(R.string.login_hint);
-                web.setBackgroundColor(Color.WHITE);
+                // 玻璃态下 View 背景是主题画的玻璃外框，刷白会盖掉它；
+                // 网页自身有白底，不需要额外兜底。非玻璃态保持原防闪色白底。
+                if (!HyperTheme.isGlass(LoginActivity.this)) {
+                    web.setBackgroundColor(Color.WHITE);
+                }
                 checkCookies();
             }
 
@@ -227,10 +235,23 @@ public class LoginActivity extends Activity {
         }
         if (HyperTheme.isGlass(this)) {
             root.setBackground(new GlassMeshDrawable(HyperTheme.isDark(this)));
+            // 网页是白底不透明，加载完成后会盖住 View 背景；这圈玻璃
+            // 外框在加载空窗期和四角圆角处露出来。
+            applyGlassWebFrame();
         } else {
             root.setBackgroundColor(HyperTheme.background(this));
         }
     }
+
+    /** 玻璃态下把登录网页的背景换成引擎画的玻璃外框（圆角与 radius_card 一致）。 */
+    private void applyGlassWebFrame() {
+        if (web == null || !HyperTheme.isGlass(this)) {
+            return;
+        }
+        web.setBackground(NeumorphicSurface.create(
+                this, NeumorphicDrawable.CONVEX, 28f, 0f, 0, 0));
+    }
+
     private void checkCookies() {
         if (saved || verifying || isFinishing()) {
             return;
