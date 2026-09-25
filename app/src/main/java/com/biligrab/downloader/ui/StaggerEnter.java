@@ -1,5 +1,6 @@
 package com.biligrab.downloader.ui;
 
+import android.animation.ValueAnimator;
 import android.view.View;
 
 /**
@@ -30,20 +31,34 @@ public final class StaggerEnter {
     /**
      * 让一组视图依次入场。
      *
-     * @param views 按入场顺序排列的视图；null 元素会被跳过
+     * @param views 按入场顺序排列的视图；null 和非 VISIBLE 元素会被跳过
      */
     public static void play(View... views) {
         if (views == null) return;
-        for (int i = 0; i < views.length; i++) {
-            View v = views[i];
-            if (v == null) continue;
-            playOne(v, delayFor(i));
+        int visibleIndex = 0;
+        for (View v : views) {
+            if (v == null || v.getVisibility() != View.VISIBLE) continue;
+            playOne(v, delayFor(visibleIndex++));
         }
     }
 
     /** 对单个视图执行入场，延迟由调用方决定。 */
     public static void playOne(View v, long delayMs) {
-        if (v == null) return;
+        if (v == null || v.getVisibility() != View.VISIBLE) return;
+
+        // 不要让一次旧动画把刷新后的最终状态带走。这个方法只在首次入场
+        // 使用，但 cancel() 也让调用方重复触发时保持确定性。
+        v.animate().cancel();
+
+        // Android 的「移除动画」开关是全局设置。关闭时不要先把内容设成透明，
+        // 否则用户会看到一帧空白，甚至在 ROM 禁止动画时一直等不到回调。
+        if (!ValueAnimator.areAnimatorsEnabled()) {
+            v.setAlpha(1f);
+            v.setTranslationY(0f);
+            v.setScaleX(1f);
+            v.setScaleY(1f);
+            return;
+        }
 
         float density = v.getResources().getDisplayMetrics().density;
         float offsetPx = OFFSET_Y_DP * density;

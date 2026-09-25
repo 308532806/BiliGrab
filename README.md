@@ -168,7 +168,7 @@ Android 的全局 HTTP 代理。
   否则改一个字的文案就会让映射静默失效
 - **输入框尾部按钮一钮两用** —— 空时是「粘贴」，有内容时变「清空」
 - **无死资源** —— `dimen` / `style` / `string` / `drawable` / `layout` 的引用数都有检查，见 DESIGN.md 末尾。
-  1.4.0 之后这项检查**尚未全绿**（有一批令牌暂时没有引用），清单见
+  当前设计系统仍记录有未引用令牌及实现/文档差异；清单见
   [docs/DESIGN-SYSTEM.md](docs/DESIGN-SYSTEM.md) 的「已知不一致」一节
 
 ## 技术特点
@@ -223,8 +223,9 @@ B 站那部分代码一个第三方库都不用，`classes.dex` 只有约 98 KB�
 powershell -ExecutionPolicy Bypass -File scripts\setup-sdk.ps1
 
 # 2) 编译（另需 JDK 17）
-powershell -ExecutionPolicy Bypass -File scripts\build-apk.ps1 -VersionName 1.4.0
-# 产物：dist\BiliGrab-1.4.0.apk
+# 当前源码版本：1.9.2（versionCode 10902）
+powershell -ExecutionPolicy Bypass -File scripts\build-apk.ps1 -VersionName 1.9.2
+# 产物：dist\BiliGrab-1.9.2.apk
 ```
 
 首次构建会自动调用 `scripts/fetch-vendor.ps1` 拉取 YouTube 引擎
@@ -236,7 +237,7 @@ powershell -ExecutionPolicy Bypass -File scripts\build-apk.ps1 -VersionName 1.4.
 推一个 tag 即可，Actions 会自动构建并发布 Release：
 
 ```bash
-git tag v1.4.0 && git push origin v1.4.0
+git tag v1.9.2 && git push origin v1.9.2
 ```
 
 > 想让 CI 产物和本地发布的 APK 签名一致（用户才能原地升级），

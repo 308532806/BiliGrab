@@ -148,7 +148,7 @@ public final class MuxUtil {
             if (vFmt != null) {
                 // 视频不强制单调：H.264 带 B 帧时呈现时间本来就可能乱序，
                 // MPEG4Writer 支持这一点（它报错的只有音频轨）。
-                vWritten = copyTrack(vEx, vFmt, muxer, vOut, info, abort, false);
+                vWritten = copyTrack(vEx, vFmt, muxer, vOut, info, abort, false, "视频");
             }
             tVideo = System.currentTimeMillis();
             if (aFmt != null) {
@@ -159,7 +159,7 @@ public final class MuxUtil {
                 // 拿「典型间距的一半」去卡会把好帧当异常扔掉。它们的
                 // 封装器也不像 OplusMPEG4Writer 那样一遇乱序就判死整条轨。
                 boolean fixedLength = isAac(aFmt);
-                aWritten = copyTrack(aEx, aFmt, muxer, aOut, info, abort, fixedLength);
+                aWritten = copyTrack(aEx, aFmt, muxer, aOut, info, abort, fixedLength, "音频");
             }
             tAudio = System.currentTimeMillis();
 
@@ -706,7 +706,7 @@ public final class MuxUtil {
      */
     private static long copyTrack(MediaExtractor ex, MediaFormat fmt, MediaMuxer muxer,
                                   int outTrack, MediaCodec.BufferInfo info, Http.Abort abort,
-                                  boolean enforceMonotonic)
+                                  boolean enforceMonotonic, String label)
             throws IOException {
         int maxInput = fmt.containsKey(MediaFormat.KEY_MAX_INPUT_SIZE)
                 ? fmt.getInteger(MediaFormat.KEY_MAX_INPUT_SIZE) : MIN_BUFFER;
@@ -717,6 +717,16 @@ public final class MuxUtil {
         long dropped = 0;
         long lastPts = Long.MIN_VALUE;
         long typicalStep = 0;
+        // 读和写分开计时。
+        //
+        // 合流是整个流程里最后一段、也常常是最大的一段（1080P 实测占总耗时
+        // 约 45%），但原来只知道「一共花了多久」，不知道时间是在**从源文件
+        // 取样本**还是**往封装器里写样本**。这两个结论指向完全不同的对策：
+        // 前者可以预读，后者只能换实现。所以别猜，量出来。
+        long nsRead = 0L;
+        long nsWrite = 0L;
+        long bytes = 0L;
+        final long nsStart = System.nanoTime();
 
         while (true) {
             // 每个样本之间查一次。放在这里而不是循环外：合成大文件时
@@ -724,7 +734,13 @@ public final class MuxUtil {
             if (abort != null && abort.shouldStop()) {
                 throw new Http.AbortedException(0);
             }
-            int size = ex.readSampleData(buf, 0);
+            int size;
+            long tRead0 = System.nanoTime();
+            try {
+                size = ex.readSampleData(buf, 0);
+            } finally {
+                nsRead += System.nanoTime() - tRead0;
+            }
             if (size < 0) {
                 break;
             }
@@ -753,16 +769,31 @@ public final class MuxUtil {
             info.presentationTimeUs = pts;
             info.flags = (ex.getSampleFlags() & MediaExtractor.SAMPLE_FLAG_SYNC) != 0
                     ? MediaCodec.BUFFER_FLAG_KEY_FRAME : 0;
+            long tWrite0 = System.nanoTime();
             try {
                 muxer.writeSampleData(outTrack, buf, info);
             } catch (RuntimeException e) {
                 // 个别损坏样本直接跳过，避免整段失败
                 ex.advance();
                 continue;
+            } finally {
+                nsWrite += System.nanoTime() - tWrite0;
             }
             lastPts = pts;
             written++;
+            bytes += size;
             ex.advance();
+        }
+
+        long nsOther = System.nanoTime() - nsStart - nsRead - nsWrite;
+        if (written > 0) {
+            // 标签由调用方给的 enforceMonotonic 反推不可靠：视频轨传的是
+            // false、音频轨才传 true（见 mux 里两处调用），正好和直觉相反。
+            // 所以让调用方把标签传进来。
+            Log.i(TAG, "  取样本 " + (nsRead / 1000000L) + "ms / 写样本 "
+                    + (nsWrite / 1000000L) + "ms（" + written + " 个样本，"
+                    + (bytes / 1024L / 1024L) + " MB） [" + label + "]"
+                    + " 计数之外 " + (nsOther / 1000000L) + "ms");
         }
 
         if (dropped > 0) {

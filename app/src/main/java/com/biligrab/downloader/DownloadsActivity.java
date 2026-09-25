@@ -23,6 +23,7 @@ import com.biligrab.downloader.ui.HyperTheme;
 import com.biligrab.downloader.ui.NeumAttr;
 import com.biligrab.downloader.ui.NeuButton;
 import com.biligrab.downloader.ui.NeuText;
+import com.biligrab.downloader.ui.StaggerEnter;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -88,6 +89,9 @@ public class DownloadsActivity extends Activity
 
     /** id → 已建好的卡片。用来复用，避免重建导致按钮跳动。 */
     private final List<Row> rows = new ArrayList<>();
+
+    /** 页面首次有内容时播放一次入场，后续刷新/删除/状态变化不再重复。 */
+    private boolean introPending = true;
 
     /** 原始主色。用于填充（进度条、药丸底），不是文字色。 */
     private int primaryColor;
@@ -317,6 +321,44 @@ public class DownloadsActivity extends Activity
             listBox.addView(v);
         }
         refreshAll();
+        playInitialEnterIfNeeded();
+    }
+
+    /**
+     * 下载页只在第一次呈现当前 Activity 时入场一次。
+     *
+     * <p>进度回调只走 {@link #updateRow(DownloadTask)}，不会触发这里；删除、
+     * 终态和新增导致的 rebuild 也会被 introPending 拦住，避免卡片反复从下方
+     * 飘进来，打断用户正在读的进度。</p>
+     */
+    private void playInitialEnterIfNeeded() {
+        if (!introPending) {
+            return;
+        }
+
+        List<View> shown = new ArrayList<>();
+        if (topBar != null && topBar.getVisibility() == View.VISIBLE) {
+            shown.add(topBar);
+        }
+        if (tvSummary != null && tvSummary.getVisibility() == View.VISIBLE) {
+            shown.add(tvSummary);
+        }
+        if (emptyBox != null && emptyBox.getVisibility() == View.VISIBLE) {
+            shown.add(emptyBox);
+        } else {
+            for (Row row : rows) {
+                if (row.root.getVisibility() == View.VISIBLE) {
+                    shown.add(row.root);
+                }
+            }
+        }
+        if (shown.isEmpty()) {
+            return;
+        }
+
+        introPending = false;
+        View anchor = listBox != null ? listBox : getWindow().getDecorView();
+        anchor.post(() -> StaggerEnter.play(shown.toArray(new View[0])));
     }
 
     /** 只刷新已有视图的内容。 */
@@ -413,6 +455,7 @@ public class DownloadsActivity extends Activity
     // ==================================================================
 
     private final class Row {
+        final View root;
         final DownloadTask task;
         final TextView tvTitle;
         final TextView tvState;
@@ -426,6 +469,7 @@ public class DownloadsActivity extends Activity
         final NeuButton btnDelete;
 
         Row(View v, DownloadTask task) {
+            root = v;
             this.task = task;
             tvTitle = v.findViewById(R.id.tvTitle);
             tvState = v.findViewById(R.id.tvState);
@@ -452,7 +496,8 @@ public class DownloadsActivity extends Activity
             tvTitle.setText(t.title);
 
             int st = t.status();
-            tvState.setText(stateLabel(st));
+            String state = stateLabel(st);
+            tvState.setText(state);
             tvState.setTextColor(stateColor(st));
 
             // 副标题：来源 + 画质 + （失败时的原因）
@@ -461,6 +506,8 @@ public class DownloadsActivity extends Activity
             tvMeta.setVisibility(meta.isEmpty() ? View.GONE : View.VISIBLE);
 
             int pct = t.percent();
+            pb.setContentDescription(getString(R.string.cd_task_progress,
+                    t.title, state, progressForAccessibility(t, pct)));
             boolean showBar = st == DownloadTask.STATUS_RUNNING
                     || st == DownloadTask.STATUS_PAUSED
                     || st == DownloadTask.STATUS_QUEUED
@@ -535,6 +582,10 @@ public class DownloadsActivity extends Activity
                     || st == DownloadTask.STATUS_PAUSED;
             b.setVisibility(show ? View.VISIBLE : View.GONE);
             b.setEnabled(show);
+            b.setContentDescription(show
+                    ? getString(R.string.cd_task_action,
+                            getString(R.string.action_cancel), t.title)
+                    : null);
         }
 
         /**
@@ -544,32 +595,39 @@ public class DownloadsActivity extends Activity
          * 已完成 → 不给主操作（隐藏），因为没有什么可做的；已取消 → 「重试」。</p>
          */
         private void bindPrimaryButton(NeuButton b, DownloadTask t) {
+            int actionRes = 0;
             switch (t.status()) {
                 case DownloadTask.STATUS_RUNNING:
                     b.setVisibility(View.VISIBLE);
                     b.setEnabled(true);
-                    b.setText(R.string.action_pause);
+                    actionRes = R.string.action_pause;
                     break;
                 case DownloadTask.STATUS_QUEUED:
                     b.setVisibility(View.VISIBLE);
                     b.setEnabled(true);
-                    b.setText(R.string.action_cancel);
+                    actionRes = R.string.action_cancel;
                     break;
                 case DownloadTask.STATUS_PAUSED:
                 case DownloadTask.STATUS_FAILED:
                     b.setVisibility(View.VISIBLE);
                     b.setEnabled(true);
-                    b.setText(R.string.action_resume);
+                    actionRes = R.string.action_resume;
                     break;
                 case DownloadTask.STATUS_CANCELLED:
                     b.setVisibility(View.VISIBLE);
                     b.setEnabled(true);
-                    b.setText(R.string.action_retry);
+                    actionRes = R.string.action_retry;
                     break;
                 default:
                     // 已完成：没有可做的主操作
                     b.setVisibility(View.GONE);
+                    b.setContentDescription(null);
                     break;
+            }
+            if (actionRes != 0) {
+                b.setText(actionRes);
+                b.setContentDescription(getString(R.string.cd_task_action,
+                        getString(actionRes), t.title));
             }
         }
 
@@ -577,6 +635,8 @@ public class DownloadsActivity extends Activity
             b.setVisibility(View.VISIBLE);
             b.setEnabled(true);
             b.setText(R.string.action_delete);
+            b.setContentDescription(getString(R.string.cd_task_action,
+                    getString(R.string.action_delete), t.title));
         }
 
         private String buildMeta(DownloadTask t) {
@@ -598,6 +658,21 @@ public class DownloadsActivity extends Activity
                 sb.append("\n").append(err);
             }
             return sb.toString();
+        }
+
+        private String progressForAccessibility(DownloadTask t, int pct) {
+            if (pct >= 0) {
+                return getString(R.string.progress_percent, pct);
+            }
+            long done = t.doneBytes();
+            long total = t.totalBytes();
+            if (done > 0 && total > 0) {
+                return getString(R.string.progress_bytes, Fmt.bytes(done), Fmt.bytes(total));
+            }
+            if (done > 0) {
+                return getString(R.string.progress_downloaded, Fmt.bytes(done));
+            }
+            return getString(R.string.progress_unknown);
         }
     }
 

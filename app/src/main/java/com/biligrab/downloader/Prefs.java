@@ -196,9 +196,9 @@ public final class Prefs {
                 .getInt(KEY_THEME, THEME_SYSTEM);
     }
 
-    /** 视觉引擎：新拟态（默认）或玻璃态。 */
+    /** 视觉引擎：玻璃态（默认）或新拟态。 */
     public int skin() {
-        return sp.getInt(KEY_SKIN, SKIN_NEUMORPHISM);
+        return sp.getInt(KEY_SKIN, SKIN_GLASS);
     }
 
     public void setSkin(int v) {

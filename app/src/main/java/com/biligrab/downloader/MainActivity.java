@@ -1369,14 +1369,15 @@ public class MainActivity extends Activity
 
         TextView tv = new TextView(this);
         tv.setText(title);
-        tv.setTextSize(14);
+        tv.setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX,
+                getResources().getDimension(R.dimen.chip_group_title_text));
         tv.setTypeface(null, android.graphics.Typeface.BOLD);
         tv.setTextColor(HyperTheme.textSecondary(this));
         tv.setLetterSpacing(0.02f);
         LinearLayout.LayoutParams tp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        tp.topMargin = dp(16);
-        tp.bottomMargin = dp(4);
+        tp.topMargin = getResources().getDimensionPixelSize(R.dimen.space_lg);
+        tp.bottomMargin = getResources().getDimensionPixelSize(R.dimen.space_xs);
         tv.setLayoutParams(tp);
 
         final FlowLayout row = new FlowLayout(this);
@@ -1827,7 +1828,9 @@ public class MainActivity extends Activity
             TextView b = new TextView(this);
             b.setText(getString(R.string.conn_value, n));
             b.setGravity(Gravity.CENTER);
-            b.setTextSize(15f);
+            b.setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX,
+                    getResources().getDimension(R.dimen.connection_chip_text));
+            b.setContentDescription(getString(R.string.cd_conn_option, n));
             // 每个按钮等宽铺满整行；用 weight 而不是固定宽，
             // 免得在窄屏上挤出去
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
@@ -1854,6 +1857,7 @@ public class MainActivity extends Activity
 
     /** 给一个并发数按钮上色 + 上凸凹。 */
     private void paintConnChip(TextView chip, boolean on) {
+        chip.setSelected(on);
         chip.setTextColor(on ? HyperTheme.primaryText(this) : HyperTheme.textSecondary(this));
         chip.setTypeface(null, on ? android.graphics.Typeface.BOLD
                 : android.graphics.Typeface.NORMAL);
@@ -1869,6 +1873,12 @@ public class MainActivity extends Activity
     private void showSettings() {
         final Dialog sheet = new Dialog(this, R.style.Theme_BiliGrab_BottomSheet);
         View content = LayoutInflater.from(this).inflate(R.layout.sheet_settings, null, false);
+        if (HyperTheme.isGlass(this)) {
+            float corner = getResources().getDimension(R.dimen.radius_dialog);
+            View sheetRoot = content.findViewById(R.id.sheetRoot);
+            sheetRoot.setBackground(new GlassMeshDrawable(
+                    HyperTheme.isDark(this), corner, corner));
+        }
         sheet.setContentView(content);
 
         Window w = sheet.getWindow();

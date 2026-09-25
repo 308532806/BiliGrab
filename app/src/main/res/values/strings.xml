@@ -198,6 +198,11 @@
     <string name="stage_cancelled_clean">已取消，残留已清理</string>
     <string name="progress_percent">%1$d%%</string>
     <string name="cd_progress">下载进度</string>
+    <string name="cd_task_progress">%1$s：%2$s，%3$s</string>
+    <string name="cd_task_action">%1$s：%2$s</string>
+    <string name="progress_bytes">已下载 %1$s / %2$s</string>
+    <string name="progress_downloaded">已下载 %1$s</string>
+    <string name="progress_unknown">进度未知</string>
     <string name="saved_to">已保存到 %1$s</string>
 
     <!-- ==================== 下载阶段的错误：问题 + 恢复 ==================== -->
@@ -375,6 +380,7 @@
     <string name="settings_conn">同时下载连接数</string>
     <string name="settings_conn_desc">YouTube 服务器按每条连接单独限速，多开几条并行取才能跑满带宽。实测 4 条约是 1 条的 4.4 倍。设为 1 即关闭多连接。</string>
     <string name="conn_value">%1$d</string>
+    <string name="cd_conn_option">并发连接数：%1$d 条</string>
     <string name="snack_conn_saved">已设为 %1$d 条连接</string>
 
     <string name="settings_theme_title">外观</string>

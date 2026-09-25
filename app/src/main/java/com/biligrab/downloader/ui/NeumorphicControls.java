@@ -46,6 +46,13 @@ public final class NeumorphicControls {
         Context ctx = sw.getContext();
         float density = ctx.getResources().getDisplayMetrics().density;
 
+        float trackRadius = dp(ctx, R.dimen.radius_switch_track);
+        float trackElevation = dp(ctx, R.dimen.elev_switch);
+        int trackWidth = px(ctx, R.dimen.switch_width);
+        int trackHeight = px(ctx, R.dimen.switch_height);
+        int thumbSize = px(ctx, R.dimen.switch_thumb);
+        float thumbElevation = dp(ctx, R.dimen.elev_switch_thumb);
+
         // 轨道：凹槽，高 28dp，圆角 14dp。
         //
         // 分选中/未选中两张。为什么必须用颜色而不是只靠浮雕：
@@ -58,12 +65,12 @@ public final class NeumorphicControls {
         int primary = HyperTheme.primary(ctx);
 
         NeumorphicDrawable trackOff = NeumorphicSurface.create(ctx, NeumorphicDrawable.CONCAVE,
-                14, 1.5f, 52, 28);
+                trackRadius, trackElevation, trackWidth, trackHeight);
         trackOff.colors(HyperTheme.divider(ctx), HyperTheme.neumLight(ctx),
                 HyperTheme.neumDark(ctx));
 
         NeumorphicDrawable trackOn = NeumorphicSurface.create(ctx, NeumorphicDrawable.CONCAVE,
-                14, 1.5f, 52, 28);
+                trackRadius, trackElevation, trackWidth, trackHeight);
         // 轨道开着时整条就是主色，和设置面板的色卡是同一类面：
         // 必须走 accent() 而不是 colors()，否则玻璃态下开着的轨道会退回成白雾，
         // 与关着的状态只差一点点色值，用户看不出开关到底开没开。
@@ -77,7 +84,7 @@ public final class NeumorphicControls {
         // 取 22 而不是 20：Switch 把滑块从轨道左缘推到右缘，
         // 直径越小越容易在两端"戳出"轨道 14dp 的圆头之外。
         NeumorphicDrawable thumb = NeumorphicSurface.create(ctx, NeumorphicDrawable.CONVEX,
-                999, 2.5f, 22, 22);
+                dp(ctx, R.dimen.radius_pill), thumbElevation, thumbSize, thumbSize);
         // 滑块用卡片色而不是页面色：轨道开着时是主色，滑块压在上面必须有区别，
         // 用背景色的话在白底卡片上会和轨道糊成一片。
         thumb.colors(HyperTheme.card(ctx), HyperTheme.neumLight(ctx), HyperTheme.neumDark(ctx));
@@ -86,7 +93,7 @@ public final class NeumorphicControls {
         sw.setThumbDrawable(thumb);
         // 注意：这里没有 setThumbOffset —— 那是 SeekBar 的 API，Switch 没有。
         // Switch 的滑块位置完全由轨道和滑块自身的尺寸推出来。
-        sw.setSwitchPadding(Math.round(8 * density));
+        sw.setSwitchPadding(px(ctx, R.dimen.space_sm));
 
         sw.setShowText(false);
         sw.setButtonDrawable(null);
@@ -128,12 +135,14 @@ public final class NeumorphicControls {
     public static void dressSeekBar(SeekBar sb) {
         Context ctx = sb.getContext();
         float density = ctx.getResources().getDisplayMetrics().density;
-        int trackH = Math.round(14 * density);
+        int trackH = px(ctx, R.dimen.slider_track_height);
         int sbH = Math.round(sb.getResources().getDimension(R.dimen.touch_min));
+        float trackRadius = dp(ctx, R.dimen.radius_slider_track);
+        float trackElevation = dp(ctx, R.dimen.elev_slider_track);
 
         // 槽：凹
         NeumorphicDrawable track = NeumorphicSurface.create(ctx, NeumorphicDrawable.CONCAVE,
-                7, 2, 0, 0);
+                trackRadius, trackElevation, 0, 0);
         track.colors(HyperTheme.neumBase(ctx), HyperTheme.neumLight(ctx), HyperTheme.neumDark(ctx));
 
         // 已播放段：凸起的实心条，主色 80% —— 规范里的 activeColor.copy(alpha = .8f)
@@ -145,7 +154,7 @@ public final class NeumorphicControls {
         int p = HyperTheme.primary(ctx);
         int playedColor = Color.argb(204, Color.red(p), Color.green(p), Color.blue(p));
         NeumorphicDrawable played = NeumorphicSurface.create(ctx, NeumorphicDrawable.CONVEX,
-                7, 2, 0, 0);
+                trackRadius, trackElevation, 0, 0);
         played.accent(playedColor, HyperTheme.neumLight(ctx), HyperTheme.neumDark(ctx));
 
         ClipDrawable clip = new ClipDrawable(played, Gravity.START, ClipDrawable.HORIZONTAL);
@@ -173,11 +182,11 @@ public final class NeumorphicControls {
      * 一个高对比的点能明确指示"当前值在这里"。</p>
      */
     private static Drawable newThumb(Context ctx, float density) {
-        int size = Math.round(32 * density);
-        int dot = Math.round(8 * density);
+        int size = px(ctx, R.dimen.slider_thumb);
+        int dot = px(ctx, R.dimen.slider_thumb_dot);
 
         NeumorphicDrawable disc = NeumorphicSurface.create(ctx, NeumorphicDrawable.CONVEX,
-                999, 2, 0, 0);
+                dp(ctx, R.dimen.radius_pill), dp(ctx, R.dimen.elev_slider_thumb), 0, 0);
         disc.colors(HyperTheme.neumBase(ctx), HyperTheme.neumLight(ctx), HyperTheme.neumDark(ctx));
         disc.setBounds(0, 0, size, size);
 
@@ -193,6 +202,15 @@ public final class NeumorphicControls {
         ld.setBounds(0, 0, size, size);
         ld.setAlpha(255);
         return ld;
+    }
+
+    private static float dp(Context ctx, int resId) {
+        return ctx.getResources().getDimension(resId)
+                / ctx.getResources().getDisplayMetrics().density;
+    }
+
+    private static int px(Context ctx, int resId) {
+        return ctx.getResources().getDimensionPixelSize(resId);
     }
 
     /*

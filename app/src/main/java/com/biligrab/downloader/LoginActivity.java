@@ -2,6 +2,7 @@ package com.biligrab.downloader;
 
 import android.app.Activity;
 import android.content.Intent;
+import android.content.res.Configuration;
 import android.graphics.Color;
 import android.net.Uri;
 import android.os.Bundle;
@@ -16,6 +17,9 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.ImageButton;
 import android.widget.TextView;
+
+import com.biligrab.downloader.ui.GlassMeshDrawable;
+import com.biligrab.downloader.ui.HyperTheme;
 
 import org.json.JSONObject;
 
@@ -114,11 +118,14 @@ public class LoginActivity extends Activity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        applyThemeOverride();
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_login);
+        applyLoginTheme();
         startedAt = System.currentTimeMillis();
 
         tvHint = findViewById(R.id.tvLoginHint);
+        tvHint.setTextColor(HyperTheme.textSecondary(this));
         web = findViewById(R.id.webLogin);
 
         // 圆角。WebView 自己不会裁背景，得让父级按 outline 裁。
@@ -196,6 +203,34 @@ public class LoginActivity extends Activity {
      * <p>只在这里「发现」，真正的判定放在 {@link #verify}：光凭 Cookie 里有
      * 这个名字不能说明它有效 —— 用户可能只是访问过 B 站。</p>
      */
+    private void applyThemeOverride() {
+        int mode = Prefs.themeModeStatic(this);
+        if (mode == Prefs.THEME_SYSTEM) {
+            return;
+        }
+        Configuration cfg = new Configuration(getResources().getConfiguration());
+        cfg.uiMode = (cfg.uiMode & ~Configuration.UI_MODE_NIGHT_MASK)
+                | (mode == Prefs.THEME_DARK
+                        ? Configuration.UI_MODE_NIGHT_YES
+                        : Configuration.UI_MODE_NIGHT_NO);
+        try {
+            applyOverrideConfiguration(cfg);
+        } catch (Throwable ignored) {
+            // 资源已被访问时无法覆盖，退回跟随系统，不影响登录。
+        }
+    }
+
+    private void applyLoginTheme() {
+        View root = findViewById(R.id.loginRoot);
+        if (root == null) {
+            return;
+        }
+        if (HyperTheme.isGlass(this)) {
+            root.setBackground(new GlassMeshDrawable(HyperTheme.isDark(this)));
+        } else {
+            root.setBackgroundColor(HyperTheme.background(this));
+        }
+    }
     private void checkCookies() {
         if (saved || verifying || isFinishing()) {
             return;

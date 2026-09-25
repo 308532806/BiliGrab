@@ -1,13 +1,15 @@
 package com.biligrab.downloader;
 
 import android.content.Context;
+import android.util.AtomicFile;
 import android.util.Log;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.io.File;
-import java.io.FileInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -85,20 +87,17 @@ public final class TaskStore {
         }
         loaded = true;
         file = new File(ctx.getFilesDir(), FILE);
-        if (!file.exists()) {
-            return;
-        }
-        try (InputStream in = new FileInputStream(file)) {
-            byte[] buf = new byte[(int) file.length()];
-            int off = 0;
-            while (off < buf.length) {
-                int n = in.read(buf, off, buf.length - off);
-                if (n <= 0) {
-                    break;
+        try (InputStream in = new AtomicFile(file).openRead()) {
+            ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+            byte[] chunk = new byte[4096];
+            int n;
+            while ((n = in.read(chunk)) != -1) {
+                if (n > 0) {
+                    bytes.write(chunk, 0, n);
                 }
-                off += n;
             }
-            JSONArray arr = new JSONArray(new String(buf, 0, off, Charset.forName("UTF-8")));
+            JSONArray arr = new JSONArray(new String(
+                    bytes.toByteArray(), Charset.forName("UTF-8")));
             for (int i = 0; i < arr.length(); i++) {
                 JSONObject o = arr.optJSONObject(i);
                 if (o != null) {
@@ -106,6 +105,9 @@ public final class TaskStore {
                 }
             }
             Log.i(TAG, "读取下载记录 " + tasks.size() + " 条");
+        } catch (FileNotFoundException e) {
+            // AtomicFile 会先尝试恢复备份；没有基文件和备份表示首次启动
+            tasks.clear();
         } catch (Exception e) {
             // 读不出来就从空开始，绝不让一条坏记录挡住整个应用
             Log.w(TAG, "下载记录读取失败，从空开始", e);
@@ -118,15 +120,25 @@ public final class TaskStore {
         if (file == null) {
             file = new File(ctx.getFilesDir(), FILE);
         }
+        FileOutputStream out = null;
+        AtomicFile atomicFile = new AtomicFile(file);
         try {
             JSONArray arr = new JSONArray();
             for (DownloadTask t : tasks) {
                 arr.put(t.toJson());
             }
-            try (OutputStream out = new FileOutputStream(file)) {
-                out.write(arr.toString().getBytes(Charset.forName("UTF-8")));
-            }
+            out = atomicFile.startWrite();
+            out.write(arr.toString().getBytes(Charset.forName("UTF-8")));
+            atomicFile.finishWrite(out);
+            out = null;
         } catch (Exception e) {
+            if (out != null) {
+                try {
+                    atomicFile.failWrite(out);
+                } catch (RuntimeException rollbackError) {
+                    e.addSuppressed(rollbackError);
+                }
+            }
             Log.w(TAG, "下载记录写入失败", e);
         }
     }

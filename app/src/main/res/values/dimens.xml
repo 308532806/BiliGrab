@@ -50,6 +50,7 @@
     <dimen name="radius_field">16dp</dimen>
     <!-- 开关轨道 -->
     <dimen name="radius_switch_track">14dp</dimen>
+    <dimen name="radius_slider_track">7dp</dimen>
     <!-- 芯片 -->
     <dimen name="radius_chip">14dp</dimen>
     <!-- 图标按钮 -->
@@ -79,7 +80,9 @@
     <dimen name="elev_icon_button">3dp</dimen>
     <dimen name="elev_field">2dp</dimen>
     <dimen name="elev_switch">1.5dp</dimen>
+    <dimen name="elev_switch_thumb">2.5dp</dimen>
     <dimen name="elev_slider_track">2dp</dimen>
+    <dimen name="elev_slider_thumb">2dp</dimen>
 
     <!-- ==================== 触控 ==================== -->
 
@@ -106,6 +109,9 @@
     <dimen name="button_height_compact">48dp</dimen>
     <dimen name="field_height">56dp</dimen>
     <dimen name="chip_height">32dp</dimen>
+    <!-- Java 动态创建的分组标题与连接数按钮字号 -->
+    <dimen name="chip_group_title_text">14sp</dimen>
+    <dimen name="connection_chip_text">15sp</dimen>
     <dimen name="fab_size">48dp</dimen>
 
     <!-- 芯片的可点区域比可见药丸上下各内缩这么多：
@@ -133,6 +139,7 @@
     <!-- 滑块：轨道 14dp 高，滑块 32dp -->
     <dimen name="slider_track_height">14dp</dimen>
     <dimen name="slider_thumb">32dp</dimen>
+    <dimen name="slider_thumb_dot">8dp</dimen>
 
     <!-- ==================== 其他 ==================== -->
 

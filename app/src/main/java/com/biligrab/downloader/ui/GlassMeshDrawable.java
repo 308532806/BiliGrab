@@ -4,6 +4,7 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.LinearGradient;
 import android.graphics.Paint;
+import android.graphics.Path;
 import android.graphics.RadialGradient;
 import android.graphics.Rect;
 import android.graphics.Shader;
@@ -70,11 +71,26 @@ public class GlassMeshDrawable extends Drawable {
 
     private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Rect rect = new Rect();
+    private final Path clipPath = new Path();
+    private final float[] cornerRadii;
+    private final boolean roundedCorners;
     private boolean dark;
 
     /** 是否走深色网格。由调用方指定，避免 drawable 反查主题配置。 */
     public GlassMeshDrawable(boolean dark) {
+        this(dark, 0f, 0f);
+    }
+
+    /**
+     * 仅为顶部两个角提供圆角裁剪，适用于贴住屏幕底边的底部面板。
+     * 半径单位为像素；底部两角保持直角。
+     */
+    public GlassMeshDrawable(boolean dark, float topLeftRadius, float topRightRadius) {
         this.dark = dark;
+        float topLeft = Math.max(0f, topLeftRadius);
+        float topRight = Math.max(0f, topRightRadius);
+        cornerRadii = new float[] {topLeft, topLeft, topRight, topRight, 0f, 0f, 0f, 0f};
+        roundedCorners = topLeft > 0f || topRight > 0f;
         paint.setDither(true);
     }
 
@@ -89,6 +105,13 @@ public class GlassMeshDrawable extends Drawable {
     public void draw(Canvas canvas) {
         Rect b = getBounds();
         if (b.width() <= 0 || b.height() <= 0) return;
+        int saveCount = canvas.save();
+        if (roundedCorners) {
+            clipPath.reset();
+            clipPath.addRoundRect(b.left, b.top, b.right, b.bottom,
+                    cornerRadii, Path.Direction.CW);
+            canvas.clipPath(clipPath);
+        }
         rect.set(b);
 
         Spot[] spots = dark ? DARK_SPOTS : LIGHT_SPOTS;
@@ -111,6 +134,7 @@ public class GlassMeshDrawable extends Drawable {
                 dark ? 0x14FFFFFF : 0x0DFFFFFF, Color.TRANSPARENT, Shader.TileMode.CLAMP));
         canvas.drawRect(rect, paint);
         paint.setShader(null);
+        canvas.restoreToCount(saveCount);
     }
 
     private static int withAlpha(int color, float a) {
