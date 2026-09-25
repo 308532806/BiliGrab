@@ -608,6 +608,13 @@ public NeuLayout(Context context, AttributeSet attrs) {
 
 这是实机验证出来的结论，不是推测。
 
+**1.9.5 修订：玻璃态下这一点有了例外。** 设置面板在玻璃态下改用
+`GlassMeshDrawable` 作底，并按系统能力分档：跨窗口模糊可用（Android 12+ 且
+`WindowManager.isCrossWindowBlurEnabled()` 为 true）时请求 28dp 模糊、底色降到 `0x88`、遮罩 `0.28`；
+不可用时底色 `0xF5`、遮罩 `0.58`，视觉上接近原不透明方案。入口：`MainActivity.showSettings()`；
+底色开关：`GlassMeshDrawable.backgroundAlpha(int)`（默认 255 保持原行为）。新拟态分支不变，仍是
+不透明 `bg_bottom_sheet`。
+
 ---
 
 ## 12. 与文档/施工说明已知不一致的地方

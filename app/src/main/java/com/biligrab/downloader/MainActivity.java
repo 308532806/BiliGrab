@@ -1873,11 +1873,20 @@ public class MainActivity extends Activity
     private void showSettings() {
         final Dialog sheet = new Dialog(this, R.style.Theme_BiliGrab_BottomSheet);
         View content = LayoutInflater.from(this).inflate(R.layout.sheet_settings, null, false);
+        boolean blurEnabled = false;
+        if (HyperTheme.isGlass(this)
+                && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+            WindowManager blurManager = getSystemService(WindowManager.class);
+            blurEnabled = blurManager != null && blurManager.isCrossWindowBlurEnabled();
+        }
         if (HyperTheme.isGlass(this)) {
             float corner = getResources().getDimension(R.dimen.radius_dialog);
             View sheetRoot = content.findViewById(R.id.sheetRoot);
-            sheetRoot.setBackground(new GlassMeshDrawable(
-                    HyperTheme.isDark(this), corner, corner));
+            GlassMeshDrawable glass = new GlassMeshDrawable(
+                    HyperTheme.isDark(this), corner, corner);
+            // 窗口模糊可用时降低底色不透明度；系统关闭模糊时保持高对比度。
+            glass.backgroundAlpha(blurEnabled ? 0x88 : 0xF5);
+            sheetRoot.setBackground(glass);
         }
         sheet.setContentView(content);
 
@@ -1892,8 +1901,13 @@ public class MainActivity extends Activity
             // gravity 必须写进 attributes，不能只靠 Window.setGravity：
             // 后者会被随后的 setAttributes 覆盖掉，面板就会浮在屏幕中间而不是贴底。
             lp.gravity = Gravity.BOTTOM;
-            lp.dimAmount = 0.45f;
+            lp.dimAmount = blurEnabled ? 0.28f : 0.58f;
             w.setAttributes(lp);
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                int blurRadius = blurEnabled
+                        ? Math.round(28f * getResources().getDisplayMetrics().density) : 0;
+                w.setBackgroundBlurRadius(blurRadius);
+            }
             w.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
         }
 

@@ -75,6 +75,14 @@ public class GlassMeshDrawable extends Drawable {
     private final float[] cornerRadii;
     private final boolean roundedCorners;
     private boolean dark;
+    private int backgroundAlpha = 255;
+
+    /** 设置底色不透明度，使窗口背景模糊可以透出；默认保持原有不透明绘制。 */
+    public GlassMeshDrawable backgroundAlpha(int alpha) {
+        backgroundAlpha = Math.max(0, Math.min(255, alpha));
+        invalidateSelf();
+        return this;
+    }
 
     /** 是否走深色网格。由调用方指定，避免 drawable 反查主题配置。 */
     public GlassMeshDrawable(boolean dark) {
@@ -115,7 +123,9 @@ public class GlassMeshDrawable extends Drawable {
         rect.set(b);
 
         Spot[] spots = dark ? DARK_SPOTS : LIGHT_SPOTS;
-        canvas.drawColor(dark ? DARK_BASE : LIGHT_BASE);
+        int base = dark ? DARK_BASE : LIGHT_BASE;
+        canvas.drawColor(Color.argb(Math.round(Color.alpha(base) * backgroundAlpha / 255f),
+                Color.red(base), Color.green(base), Color.blue(base)));
 
         float shortSide = Math.min(b.width(), b.height());
         for (Spot s : spots) {
