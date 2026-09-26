@@ -1917,8 +1917,8 @@ public class MainActivity extends Activity
             View sheetRoot = content.findViewById(R.id.sheetRoot);
             GlassMeshDrawable glass = new GlassMeshDrawable(
                     HyperTheme.isDark(this), corner, corner);
-            // 窗口模糊可用时降低底色不透明度；系统关闭模糊时保持高对比度。
-            glass.backgroundAlpha(blurEnabled ? 0x88 : 0xF5);
+            // 面板必须挡住后面的内容：窗口模糊可用时保留一点透感（78%），系统关闭模糊时全不透明（100%）。
+            glass.backgroundAlpha(blurEnabled ? 0xC8 : 0xFF);
             sheetRoot.setBackground(glass);
         }
         sheet.setContentView(content);

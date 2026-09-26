@@ -161,6 +161,7 @@
                     style="@style/Widget.Button.Filled"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/space_lg"
                     android:text="@string/action_parse" />
 
                 <!-- == 错误：问题 + 恢复动作 == -->
