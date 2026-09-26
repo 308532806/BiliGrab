@@ -300,7 +300,7 @@
 
                     <com.biligrab.downloader.ui.NeuButton
                         android:id="@+id/btnResetDir"
-                        style="@style/Widget.Button.Outlined"
+                        style="@style/Widget.Button.Outlined.Compact"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginStart="@dimen/touch_gap"
@@ -373,7 +373,7 @@
                         android:paddingEnd="@dimen/space_md"
                         android:textAppearance="@style/Text.BodySmall"
                         android:textColor="@color/hyper_text_secondary"
-                        tools:text="解析引擎 2025.11.12" />
+                        tools:text="解析引擎 2026.08.19" />
 
                     <com.biligrab.downloader.ui.NeuButton
                         android:id="@+id/btnUpdateYtDlp"

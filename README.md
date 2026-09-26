@@ -77,7 +77,7 @@ BiliGrab 是从零重写的独立实现，**没有复用 BILIBILIAS 的任何代
 
 - 前台服务 + 通知栏实时进度
 - 完成后写入系统媒体库，相册 / 音乐播放器直接可见
-- Hyper-Neumorphic 界面：新拟态 / 玻璃态**双引擎**可切换，5 套主题色，浅色 / 深色 / 跟随系统三选一
+- Hyper-Neumorphic 界面：**玻璃态单引擎**（1.9.8 起），5 套主题色，浅色 / 深色 / 跟随系统三选一
 - 自适应启动图标（含 Android 13+ 主题化图标）
 
 ---
@@ -132,11 +132,12 @@ Android 的全局 HTTP 代理。
 
 **1.4.0 起界面层换成 Hyper-Neumorphic** —— 新拟态（Neumorphic）+ HyperOS 语言 + 玻璃态
 三合一的设计系统，纯 Java + XML 手写，仍然零 AndroidX、零 Material Components。
+**1.9.8 起统一为玻璃态单引擎** —— 新拟态渲染管线保留在代码里，但不再有切换入口。
 
-- **双引擎可切换** —— 设置面板「外观 → 视觉引擎」里选「新拟态」或「玻璃态」。
-  两者共用同一套尺寸、圆角、动效与交互参数，**只有「表面怎么画」不同**：
-  新拟态用 `BlurMaskFilter` 画双色浮雕阴影（凸起 / 凹陷两套画法），
-  玻璃态用整屏 mesh + 半透明叠加 + 方向光（mesh 只画一份，否则光斑会在每个面上重复）。
+- **玻璃态单引擎（1.9.8 起）** —— 设置里不再有引擎切换入口，界面统一用玻璃态绘制，
+  并保持一贯的尺寸、圆角、动效与交互参数：
+  整屏 mesh + 半透明叠加 + 方向光（mesh 只画一份，否则光斑会在每个面上重复）。
+  新拟态代码保留在引擎里仅作历史兼容，不再是用户可选项。
 - **5 套主题色** —— 樱花粉（默认，保留原本的品牌种子色 `#FB7299`）/ 默认蓝 / 深海蓝 /
   薄荷绿 / 薰衣草紫，深浅模式各一套值。**风格照规范走，主色作为可变量保留品牌。**
 - **无涟漪** —— 主题把 `colorControlHighlight` / `selectableItemBackground` 压成透明，
@@ -223,9 +224,9 @@ B 站那部分代码一个第三方库都不用，`classes.dex` 只有约 98 KB�
 powershell -ExecutionPolicy Bypass -File scripts\setup-sdk.ps1
 
 # 2) 编译（另需 JDK 17）
-# 当前源码版本：1.9.2（versionCode 10902）
-powershell -ExecutionPolicy Bypass -File scripts\build-apk.ps1 -VersionName 1.9.2
-# 产物：dist\BiliGrab-1.9.2.apk
+# 当前源码版本：1.9.8（versionCode 10908）
+powershell -ExecutionPolicy Bypass -File scripts\build-apk.ps1 -VersionName 1.9.8
+# 产物：dist\BiliGrab-1.9.8.apk
 ```
 
 首次构建会自动调用 `scripts/fetch-vendor.ps1` 拉取 YouTube 引擎
@@ -237,7 +238,7 @@ powershell -ExecutionPolicy Bypass -File scripts\build-apk.ps1 -VersionName 1.9.
 推一个 tag 即可，Actions 会自动构建并发布 Release：
 
 ```bash
-git tag v1.9.2 && git push origin v1.9.2
+git tag v1.9.8 && git push origin v1.9.8
 ```
 
 > 想让 CI 产物和本地发布的 APK 签名一致（用户才能原地升级），

@@ -32,32 +32,28 @@
 
 ---
 
-## 1. 双引擎
+## 1. 玻璃态单引擎（1.9.8 起）
 
-| 引擎 | 取值 | 默认 | 「表面怎么画」 |
+| 引擎 | 取值 | 现状 | 「表面怎么画」 |
 | --- | --- | --- | --- |
-| 新拟态 | `Prefs.SKIN_NEUMORPHISM` = 0 | ✅ | 双色浮雕阴影（凸起 / 凹陷），不透明表面 |
-| 玻璃态 | `Prefs.SKIN_GLASS` = 1 | | 整屏 mesh + 半透明叠加 + 方向光 + 渐变描边 |
+| 新拟态 | `Prefs.SKIN_NEUMORPHISM` = 0 | 历史兼容 | 双色浮雕阴影（凸起 / 凹陷），不透明表面 |
+| 玻璃态 | `Prefs.SKIN_GLASS` = 1 | ✅ 唯一引擎 | 整屏 mesh + 半透明叠加 + 方向光 + 渐变描边 |
 
-核心约定：**两者共用同一套尺寸、圆角、动效与交互参数**，只有表面怎么画不同。
-布局、样式、自定义 View、点击反馈全都是同一份 —— 加一套引擎不需要第二套 XML。
+1.9.8 起界面统一为**玻璃态单引擎**，设置面板里的「视觉引擎」切换行已移除。
+`isGlass()` 仍然保留 —— 它是整棵渲染管线的总开关，恒定返回 `true`：
 
-- 存储键：`Prefs.KEY_SKIN` = `"ui_skin"`，默认值 `SKIN_NEUMORPHISM`。
-- 切换入口：设置面板「外观」卡片里的**「视觉引擎」**一行（`@string/settings_skin`，
-  两个选项 `settings_skin_neumorphism` / `settings_skin_glass`）。
-- 切换行为：`setSkin()` → `sheet.dismiss()` → `recreate()`。引擎决定的是一整棵树怎么画，
-  不是单个控件的属性，所以整屏重建而不是局部刷新。
-- 判断收在一处：
-
-  ```java
-  // HyperTheme
-  public static boolean isGlass(Context ctx) {
-      return new Prefs(ctx).skin() == Prefs.SKIN_GLASS;
-  }
-  ```
+```java
+// HyperTheme
+public static boolean isGlass(Context ctx) {
+    return new Prefs(ctx).skin() == Prefs.SKIN_GLASS;
+}
+// Prefs.skin() 1.9.8 起恒返 SKIN_GLASS；KEY_SKIN 与 setSkin() 仅为
+// 兼容旧偏好而保留，不再有界面入口。
+```
 
 `NeumorphicSurface.apply()` 与 `NeumAttr.apply()` 都会把引擎开关透传给 `NeumorphicDrawable`，
-所以布局里的 `neu*` 属性在两套引擎下都成立。
+所以布局里的 `neu*` 属性在玻璃态下照常成立。新拟态绘制路径保留在代码里，
+但不会再被默认路径触达。
 
 ---
 
@@ -609,11 +605,12 @@ public NeuLayout(Context context, AttributeSet attrs) {
 这是实机验证出来的结论，不是推测。
 
 **1.9.5 修订：玻璃态下这一点有了例外。** 设置面板在玻璃态下改用
-`GlassMeshDrawable` 作底，并按系统能力分档：跨窗口模糊可用（Android 12+ 且
-`WindowManager.isCrossWindowBlurEnabled()` 为 true）时请求 28dp 模糊、底色降到 `0x88`、遮罩 `0.28`；
-不可用时底色 `0xF5`、遮罩 `0.58`，视觉上接近原不透明方案。入口：`MainActivity.showSettings()`；
-底色开关：`GlassMeshDrawable.backgroundAlpha(int)`（默认 255 保持原行为）。新拟态分支不变，仍是
-不透明 `bg_bottom_sheet`。
+`GlassMeshDrawable` 作底。
+
+**1.9.8 修订：面板恒不透明。** 实测用户反馈半透面板影响阅读（背后内容会透上来），因此
+`MainActivity.showSettings()` 改为恒 `glass.backgroundAlpha(0xFF)`；跨窗口模糊可用时仍保留
+28dp 模糊半径与 `dimAmount = 0.28`，不可用时 `dimAmount = 0.58`，但底色不再随系统能力降透明度。
+分档现在只剩「遮罩深浅 + 模糊半径」两个变量，透明度一维被移除。
 
 ---
 
@@ -687,8 +684,8 @@ color: hyper_gradient_top, hyper_gradient_mid, hyper_gradient_bottom,
 
 ## 14. 每次改动后的自检
 
-1. **两套引擎都要跑一遍** —— 新拟态和玻璃态是同一条代码路径的两个分支，
-   只测一个很容易漏掉玻璃态的分支（例如凹面的叠加色）。
+1. **玻璃态单路径（1.9.8 起）** —— 界面只走玻璃态渲染，但历史分支仍在代码里；
+   涉及引擎层的改动仍应对照两个分支检查，确认单引擎路径不会误触新拟态代码。
 2. **浅色 + 深色都要跑** —— `neum_light` / `neum_dark` 在深色下是反向值，换错浮雕会整个消失。
 3. **不要同时写 `android:background` 和 `neu*`** —— 见第 11 节。
 4. **滑块与开关不在 `refreshTree` 的覆盖范围内** —— 换肤后要另外调

@@ -1377,7 +1377,7 @@ public class MainActivity extends Activity
      * 在 {@code anchor} 之后插入一行新的芯片选项（含小标题）。
      *
      * <p>程序化创建而不是写进 XML：外观选项的组数会随设计系统演进变化
-     * （主题明暗 / 视觉引擎 / 主题色），每加一组都要同时改布局和 Java，
+     * （主题明暗 / 主题色），每加一组都要同时改布局和 Java，
      * 很容易漏。收成一处之后，加一组只需要一次调用。</p>
      *
      * <p>连续调用时把上一次返回的行当作 anchor，就会自然按顺序堆叠。</p>
@@ -1917,8 +1917,8 @@ public class MainActivity extends Activity
             View sheetRoot = content.findViewById(R.id.sheetRoot);
             GlassMeshDrawable glass = new GlassMeshDrawable(
                     HyperTheme.isDark(this), corner, corner);
-            // 面板必须挡住后面的内容：窗口模糊可用时保留一点透感（78%），系统关闭模糊时全不透明（100%）。
-            glass.backgroundAlpha(blurEnabled ? 0xC8 : 0xFF);
+            // 1.9.8 起恒 100% 不透明（用户反馈半透感影响观看）。
+            glass.backgroundAlpha(0xFF);
             sheetRoot.setBackground(glass);
         }
         sheet.setContentView(content);
@@ -2117,22 +2117,6 @@ public class MainActivity extends Activity
         }
         applyChipStates(chipTheme, currentModeIndex);
 
-        // 视觉引擎。规范是双引擎的：两者共用同一套尺寸与交互参数，
-        // 只有"表面怎么画"不同（浮雕 vs 玻璃）。
-        final int[] skinValues = {Prefs.SKIN_NEUMORPHISM, Prefs.SKIN_GLASS};
-        final String[] skinLabels = {
-                getString(R.string.settings_skin_neumorphism),
-                getString(R.string.settings_skin_glass)};
-        final int skinIndex = prefs.skin() == Prefs.SKIN_GLASS ? 1 : 0;
-        FlowLayout chipSkin = addChipRow(chipTheme, getString(R.string.settings_skin),
-                skinLabels, skinIndex, i -> {
-                    if (skinValues[i] != prefs.skin()) {
-                        prefs.setSkin(skinValues[i]);
-                        sheet.dismiss();
-                        recreate();
-                    }
-                });
-
         // 主题色。规范正文只定义了默认蓝，其余按同一结构补全；
         // 默认给的是樱花粉，保留 BiliGrab 原本的品牌色。
         final int schemeCount = HyperTheme.schemeCount(this);
@@ -2144,7 +2128,7 @@ public class MainActivity extends Activity
         }
         names.recycle();
 
-        FlowLayout chipColor = addChipRow(chipSkin, getString(R.string.settings_primary_color),
+        FlowLayout chipColor = addChipRow(chipTheme, getString(R.string.settings_primary_color),
                 colorLabels, prefs.primary(), i -> {
                     if (i != prefs.primary()) {
                         prefs.setPrimary(i);

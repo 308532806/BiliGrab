@@ -53,8 +53,8 @@ public final class Prefs {
     public static final int THEME_DARK = 2;
 
     /**
-     * 视觉引擎。Hyper-Neumorphic 规范是双引擎的，两者共用同一套
-     * 尺寸、圆角和交互参数，只有「表面怎么画」不同。
+     * 视觉引擎。1.9.8 起恒玻璃态：常量与 setSkin 保留仅兼容旧偏好，
+     * 不再有界面入口。
      */
     public static final int SKIN_NEUMORPHISM = 0;
     public static final int SKIN_GLASS = 1;
@@ -196,9 +196,9 @@ public final class Prefs {
                 .getInt(KEY_THEME, THEME_SYSTEM);
     }
 
-    /** 视觉引擎：玻璃态（默认）或新拟态。 */
+    /** 视觉引擎：1.9.8 起恒玻璃态（常量与 setSkin 保留仅兼容旧偏好）。 */
     public int skin() {
-        return sp.getInt(KEY_SKIN, SKIN_GLASS);
+        return SKIN_GLASS;
     }
 
     public void setSkin(int v) {

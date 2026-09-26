@@ -238,6 +238,12 @@
         <item name="android:minHeight">@dimen/button_height_compact</item>
     </style>
 
+    <!-- 中性按钮的紧凑档：与色调紧凑档同高（48dp），供内联行使用 -->
+    <style name="Widget.Button.Outlined.Compact">
+        <item name="android:layout_height">@dimen/button_height_compact</item>
+        <item name="android:minHeight">@dimen/button_height_compact</item>
+    </style>
+
     <!-- 输入框：凹槽 16dp / 2dp，高 56dp -->
     <style name="Widget.TextField" parent="">
         <item name="android:layout_height">@dimen/field_height</item>

@@ -45,7 +45,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ github.workspace }}\vendor
-          key: vendor-youtubedl-0.18.1-kotlin-2.0.21-arm64-v8a-v1
+          key: vendor-youtubedl-0.18.1-kotlin-2.0.21-arm64-v8a-ytdlp-2026.08.19-v2
 
       # 不用 android-actions/setup-android：它默认安装 'tools' 包，
       # 而 Google 已下架该包，会导致 "Failed to find package 'tools'" 失败。

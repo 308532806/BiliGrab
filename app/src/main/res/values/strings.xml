@@ -388,10 +388,6 @@
     <string name="settings_theme_light">浅色</string>
     <string name="settings_theme_dark">深色</string>
 
-    <string name="settings_skin">视觉引擎</string>
-    <string name="settings_skin_neumorphism">新拟态</string>
-    <string name="settings_skin_glass">玻璃态</string>
-    <string name="settings_skin_desc">两者共用同一套尺寸、圆角与动效参数，只改变表面怎么画。</string>
     <string name="settings_primary_color">主题色</string>
 
     <string name="settings_about_title">关于</string>

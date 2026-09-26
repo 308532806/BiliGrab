@@ -32,7 +32,7 @@ public final class HyperTheme {
         return mode == Configuration.UI_MODE_NIGHT_YES;
     }
 
-    /** 当前视觉引擎。读设置，默认新拟态。 */
+    /** 当前视觉引擎。1.9.8 起恒玻璃态（skin() 恒返 SKIN_GLASS）。 */
     public static boolean isGlass(Context ctx) {
         return new Prefs(ctx).skin() == Prefs.SKIN_GLASS;
     }

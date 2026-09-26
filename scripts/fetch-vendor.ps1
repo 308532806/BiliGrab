@@ -31,6 +31,9 @@ param(
     # 只打这一种 ABI。ARM64 覆盖了 2017 年以后几乎所有中高端安卓机，
     # 保留四种 ABI 会让原生库部分从 14.5 MB 涨到 56 MB。
     [string]$Abi = "arm64-v8a",
+    # 内置 yt-dlp 本体的目标版本。设置里那个「应用内更新」是运行时的，
+    # 这里决定的是 APK 出厂自带的兜底版本 —— 拉不到就保留 AAR 自带的那份。
+    [string]$YtDlpVersion = "2026.08.19",
     [switch]$Force
 )
 
@@ -157,6 +160,23 @@ $srcYtdlp = Join-Path $extract "res\raw\ytdlp"
 if (Test-Path $srcYtdlp) {
     Copy-Item $srcYtdlp (Join-Path $ResRaw "ytdlp") -Force
     Write-Host ("  res/raw/ytdlp  " + [math]::Round((Get-Item (Join-Path $ResRaw "ytdlp")).Length / 1MB, 2) + " MB") -ForegroundColor DarkGray
+}
+
+# ---------------------------- 2d. yt-dlp 本体 ----------------------------
+# AAR 自带的 yt-dlp 往往落后几个月。这里在同一个脚本里顺手拉一份官方最新版，
+# 直接覆盖 vendor/res/raw/ytdlp —— 失败不致命：保留 AAR 自带版本，运行时
+# 仍可经设置里的「应用内更新」再拉。
+$ytdlpCache = Join-Path $Cache "ytdlp-$YtDlpVersion"
+if (-not (Fetch "https://github.com/yt-dlp/yt-dlp/releases/download/$YtDlpVersion/yt-dlp" $ytdlpCache)) {
+    Write-Host "  yt-dlp $YtDlpVersion 拉取失败，保留 AAR 自带版本。" -ForegroundColor Yellow
+} else {
+    $head = [IO.File]::ReadAllBytes($ytdlpCache)[0..1]
+    if ($head[0] -ne 0x23 -or $head[1] -ne 0x21) {
+        Write-Host "  yt-dlp 下载内容不是 #! 开头的 zipapp，保留 AAR 自带版本。" -ForegroundColor Yellow
+    } else {
+        Copy-Item $ytdlpCache (Join-Path $ResRaw "ytdlp") -Force
+        Write-Host ("  res/raw/ytdlp  " + $YtDlpVersion + "  " + [math]::Round((Get-Item (Join-Path $ResRaw "ytdlp")).Length / 1MB, 2) + " MB") -ForegroundColor DarkGray
+    }
 }
 
 # res/values 刻意不复制。
